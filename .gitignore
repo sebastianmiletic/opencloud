@@ -1,0 +1,25 @@
+# Environment variables - contains sensitive API keys
+.env
+
+# macOS system files
+.DS_Store
+
+# Logs
+*.log
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Node modules (if ever added)
+node_modules/
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Server output
+server.log
+nohup.out
