@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Open Cloud</title>
+  <link rel="stylesheet" href="styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <!-- Netflix-style Splash Intro -->
+  <div id="splashScreen" class="splash-screen">
+    <div class="splash-logo">
+      <i class="fas fa-cloud"></i>
+      <span>Open Cloud</span>
+    </div>
+    <div class="splash-progress">
+      <div class="splash-progress-bar"></div>
+    </div>
+  </div>
+
+  <div id="moduleError" style="display:none;position:fixed;inset:0;z-index:99999;background:#000;color:#fff;flex-direction:column;align-items:center;justify-content:center;gap:1.5rem;padding:2rem;text-align:center;font-family:'Inter',sans-serif;">
+    <div style="font-size:2.5rem;font-weight:800;display:flex;align-items:center;gap:0.75rem;">
+      <i class="fas fa-cloud"></i> Open Cloud
+    </div>
+    <div id="moduleErrorMsg" style="max-width:420px;color:#a3a3a3;line-height:1.6;">
+      <p style="margin-bottom:1rem;color:#fff;font-weight:600;">Loading...</p>
+    </div>
+    <div id="moduleErrorActions" style="display:flex;gap:0.75rem;flex-wrap:wrap;justify-content:center;">
+      <button id="moduleErrorRetry" class="btn btn-primary" onclick="location.reload()" style="display:none;">Reload Page</button>
+      <a id="moduleErrorLocalhost" class="btn btn-primary" href="http://localhost:8080" style="display:none;text-decoration:none;">Open localhost:8080</a>
+    </div>
+  </div>
+  <script>
+    (function() {
+      window._appLoaded = false;
+      var isFile = location.protocol === 'file:';
+      var isHttp = location.protocol === 'http:' || location.protocol === 'https:';
+      var msgEl = document.getElementById('moduleErrorMsg');
+      var retryBtn = document.getElementById('moduleErrorRetry');
+      var localhostBtn = document.getElementById('moduleErrorLocalhost');
+
+      // If opened via file://, try to redirect to localhost immediately
+      if (isFile) {
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', 'http://localhost:8080/', true);
+        xhr.timeout = 1500;
+        xhr.onreadystatechange = function() {
+          if (xhr.readyState === 4 && xhr.status === 200) {
+            // Server is running — redirect
+            location.replace('http://localhost:8080/');
+          }
+        };
+        xhr.ontimeout = xhr.onerror = function() {
+          // Server not running — show file:// fallback
+          msgEl.innerHTML = '<p style="margin-bottom:1rem;color:#fff;font-weight:600;">Cannot load app from file://</p><p>Your browser blocks JavaScript modules when opening files directly. Please run the local server:</p>';
+          localhostBtn.style.display = 'inline-flex';
+          document.getElementById('moduleError').style.display = 'flex';
+        };
+        xhr.send();
+      }
+
+      setTimeout(function() {
+        if (!window._appLoaded) {
+          if (isFile) {
+            // Already handled above; if we reach here, show the same message
+            msgEl.innerHTML = '<p style="margin-bottom:1rem;color:#fff;font-weight:600;">Cannot load app from file://</p><p>Your browser blocks JavaScript modules when opening files directly. Please run the local server:</p>';
+            localhostBtn.style.display = 'inline-flex';
+          } else if (isHttp) {
+            msgEl.innerHTML = '<p style="margin-bottom:1rem;color:#fff;font-weight:600;">App failed to load</p><p>Something went wrong while loading the app. Check the browser console for errors, or try reloading.</p>';
+            retryBtn.style.display = 'inline-flex';
+          } else {
+            msgEl.innerHTML = '<p style="margin-bottom:1rem;color:#fff;font-weight:600;">Unsupported protocol</p><p>This app must be opened via HTTP. Please run the local server.</p>';
+            localhostBtn.style.display = 'inline-flex';
+          }
+          document.getElementById('moduleError').style.display = 'flex';
+        }
+      }, 6000);
+    })();
+  </script>
+
+  <div class="app-container" id="appContainer">
+    <header class="main-header">
+      <div class="header-content">
+        <div class="header-left">
+          <div class="logo" id="logoHome" style="cursor:pointer;">
+            <i class="fas fa-cloud"></i>
+            <span>Open Cloud</span>
+          </div>
+        </div>
+
+        <div class="header-center">
+          <div class="search-container">
+            <div class="search-box">
+              <i class="fas fa-search search-icon"></i>
+              <input type="text" id="searchInput" placeholder="Search movies and shows..." autocomplete="off">
+              <button id="clearSearch" class="clear-btn hidden">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+            <div id="searchResults" class="search-results hidden">
+              <div class="search-results-header">
+                <span id="searchResultsCount">Results</span>
+              </div>
+              <div id="searchResultsBody"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="header-right">
+          <nav class="main-nav">
+            <button class="nav-btn active" data-tab="home">
+              <i class="fas fa-home"></i>
+              <span>Home</span>
+            </button>
+            <button class="nav-btn" data-tab="collection">
+              <i class="fas fa-layer-group"></i>
+              <span>Collection</span>
+            </button>
+            <button class="nav-btn" data-tab="history">
+              <i class="fas fa-clock-rotate-left"></i>
+              <span>History</span>
+            </button>
+          </nav>
+          <div class="account-menu">
+            <button class="account-btn" id="accountBtn">
+              <div class="account-avatar" id="accountAvatar">D</div>
+              <span class="account-name" id="accountName">Default</span>
+              <i class="fas fa-chevron-down"></i>
+            </button>
+            <div class="account-dropdown hidden" id="accountDropdown">
+              <div class="dropdown-label">Switch Account</div>
+              <div id="accountList"></div>
+              <div class="dropdown-divider"></div>
+              <button class="dropdown-item" id="addAccountBtn">
+                <div class="dropdown-avatar" style="background:var(--text-primary);color:var(--bg-primary);"><i class="fas fa-plus" style="font-size:0.625rem;"></i></div>
+                <span>Add Account</span>
+              </button>
+              <button class="dropdown-item" id="manageAccountsBtn">
+                <div class="dropdown-avatar" style="background:transparent;border-color:var(--text-muted);color:var(--text-muted);"><i class="fas fa-gear" style="font-size:0.625rem;"></i></div>
+                <span>Manage Accounts</span>
+              </button>
+              <button class="dropdown-item" id="settingsBtn">
+                <div class="dropdown-avatar" style="background:transparent;border-color:var(--text-muted);color:var(--text-muted);"><i class="fas fa-sliders" style="font-size:0.625rem;"></i></div>
+                <span>Settings</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <section id="homeView" class="home-view">
+        <div class="hero-section" id="heroSection">
+          <div class="hero-viewport">
+            <div class="hero-slides" id="heroSlides"></div>
+          </div>
+          <div class="hero-progress">
+            <div class="hero-progress-bar" id="heroProgressBar"></div>
+          </div>
+          <div class="hero-dots" id="heroDots"></div>
+        </div>
+
+        <div class="category-section" id="recommendationsSection">
+          <div class="category-header">
+            <h3>Based on Your Watches</h3>
+          </div>
+          <div class="category-row" id="recommendationsRow"></div>
+        </div>
+
+        <div class="category-section">
+          <div class="category-header">
+            <h3>Popular Now</h3>
+          </div>
+          <div class="category-row" id="popularRow"></div>
+        </div>
+
+        <div class="category-section" id="starWarsSection">
+          <div class="category-header">
+            <h3>The Star Wars Saga</h3>
+          </div>
+          <div class="category-row" id="starWarsRow"></div>
+        </div>
+
+        <div class="category-section">
+          <div class="category-header">
+            <h3>Recently Released</h3>
+          </div>
+          <div class="category-row" id="nowPlayingRow"></div>
+        </div>
+
+        <div class="category-section">
+          <div class="category-header">
+            <h3>Top Rated</h3>
+          </div>
+          <div class="category-row" id="topRatedRow"></div>
+        </div>
+
+        <div class="category-section">
+          <div class="category-header">
+            <h3>Comedy</h3>
+          </div>
+          <div class="category-row" id="comedyRow"></div>
+        </div>
+
+        <div class="category-section">
+          <div class="category-header">
+            <h3>Action</h3>
+          </div>
+          <div class="category-row" id="actionRow"></div>
+        </div>
+
+        <div class="category-section">
+          <div class="category-header">
+            <h3>Horror</h3>
+          </div>
+          <div class="category-row" id="horrorRow"></div>
+        </div>
+
+        <div class="category-section">
+          <div class="category-header">
+            <h3>Science Fiction</h3>
+          </div>
+          <div class="category-row" id="scifiRow"></div>
+        </div>
+      </section>
+
+      <section id="collectionView" class="collection-view hidden">
+        <div class="collection-header">
+          <h2>My Collection</h2>
+          <div class="collection-filters">
+            <select id="collectionSort">
+              <option value="date-desc">Newest First</option>
+              <option value="date-asc">Oldest First</option>
+              <option value="title-asc">Title A-Z</option>
+              <option value="title-desc">Title Z-A</option>
+              <option value="rating-desc">Highest Rated</option>
+            </select>
+          </div>
+        </div>
+        <div id="collectionGrid" class="collection-grid">
+          <div class="empty-state">
+            <i class="fas fa-layer-group"></i>
+            <h3>Your collection is empty</h3>
+            <p>Browse or search to add movies and shows to your collection</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="historyView" class="history-view hidden">
+        <div class="history-header">
+          <h2>Watch History</h2>
+          <div class="history-filters">
+            <select id="historySort">
+              <option value="date-desc">Newest First</option>
+              <option value="date-asc">Oldest First</option>
+              <option value="title-asc">Title A-Z</option>
+              <option value="title-desc">Title Z-A</option>
+              <option value="rating-desc">Highest Rated</option>
+            </select>
+          </div>
+        </div>
+        <div id="historyGrid" class="history-grid">
+          <div class="empty-state">
+            <i class="fas fa-clock-rotate-left"></i>
+            <h3>Your history is empty</h3>
+            <p>Start watching to build your history</p>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- OVERLAYS: moved outside app-container so position:fixed works relative to viewport -->
+
+  <!-- Item Modal -->
+  <div id="itemModal" class="modal hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-content">
+      <button class="modal-close">
+        <i class="fas fa-times"></i>
+      </button>
+      <div class="modal-body">
+        <div class="modal-backdrop"></div>
+        <div class="modal-details">
+          <img id="modalPoster" class="modal-poster" src="" alt="">
+          <div class="modal-info">
+            <h2 id="modalTitle"></h2>
+            <div class="modal-meta">
+              <span id="modalYear" class="meta-item"></span>
+              <span id="modalRating" class="meta-item rating">
+                <i class="fas fa-star"></i>
+                <span></span>
+              </span>
+              <span id="modalType" class="meta-item type"></span>
+            </div>
+            <p id="modalOverview" class="modal-overview"></p>
+            <div class="modal-genres" id="modalGenres"></div>
+            <div class="modal-actions">
+              <button id="modalWatchBtn" class="btn btn-primary">
+                <i class="fas fa-play"></i>
+                Watch Now
+              </button>
+              <button id="modalCollectionBtn" class="btn btn-secondary">
+                <i class="fas fa-plus"></i>
+                Add to Collection
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Inline Player Overlay -->
+  <div id="playerOverlay" class="player-overlay hidden">
+    <div class="player-header-bar">
+      <div class="player-header-left">
+        <button class="player-back-btn" id="playerBackBtn">
+          <i class="fas fa-arrow-left"></i>
+          <span>Back</span>
+        </button>
+        <span class="player-title-text" id="playerTitleText">Loading...</span>
+      </div>
+      <div class="player-header-right">
+        <button class="player-header-btn" id="playerNextBtn" style="display:none;">
+          <i class="fas fa-forward-step"></i>
+          <span>Next</span>
+        </button>
+        <button class="player-header-btn" id="playerEpBtn" style="display:none;">
+          <i class="fas fa-list"></i>
+          <span>Episodes</span>
+        </button>
+      </div>
+    </div>
+    <div class="player-frame-wrap">
+      <iframe id="playerFrame" allowfullscreen allow="fullscreen; autoplay; encrypted-media; picture-in-picture"></iframe>
+    </div>
+  </div>
+
+  <!-- Episode Selector Popover -->
+  <div id="epPopoverOverlay" class="ep-popover-overlay hidden">
+    <div class="ep-popover-panel">
+      <div class="ep-popover-header">
+        <button id="epPopoverBack" style="visibility:hidden;"><i class="fas fa-arrow-left"></i></button>
+        <h3 id="epPopoverTitle">Episodes</h3>
+        <button id="epPopoverClose"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="ep-popover-tabs" id="epPopoverTabs"></div>
+      <ul class="ep-popover-list" id="epPopoverList"></ul>
+    </div>
+  </div>
+
+  <!-- Add Account Modal -->
+  <div id="addAccountModal" class="modal hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-content edit-modal">
+      <button class="modal-close" id="addAccountClose">
+        <i class="fas fa-times"></i>
+      </button>
+      <div class="edit-modal-body">
+        <h2><i class="fas fa-user-plus"></i> Add Account</h2>
+        <form id="addAccountForm">
+          <div class="form-group">
+            <label for="newAccountName">Account Name</label>
+            <input type="text" id="newAccountName" placeholder="e.g., Kids, Guest, etc." required>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary" id="addAccountCancel">Cancel</button>
+            <button type="submit" class="btn btn-primary">Create Account</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Manage Accounts Modal -->
+  <div id="manageAccountsModal" class="modal hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-content edit-modal">
+      <button class="modal-close" id="manageAccountsClose">
+        <i class="fas fa-times"></i>
+      </button>
+      <div class="edit-modal-body">
+        <h2><i class="fas fa-users"></i> Manage Accounts</h2>
+        <div id="manageAccountsList" class="manage-accounts-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm Modal -->
+  <div id="confirmModal" class="modal hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-content confirm-modal">
+      <div class="confirm-modal-body">
+        <div class="confirm-icon"><i class="fas fa-triangle-exclamation"></i></div>
+        <h3 id="confirmTitle">Are you sure?</h3>
+        <p id="confirmMessage">This action cannot be undone.</p>
+        <div class="confirm-actions">
+          <button id="confirmCancel" class="btn btn-secondary">Cancel</button>
+          <button id="confirmOk" class="btn btn-primary">Confirm</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="modal hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-content edit-modal" style="max-width:640px;">
+      <button class="modal-close" id="settingsClose">
+        <i class="fas fa-times"></i>
+      </button>
+      <div class="edit-modal-body">
+        <h2><i class="fas fa-sliders"></i> Settings</h2>
+        <div class="settings-tabs">
+          <button class="settings-tab-btn active" data-tab="general">General</button>
+          <button class="settings-tab-btn" data-tab="sources">Video Sources</button>
+          <button class="settings-tab-btn" data-tab="blocker">Blocker</button>
+        </div>
+        <form id="settingsForm">
+          <div class="settings-tab-panel" data-panel="general">
+            <div class="form-group">
+              <label for="settingsDevice">Device Layout</label>
+              <select id="settingsDevice">
+                <option value="laptop">Laptop / Desktop</option>
+                <option value="tv">Google TV / Android TV</option>
+                <option value="phone">Phone</option>
+              </select>
+              <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.25rem;">Optimizes the interface for your device.</p>
+            </div>
+            <div class="form-group" style="display:flex;align-items:center;gap:0.75rem;">
+              <input type="checkbox" id="settingsAutoPlay" checked style="width:auto;">
+              <label for="settingsAutoPlay" style="margin-bottom:0;">Auto-play videos when opening player</label>
+            </div>
+          </div>
+          <div class="settings-tab-panel hidden" data-panel="sources">
+            <p style="font-size:0.8125rem;color:var(--text-muted);margin-bottom:0.75rem;">Click a source to select it. Your current choice is highlighted.</p>
+            <div class="provider-cards" id="settingsProviderCards"></div>
+          </div>
+          <div class="settings-tab-panel hidden" data-panel="blocker">
+            <div class="blocker-status-card">
+              <div class="blocker-status-label">Global Protection</div>
+              <div class="blocker-status-text" id="blockerStatusText">ENABLED</div>
+              <label class="blocker-toggle">
+                <input type="checkbox" id="blockerToggle">
+                <span class="blocker-slider"></span>
+              </label>
+              <div class="blocker-counter-wrap">
+                <div class="blocker-counter-num" id="blockerCounter">0</div>
+                <div class="blocker-counter-desc">Total Popups Blocked</div>
+              </div>
+            </div>
+
+            <div class="blocker-settings-list">
+              <div class="blocker-setting-item">
+                <div class="blocker-setting-label">Block all new tabs</div>
+                <input type="checkbox" class="custom-checkbox" id="blockerBlockTabs">
+              </div>
+              <div class="blocker-setting-item">
+                <div class="blocker-setting-label">Block all new windows</div>
+                <input type="checkbox" class="custom-checkbox" id="blockerBlockWindows">
+              </div>
+              <div class="blocker-setting-item">
+                <div class="blocker-setting-label">Allow same-site tabs</div>
+                <input type="checkbox" class="custom-checkbox" id="blockerAllowSelf">
+              </div>
+              <div class="blocker-setting-item">
+                <div class="blocker-setting-label">Allow extension pages</div>
+                <input type="checkbox" class="custom-checkbox" id="blockerAllowExt">
+              </div>
+            </div>
+
+            <div class="blocker-logs-wrap">
+              <div class="blocker-logs-header">
+                <h4>Block Logs</h4>
+                <button type="button" class="btn btn-secondary" id="blockerClearLogs">Clear</button>
+              </div>
+              <div class="blocker-log-list" id="blockerLogList">
+                <div class="blocker-empty-logs">No blocked popups yet</div>
+              </div>
+            </div>
+
+            <div class="form-actions" style="margin-top:1rem;">
+              <button type="button" class="btn btn-secondary" id="blockerResetCounter">Reset Counter</button>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary" id="settingsCancel">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save Settings</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="/env.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

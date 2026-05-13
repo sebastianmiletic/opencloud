@@ -1,0 +1,20 @@
+127.0.0.1 - - [13/May/2026 21:38:01] "GET /js/ui.js HTTP/1.1" 200 -
+127.0.0.1 - - [13/May/2026 21:38:06] "GET /js/ui.js HTTP/1.1" 200 -
+127.0.0.1 - - [13/May/2026 21:38:36] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [13/May/2026 21:38:36] "GET /styles.css HTTP/1.1" 200 -
+127.0.0.1 - - [13/May/2026 21:38:36] "GET /js/app.js HTTP/1.1" 200 -
+127.0.0.1 - - [13/May/2026 21:38:36] "GET /js/storage.js HTTP/1.1" 200 -
+127.0.0.1 - - [13/May/2026 21:38:36] "GET /js/accounts.js HTTP/1.1" 200 -
+127.0.0.1 - - [13/May/2026 21:38:36] "GET /js/settings.js HTTP/1.1" 200 -
+127.0.0.1 - - [13/May/2026 21:38:36] "GET /js/player.js HTTP/1.1" 200 -
+127.0.0.1 - - [13/May/2026 21:38:36] "GET /js/hero.js HTTP/1.1" 200 -
+127.0.0.1 - - [13/May/2026 21:38:36] "GET /js/blocker.js HTTP/1.1" 200 -
+127.0.0.1 - - [13/May/2026 21:38:36] "GET /js/ui.js HTTP/1.1" 200 -
+127.0.0.1 - - [13/May/2026 21:38:36] "GET /js/utils.js HTTP/1.1" 200 -
+127.0.0.1 - - [13/May/2026 21:38:36] "GET /js/state.js HTTP/1.1" 200 -
+127.0.0.1 - - [13/May/2026 21:38:36] "GET /js/api.js HTTP/1.1" 200 -
+127.0.0.1 - - [13/May/2026 21:38:36] "GET /js/config.js HTTP/1.1" 200 -
+127.0.0.1 - - [13/May/2026 21:38:37] code 404, message File not found
+127.0.0.1 - - [13/May/2026 21:38:37] "GET /favicon.ico HTTP/1.1" 404 -
+127.0.0.1 - - [13/May/2026 21:40:21] code 404, message File not found
+127.0.0.1 - - [13/May/2026 21:40:21] "GET /favicon.ico HTTP/1.1" 404 -
