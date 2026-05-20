@@ -22,21 +22,7 @@ A black-and-white themed streaming tracker web app with TMDB/OMDB integration, i
    cd opencloud
    ```
 
-3. **Get your free API keys**
-   - **TMDB Bearer Token**: Go to https://www.themoviedb.org/settings/api and copy your "API Read Access Token"
-   - **OMDB API Key**: Go to https://www.omdbapi.com/apikey.aspx and get a free key
-
-4. **Set up your .env file**
-   ```bash
-   cp .env.example .env
-   ```
-   Open `.env` in any text editor and paste your keys:
-   ```
-   TMDB_BEARER_TOKEN=your_tmdb_token_here
-   OMDB_API_KEY=your_omdb_key_here
-   ```
-
-5. **Start the app**
+3. **Start the app**
    ```bash
    ./start.sh
    ```
@@ -45,7 +31,7 @@ A black-and-white themed streaming tracker web app with TMDB/OMDB integration, i
    python3 server.py
    ```
 
-6. **Open your browser** and go to `http://localhost:8080`
+4. **Open your browser** and go to `http://localhost:8080`
 
 ---
 
@@ -66,26 +52,12 @@ A black-and-white themed streaming tracker web app with TMDB/OMDB integration, i
    ```
    *(If you don't have Git, download the ZIP from GitHub and extract it)*
 
-3. **Get your free API keys**
-   - **TMDB Bearer Token**: Go to https://www.themoviedb.org/settings/api and copy your "API Read Access Token"
-   - **OMDB API Key**: Go to https://www.omdbapi.com/apikey.aspx and get a free key
-
-4. **Set up your .env file**
-   ```cmd
-   copy .env.example .env
-   ```
-   Open `.env` in Notepad or any text editor and paste your keys:
-   ```
-   TMDB_BEARER_TOKEN=your_tmdb_token_here
-   OMDB_API_KEY=your_omdb_key_here
-   ```
-
-5. **Start the app**
+3. **Start the app**
    ```cmd
    python server.py
    ```
 
-6. **Open your browser** and go to `http://localhost:8080`
+4. **Open your browser** and go to `http://localhost:8080`
 
 ---
 
@@ -109,15 +81,6 @@ A black-and-white themed streaming tracker web app with TMDB/OMDB integration, i
 - Font Awesome icons
 - LocalStorage for persistence
 
-## API Keys
-
-You need two free API keys:
-
-1. **TMDB Bearer Token**: Get at https://www.themoviedb.org/settings/api
-2. **OMDB API Key**: Get at https://www.omdbapi.com/apikey.aspx
-
-Add them to your `.env` file (which is `.gitignore`'d and never committed).
-
 ## Project Structure
 
 ```
@@ -126,8 +89,8 @@ Free Cloud/
 ├── styles.css          # All styles (black/white theme)
 ├── start.sh            # Launcher script
 ├── server.py           # Python HTTP server
-├── .env                # API keys (gitignored)
-├── .env.example        # Template for API keys
+├── .env                # API keys
+├── .env.example        # API keys template
 ├── .gitignore          # Git ignore rules
 ├── js/                 # JavaScript modules
 │   ├── app.js          # Entry point

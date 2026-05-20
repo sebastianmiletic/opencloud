@@ -1,6 +1,3 @@
-# Environment variables - contains sensitive API keys
-.env
-
 # macOS system files
 .DS_Store
 
