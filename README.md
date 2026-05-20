@@ -2,6 +2,93 @@
 
 A black-and-white themed streaming tracker web app with TMDB/OMDB integration, inline video player, multi-account system, Netflix-style animations, and built-in ad/popup blocker.
 
+## Installation & Setup
+
+### Mac
+
+1. **Install Python 3** (if you don't have it)
+   ```bash
+   # Check if Python 3 is installed
+   python3 --version
+
+   # If not installed, download from https://www.python.org/downloads/
+   # Or install via Homebrew:
+   brew install python
+   ```
+
+2. **Clone the repo**
+   ```bash
+   git clone https://github.com/sebastianmiletic/opencloud.git
+   cd opencloud
+   ```
+
+3. **Get your free API keys**
+   - **TMDB Bearer Token**: Go to https://www.themoviedb.org/settings/api and copy your "API Read Access Token"
+   - **OMDB API Key**: Go to https://www.omdbapi.com/apikey.aspx and get a free key
+
+4. **Set up your .env file**
+   ```bash
+   cp .env.example .env
+   ```
+   Open `.env` in any text editor and paste your keys:
+   ```
+   TMDB_BEARER_TOKEN=your_tmdb_token_here
+   OMDB_API_KEY=your_omdb_key_here
+   ```
+
+5. **Start the app**
+   ```bash
+   ./start.sh
+   ```
+   Or manually:
+   ```bash
+   python3 server.py
+   ```
+
+6. **Open your browser** and go to `http://localhost:8080`
+
+---
+
+### Windows
+
+1. **Install Python 3** (if you don't have it)
+   - Download from https://www.python.org/downloads/
+   - Run the installer and **check "Add Python to PATH"**
+   - Open Command Prompt or PowerShell and verify:
+     ```cmd
+     python --version
+     ```
+
+2. **Clone the repo**
+   ```cmd
+   git clone https://github.com/sebastianmiletic/opencloud.git
+   cd opencloud
+   ```
+   *(If you don't have Git, download the ZIP from GitHub and extract it)*
+
+3. **Get your free API keys**
+   - **TMDB Bearer Token**: Go to https://www.themoviedb.org/settings/api and copy your "API Read Access Token"
+   - **OMDB API Key**: Go to https://www.omdbapi.com/apikey.aspx and get a free key
+
+4. **Set up your .env file**
+   ```cmd
+   copy .env.example .env
+   ```
+   Open `.env` in Notepad or any text editor and paste your keys:
+   ```
+   TMDB_BEARER_TOKEN=your_tmdb_token_here
+   OMDB_API_KEY=your_omdb_key_here
+   ```
+
+5. **Start the app**
+   ```cmd
+   python server.py
+   ```
+
+6. **Open your browser** and go to `http://localhost:8080`
+
+---
+
 ## Features
 
 - **Streaming Tracker**: Search and browse movies/TV shows via TMDB API
@@ -10,6 +97,8 @@ A black-and-white themed streaming tracker web app with TMDB/OMDB integration, i
 - **Netflix-Style UI**: Splash intro, hero carousel, smooth animations
 - **Ad/Popup Blocker**: Built-in blocker with configurable settings and logs
 - **Per-Account Data**: Collection data fully isolated per profile
+- **Continue Watching**: Auto-saves your episode/season progress and resumes where you left off
+- **Collection Folders**: Create folders and organize your collection
 
 ## Tech Stack
 
@@ -19,18 +108,6 @@ A black-and-white themed streaming tracker web app with TMDB/OMDB integration, i
 - CSS3 with CSS variables
 - Font Awesome icons
 - LocalStorage for persistence
-
-## Quick Start
-
-```bash
-# Copy the example env file and add your API keys
-cp .env.example .env
-
-# Start the server and open browser
-./start.sh
-```
-
-The app runs at `http://localhost:8080`.
 
 ## API Keys
 
