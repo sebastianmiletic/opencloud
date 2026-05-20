@@ -109,21 +109,41 @@ export const DEVICES = {
   phone: { name: 'Phone', class: 'device-phone' }
 };
 
+export const DEFAULT_PROVIDER = 'vidsrccc';
+const SETTINGS_VERSION = 2; // bump to force-reset defaults for everyone
+
 export function getSettings() {
-  return JSON.parse(localStorage.getItem('openccloud_settings')) || {
-    provider: 'vidsrccc',
+  const raw = localStorage.getItem('openccloud_settings');
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      // If version mismatch, reset to defaults (forces Nova as default for all users)
+      if (parsed._version !== SETTINGS_VERSION) {
+        return {
+          provider: DEFAULT_PROVIDER,
+          device: 'laptop',
+          autoPlay: true,
+          _version: SETTINGS_VERSION
+        };
+      }
+      return parsed;
+    } catch (e) { /* fall through */ }
+  }
+  return {
+    provider: DEFAULT_PROVIDER,
     device: 'laptop',
-    autoPlay: true
+    autoPlay: true,
+    _version: SETTINGS_VERSION
   };
 }
 
 export function saveSettings(settings) {
-  localStorage.setItem('openccloud_settings', JSON.stringify(settings));
+  localStorage.setItem('openccloud_settings', JSON.stringify({ ...settings, _version: SETTINGS_VERSION }));
 }
 
 export function getProviderUrl(type, id, season = 1, episode = 1) {
   const settings = getSettings();
-  const p = PROVIDERS[settings.provider] || PROVIDERS.vidsrccc;
+  const p = PROVIDERS[settings.provider] || PROVIDERS[DEFAULT_PROVIDER];
   let url = type === 'movie' ? p.movieUrl : p.tvUrl;
   url = url.replace(/{id}/g, id).replace(/{season}/g, season).replace(/{episode}/g, episode);
   return url;
@@ -131,7 +151,7 @@ export function getProviderUrl(type, id, season = 1, episode = 1) {
 
 export function getActiveProvider() {
   const settings = getSettings();
-  return PROVIDERS[settings.provider] || PROVIDERS.vidsrccc;
+  return PROVIDERS[settings.provider] || PROVIDERS[DEFAULT_PROVIDER];
 }
 
 export function applyDeviceClass() {
