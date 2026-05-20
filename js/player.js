@@ -1,5 +1,5 @@
 /** Player Overlay & Episode Picker */
-import { playerState, setPlayerState } from './state.js';
+import { playerState, setPlayerState, setWatchProgress } from './state.js';
 import { getProviderUrl } from './config.js';
 import { fetchWithAuth } from './api.js';
 import { BASE_URL, API_KEY } from './config.js';
@@ -18,6 +18,240 @@ const epPopoverTitle = document.getElementById('epPopoverTitle');
 const epPopoverBack = document.getElementById('epPopoverBack');
 const epPopoverClose = document.getElementById('epPopoverClose');
 const epPopoverTabs = document.getElementById('epPopoverTabs');
+
+/* Elapsed-time tracking */
+let _playerOpenedAt = 0;
+let _progressInterval = null;
+let _srcPoller = null;
+let _lastKnownSrc = '';
+
+function getCurrentProgress() {
+  try {
+    const user = localStorage.getItem('openccloud_current_user') || 'Default';
+    return JSON.parse(localStorage.getItem(`openccloud_user_${user}_progress`) || '{}');
+  } catch (e) { return {}; }
+}
+
+function setCurrentProgress(data) {
+  try {
+    const user = localStorage.getItem('openccloud_current_user') || 'Default';
+    localStorage.setItem(`openccloud_user_${user}_progress`, JSON.stringify(data));
+    setWatchProgress(data);
+  } catch (e) { console.error('[setCurrentProgress] failed', e); }
+}
+
+function persistProgress(id, season, episode, extra = {}) {
+  if (!id || season == null || episode == null) return;
+  try {
+    const sid = String(id);
+    const progress = getCurrentProgress();
+    const existing = progress[sid] || {};
+    progress[sid] = {
+      season: parseInt(season),
+      episode: parseInt(episode),
+      updated_at: new Date().toISOString(),
+      elapsedMinutes: extra.elapsedMinutes ?? existing.elapsedMinutes ?? 0,
+      episodeRuntime: extra.episodeRuntime ?? existing.episodeRuntime ?? null,
+      ...extra
+    };
+    setCurrentProgress(progress);
+    console.log('[persistProgress] saved', sid, 'S' + season, 'E' + episode, progress[sid]);
+  } catch (e) {
+    console.error('[persistProgress] failed', e);
+  }
+}
+
+function addSessionElapsed() {
+  if (!_playerOpenedAt) return 0;
+  const minutes = Math.floor((Date.now() - _playerOpenedAt) / 60000);
+  _playerOpenedAt = Date.now();
+  return minutes;
+}
+
+function startProgressInterval() {
+  stopProgressInterval();
+  _progressInterval = setInterval(() => {
+    const p = playerState;
+    if (p.id && p.type === 'tv' && p.season != null && p.episode != null) {
+      const minutes = addSessionElapsed();
+      if (minutes > 0) {
+        const progress = getCurrentProgress();
+        const existing = progress[String(p.id)];
+        if (existing) {
+          existing.elapsedMinutes = (existing.elapsedMinutes || 0) + minutes;
+          existing.updated_at = new Date().toISOString();
+          setCurrentProgress(progress);
+        }
+      }
+    }
+  }, 30000); // tick every 30s
+}
+
+function stopProgressInterval() {
+  if (_progressInterval) {
+    clearInterval(_progressInterval);
+    _progressInterval = null;
+  }
+}
+
+function flushElapsedAndSave() {
+  const p = playerState;
+  if (!p.id || p.type !== 'tv') return;
+  if (p.season == null || p.episode == null) return;
+  const minutes = addSessionElapsed();
+  const sid = String(p.id);
+  const progress = getCurrentProgress();
+  const existing = progress[sid] || {};
+  progress[sid] = {
+    season: parseInt(p.season),
+    episode: parseInt(p.episode),
+    updated_at: new Date().toISOString(),
+    elapsedMinutes: (existing.elapsedMinutes || 0) + minutes,
+    episodeRuntime: existing.episodeRuntime ?? null
+  };
+  setCurrentProgress(progress);
+  console.log('[flushElapsedAndSave] saved', sid, 'S' + p.season, 'E' + p.episode);
+}
+
+/* Track our own iframe loads vs user-initiated embed navigation */
+let _intentionalLoad = false;
+let _iframeLoadHandler = null;
+
+function attachIframeLoadListener() {
+  if (!playerFrame || _iframeLoadHandler) return;
+  _iframeLoadHandler = () => {
+    if (_intentionalLoad) {
+      _intentionalLoad = false;
+      return;
+    }
+    // User navigated inside the embed — try to detect the new episode
+    const currentSrc = playerFrame.src || '';
+    console.log('[iframe] load event fired, src=', currentSrc);
+    handleIframeSrcChange(currentSrc);
+  };
+  playerFrame.addEventListener('load', _iframeLoadHandler);
+}
+
+function detachIframeLoadListener() {
+  if (!playerFrame || !_iframeLoadHandler) return;
+  playerFrame.removeEventListener('load', _iframeLoadHandler);
+  _iframeLoadHandler = null;
+}
+
+/* Detect iframe src changes from inside the player (user clicks next/prev in embed) */
+function startSrcPoller() {
+  stopSrcPoller();
+  attachIframeLoadListener();
+  _lastKnownSrc = playerFrame?.src || '';
+  _srcPoller = setInterval(() => {
+    const currentSrc = playerFrame?.src || '';
+    if (currentSrc && currentSrc !== _lastKnownSrc) {
+      _lastKnownSrc = currentSrc;
+      console.log('[srcPoller] src changed', currentSrc);
+      handleIframeSrcChange(currentSrc);
+    }
+  }, 2000);
+}
+
+function stopSrcPoller() {
+  if (_srcPoller) {
+    clearInterval(_srcPoller);
+    _srcPoller = null;
+  }
+  _lastKnownSrc = '';
+  detachIframeLoadListener();
+}
+
+function handleIframeSrcChange(src) {
+  if (playerState.type !== 'tv' || !playerState.id) return;
+  const parsed = parseSeasonEpisodeFromUrl(src);
+  if (!parsed) {
+    console.log('[handleIframeSrcChange] could not parse', src);
+    return;
+  }
+
+  const newS = parseInt(parsed.season);
+  const newE = parseInt(parsed.episode);
+  if (isNaN(newS) || isNaN(newE)) return;
+
+  // Only act if actually changed
+  if (newS === parseInt(playerState.season) && newE === parseInt(playerState.episode)) {
+    console.log('[handleIframeSrcChange] same ep, ignoring');
+    return;
+  }
+
+  console.log('[handleIframeSrcChange] detected change', 'S' + newS, 'E' + newE);
+
+  // Save elapsed for old episode
+  const minutesWatched = addSessionElapsed();
+  const progress = getCurrentProgress();
+  const existing = progress[String(playerState.id)];
+  if (existing) {
+    existing.elapsedMinutes = (existing.elapsedMinutes || 0) + minutesWatched;
+  }
+  setCurrentProgress(progress);
+
+  // Update state and title
+  setPlayerState({ ...playerState, season: newS, episode: newE });
+  updatePlayerTitle(playerState.tmdbData?.title || '', newS, newE);
+  persistProgress(playerState.id, newS, newE, { elapsedMinutes: 0 });
+  _playerOpenedAt = Date.now();
+
+  // Update Next button state
+  if (playerState.tmdbData && playerNextBtn) {
+    const [nextS, nextE] = getNextEp(newS, newE, playerState.tmdbData);
+    if (nextS !== null) {
+      playerNextBtn.style.display = 'flex';
+      playerNextBtn.disabled = false;
+      playerNextBtn.title = `Next: S${nextS} E${nextE}`;
+      playerNextBtn.onclick = () => {
+        const minutes = addSessionElapsed();
+        const p = getCurrentProgress();
+        const ex = p[String(playerState.id)];
+        if (ex) ex.elapsedMinutes = (ex.elapsedMinutes || 0) + minutes;
+        setCurrentProgress(p);
+        setPlayerState({ ...playerState, season: nextS, episode: nextE });
+        updatePlayerTitle(playerState.tmdbData.title, nextS, nextE);
+        persistProgress(playerState.id, nextS, nextE, { elapsedMinutes: 0 });
+        _playerOpenedAt = Date.now();
+        initPlayerData();
+      };
+    } else {
+      playerNextBtn.style.display = 'flex';
+      playerNextBtn.disabled = true;
+      playerNextBtn.title = 'No next episode';
+    }
+  }
+}
+
+function parseSeasonEpisodeFromUrl(url) {
+  try {
+    const u = new URL(url);
+    const path = u.pathname;
+    const search = u.search;
+
+    // Format: /tv/{id}/{season}/{episode}  (vidsrccc, vidsrcto, videasy, vidsrcsu, vidlink)
+    let m = path.match(/\/tv\/\d+\/(\d+)\/(\d+)/);
+    if (m) return { season: m[1], episode: m[2] };
+
+    // Format: /tv/{id}-{season}-{episode}  (moviesapi)
+    m = path.match(/\/tv\/\d+-(\d+)-(\d+)/);
+    if (m) return { season: m[1], episode: m[2] };
+
+    // Format: ?tmdb={id}&season={season}&episode={episode}  (vidsrcme)
+    const s = new URLSearchParams(search).get('season');
+    const e = new URLSearchParams(search).get('episode');
+    if (s && e) return { season: s, episode: e };
+  } catch (e) {
+    console.error('[parseSeasonEpisodeFromUrl]', e);
+  }
+  return null;
+}
+
+/* beforeunload: always do a final save */
+window.addEventListener('beforeunload', () => {
+  flushElapsedAndSave();
+});
 
 export function initPlayer() {
   if (playerBackBtn) playerBackBtn.addEventListener('click', closePlayer);
@@ -58,11 +292,17 @@ function getPlayerSrc() {
 }
 
 function loadPlayerIframe() {
-  if (playerFrame) playerFrame.src = getPlayerSrc();
+  if (!playerFrame) return;
+  _intentionalLoad = true;
+  playerFrame.src = getPlayerSrc();
 }
 
 export function closePlayer() {
   if (!playerOverlay) return;
+  flushElapsedAndSave();
+  stopProgressInterval();
+  stopSrcPoller();
+  _playerOpenedAt = 0;
   playerOverlay.classList.add('closing');
   setTimeout(() => {
     playerOverlay.classList.add('hidden');
@@ -76,21 +316,55 @@ export function closePlayer() {
 export function openPlayer(id, type, season, episode) {
   if (!playerOverlay || !playerFrame) return;
 
+  let startSeason = season ?? 1;
+  let startEpisode = episode ?? 1;
+
+  // Resume from saved progress for TV shows if no explicit episode provided
+  if (type === 'tv' && season == null && episode == null) {
+    try {
+      const progress = getCurrentProgress();
+      const saved = progress[String(id)];
+      if (saved && saved.season != null && saved.episode != null) {
+        startSeason = saved.season;
+        startEpisode = saved.episode;
+        console.log('[openPlayer] resuming from saved', id, 'S' + startSeason, 'E' + startEpisode);
+      }
+    } catch (e) { /* ignore */ }
+  }
+
   setPlayerState({
     id,
     type,
-    season: season || 1,
-    episode: episode || 1,
+    season: startSeason,
+    episode: startEpisode,
     tmdbData: null,
     epData: null,
     view: 'seasons'
   });
 
+  // Save immediately so a reload right after clicking play resumes correctly
+  if (type === 'tv') {
+    persistProgress(id, startSeason, startEpisode);
+  }
+
+  _playerOpenedAt = Date.now();
   playerOverlay.classList.remove('hidden');
   playerOverlay.classList.remove('closing');
   lockScroll();
-  window.dispatchEvent(new CustomEvent('watchStarted', { detail: { id, type } }));
+  window.dispatchEvent(new CustomEvent('watchStarted', { detail: { id, type, season: startSeason, episode: startEpisode } }));
+  startProgressInterval();
+  startSrcPoller();
   initPlayerData();
+}
+
+function updatePlayerTitle(name, season, episode) {
+  if (playerTitleText) {
+    if (playerState.type === 'tv') {
+      playerTitleText.textContent = `${name} S${season} E${episode}`;
+    } else {
+      playerTitleText.textContent = name;
+    }
+  }
 }
 
 async function initPlayerData() {
@@ -102,7 +376,7 @@ async function initPlayerData() {
         headers: { 'Authorization': `Bearer ${API_KEY}`, 'accept': 'application/json' }
       });
       const data = await res.json();
-      if (playerTitleText) playerTitleText.textContent = data.original_title || data.title;
+      updatePlayerTitle(data.original_title || data.title);
       if (playerNextBtn) playerNextBtn.style.display = 'none';
       if (playerEpBtn) {
         playerEpBtn.style.display = 'none';
@@ -122,20 +396,31 @@ async function initPlayerData() {
       }
       setPlayerState({ ...p, tmdbData: newTmdbData });
 
-      if (playerTitleText) {
-        playerTitleText.textContent = `${data.name} S${p.season} E${p.episode}`;
-      }
+      // Update title with CURRENT state (which may have been changed by Next/Ep picker/srcPoller)
+      updatePlayerTitle(data.name, playerState.season, playerState.episode);
 
-      const [nextS, nextE] = getNextEp(p.season, p.episode, newTmdbData);
+      // Save progress again now that metadata is confirmed loaded
+      persistProgress(p.id, playerState.season, playerState.episode);
+
+      const [nextS, nextE] = getNextEp(playerState.season, playerState.episode, newTmdbData);
       if (nextS !== null && playerNextBtn) {
         playerNextBtn.style.display = 'flex';
         playerNextBtn.disabled = false;
         playerNextBtn.title = `Next: S${nextS} E${nextE}`;
         playerNextBtn.onclick = () => {
-          setPlayerState({ ...playerState, season: nextS, episode: nextE });
-          if (playerTitleText) {
-            playerTitleText.textContent = `${newTmdbData.title} S${nextS} E${nextE}`;
+          const minutesWatched = addSessionElapsed();
+          // Save old episode elapsed first
+          const progress = getCurrentProgress();
+          const existing = progress[String(p.id)];
+          if (existing) {
+            existing.elapsedMinutes = (existing.elapsedMinutes || 0) + minutesWatched;
           }
+          setCurrentProgress(progress);
+
+          setPlayerState({ ...playerState, season: nextS, episode: nextE });
+          updatePlayerTitle(newTmdbData.title, nextS, nextE);
+          persistProgress(p.id, nextS, nextE, { elapsedMinutes: 0 });
+          _playerOpenedAt = Date.now();
           initPlayerData();
         };
       } else if (playerNextBtn) {
@@ -192,6 +477,19 @@ async function loadEpPopoverData(tmdbData) {
       };
     }
     setPlayerState({ ...p, epData: result });
+
+    // Cache current episode runtime in progress
+    const currentEp = result[p.season]?.episodes?.find(
+      ep => String(ep.episode_number) === String(p.episode)
+    );
+    if (currentEp?.runtime) {
+      const progress = getCurrentProgress();
+      if (progress[String(p.id)]) {
+        progress[String(p.id)].episodeRuntime = currentEp.runtime;
+        setCurrentProgress(progress);
+      }
+    }
+
     if (playerEpBtn) {
       playerEpBtn.disabled = false;
       playerEpBtn.innerHTML = '<i class="fas fa-list"></i> <span>Episodes</span>';
@@ -269,7 +567,17 @@ function showEpisodes(season) {
     li.addEventListener('click', () => {
       const newSeason = li.getAttribute('data-season');
       const newEpisode = li.getAttribute('data-episode');
+      const minutesWatched = addSessionElapsed();
+      const progress = getCurrentProgress();
+      const existing = progress[String(playerState.id)];
+      if (existing) {
+        existing.elapsedMinutes = (existing.elapsedMinutes || 0) + minutesWatched;
+      }
+      setCurrentProgress(progress);
+
       setPlayerState({ ...playerState, season: newSeason, episode: newEpisode });
+      persistProgress(playerState.id, newSeason, newEpisode, { elapsedMinutes: 0 });
+      _playerOpenedAt = Date.now();
       closeEpPopover();
       initPlayerData();
     });

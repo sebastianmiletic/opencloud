@@ -1,8 +1,8 @@
 /** localStorage & Cache Wrappers */
-import { setAccounts, setCollection, setUserCollection, setUserHistory } from './state.js';
+import { setAccounts, setCollection, setUserCollection, setUserHistory, setWatchProgress, setUserFolders } from './state.js';
 
 const DEFAULT_ACCOUNT = 'Default';
-const PRIVACY_RESET_KEY = 'openccloud_privacy_reset_v1';
+const PRIVACY_RESET_KEY = 'openccloud_privacy_reset_v2';
 
 function safeParse(value, fallback) {
   if (!value) return fallback;
@@ -118,6 +118,52 @@ export function getUserHistoryForUser(user) {
   return safeParse(localStorage.getItem(`openccloud_user_${user}_history`), []);
 }
 
+export function getWatchProgress() {
+  const prefix = getUserPrefix();
+  if (!prefix) return {};
+  return safeParse(localStorage.getItem(`${prefix}_progress`), {});
+}
+
+export function saveWatchProgress(data) {
+  const prefix = getUserPrefix();
+  if (!prefix) return;
+  localStorage.setItem(`${prefix}_progress`, JSON.stringify(data));
+}
+
+export function getWatchProgressForUser(user) {
+  if (!user) return {};
+  return safeParse(localStorage.getItem(`openccloud_user_${user}_progress`), {});
+}
+
+export function saveWatchProgressForUser(user, data) {
+  if (!user) return;
+  localStorage.setItem(`openccloud_user_${user}_progress`, JSON.stringify(data));
+}
+
+export function getUserFolders() {
+  const prefix = getUserPrefix();
+  if (!prefix) return [];
+  const parsed = safeParse(localStorage.getItem(`${prefix}_folders`), []);
+  return Array.isArray(parsed) ? parsed : [];
+}
+
+export function saveUserFolders(data) {
+  const prefix = getUserPrefix();
+  if (!prefix) return;
+  localStorage.setItem(`${prefix}_folders`, JSON.stringify(data));
+}
+
+export function getUserFoldersForUser(user) {
+  if (!user) return [];
+  const parsed = safeParse(localStorage.getItem(`openccloud_user_${user}_folders`), []);
+  return Array.isArray(parsed) ? parsed : [];
+}
+
+export function saveUserFoldersForUser(user, data) {
+  if (!user) return;
+  localStorage.setItem(`openccloud_user_${user}_folders`, JSON.stringify(data));
+}
+
 export function initStorage() {
   runOneTimePrivacyReset();
   const accountList = getAccounts();
@@ -128,4 +174,6 @@ export function initStorage() {
   setCollection(getCollection());
   setUserCollection(getUserCollection());
   setUserHistory(getUserHistory());
+  setWatchProgress(getWatchProgress());
+  setUserFolders(getUserFolders());
 }

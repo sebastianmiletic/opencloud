@@ -1,8 +1,8 @@
 /** Account System */
-import { accounts, setAccounts, setUserCollection, setUserHistory } from './state.js';
+import { accounts, setAccounts, setUserCollection, setUserHistory, setWatchProgress, setUserFolders } from './state.js';
 import {
   getAccounts, saveAccounts, getCurrentUser, setCurrentUser,
-  getUserCollection, getUserHistory
+  getUserCollection, getUserHistory, getWatchProgress, getUserFolders
 } from './storage.js';
 import { showToast, showConfirm } from './utils.js';
 
@@ -14,6 +14,8 @@ export function initUser() {
   if (name) name.textContent = user || 'Default';
   setUserCollection(getUserCollection());
   setUserHistory(getUserHistory());
+  setWatchProgress(getWatchProgress());
+  setUserFolders(getUserFolders());
   renderAccountDropdown();
 }
 
@@ -53,7 +55,10 @@ export function renderAccountDropdown() {
       // Reload current tab via dynamic import to avoid circular deps
       const activeTab = document.querySelector('.nav-btn.active')?.dataset.tab || 'home';
       if (activeTab === 'home') {
-        import('./ui.js').then(m => m.loadHomeCategories());
+        import('./ui.js').then(m => {
+          m.loadHomeCategories();
+          m.loadContinueWatching();
+        });
       } else if (activeTab === 'collection') {
         import('./ui.js').then(m => m.renderUserCollection());
       } else if (activeTab === 'history') {
@@ -71,6 +76,8 @@ export function renderManageAccounts() {
     const prefix = `openccloud_user_${user}`;
     const ucCount = (JSON.parse(localStorage.getItem(`${prefix}_usercollection`)) || []).length;
     const hCount = (JSON.parse(localStorage.getItem(`${prefix}_history`)) || []).length;
+    const pCount = Object.keys(JSON.parse(localStorage.getItem(`${prefix}_progress`)) || {}).length;
+    const fCount = (JSON.parse(localStorage.getItem(`${prefix}_folders`)) || []).length;
     const isCurrent = user === getCurrentUser();
     const canDelete = accounts.length > 1;
     return `
@@ -78,7 +85,7 @@ export function renderManageAccounts() {
         <div class="dropdown-avatar">${user.charAt(0).toUpperCase()}</div>
         <div class="account-info">
           <div class="name">${user} ${isCurrent ? '<span style="color:var(--text-muted);font-size:0.75rem;">(Current)</span>' : ''}</div>
-          <div class="details">${ucCount} in collection • ${hCount} in history</div>
+          <div class="details">${ucCount} in collection • ${hCount} in history • ${pCount} in progress • ${fCount} folders</div>
         </div>
         <button class="remove-btn" data-user="${user}" ${!canDelete ? 'disabled' : ''}>Remove</button>
       </div>
@@ -95,6 +102,8 @@ export function renderManageAccounts() {
       setAccounts(newAccounts);
       localStorage.removeItem(`openccloud_user_${user}_usercollection`);
       localStorage.removeItem(`openccloud_user_${user}_history`);
+      localStorage.removeItem(`openccloud_user_${user}_progress`);
+      localStorage.removeItem(`openccloud_user_${user}_folders`);
       if (getCurrentUser() === user) {
         setCurrentUser(newAccounts[0] || 'Default');
         initUser();

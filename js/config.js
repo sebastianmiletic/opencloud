@@ -19,7 +19,8 @@ export const STAR_WARS_SAGA_ORDER = [
 
 export const PROVIDERS = {
   vidsrccc: {
-    name: 'Nova',
+    name: 'Default',
+    tier: 1,
     movie: true,
     tv: true,
     quality: '1080p',
@@ -28,6 +29,30 @@ export const PROVIDERS = {
     description: 'Reliable all-rounder with fast load times and consistent uptime.',
     movieUrl: 'https://vidsrc.cc/v3/embed/movie/{id}?autoPlay=false',
     tvUrl: 'https://vidsrc.cc/v3/embed/tv/{id}/{season}/{episode}?autoPlay=false'
+  },
+  videasy: {
+    name: 'Best',
+    tier: 1,
+    movie: true,
+    tv: true,
+    quality: '4K',
+    subtitles: true,
+    speed: 'Fast',
+    description: 'Premium player with built-in next-episode and selector UI.',
+    movieUrl: 'https://player.videasy.net/movie/{id}?nextEpisode=true&episodeSelector=true',
+    tvUrl: 'https://player.videasy.net/tv/{id}/{season}/{episode}?nextEpisode=true&episodeSelector=true'
+  },
+  vidsrcme: {
+    name: '2nd',
+    tier: 1,
+    movie: true,
+    tv: true,
+    quality: '1080p',
+    subtitles: true,
+    speed: 'Medium',
+    description: 'Stable source with multi-language subtitle support.',
+    movieUrl: 'https://vidsrc.me/embed/movie?tmdb={id}',
+    tvUrl: 'https://vidsrc.me/embed/tv?tmdb={id}&season={season}&episode={episode}'
   },
   vidsrcto: {
     name: 'Phantom',
@@ -50,28 +75,6 @@ export const PROVIDERS = {
     description: 'Large back-catalog with older titles and cult classics.',
     movieUrl: 'https://moviesapi.club/movie/{id}',
     tvUrl: 'https://moviesapi.club/tv/{id}-{season}-{episode}'
-  },
-  vidsrcme: {
-    name: 'Pulse',
-    movie: true,
-    tv: true,
-    quality: '1080p',
-    subtitles: true,
-    speed: 'Medium',
-    description: 'Stable source with multi-language subtitle support.',
-    movieUrl: 'https://vidsrc.me/embed/movie?tmdb={id}',
-    tvUrl: 'https://vidsrc.me/embed/tv?tmdb={id}&season={season}&episode={episode}'
-  },
-  videasy: {
-    name: 'Helix',
-    movie: true,
-    tv: true,
-    quality: '4K',
-    subtitles: true,
-    speed: 'Fast',
-    description: 'Premium player with built-in next-episode and selector UI.',
-    movieUrl: 'https://player.videasy.net/movie/{id}?nextEpisode=true&episodeSelector=true',
-    tvUrl: 'https://player.videasy.net/tv/{id}/{season}/{episode}?nextEpisode=true&episodeSelector=true'
   },
   vidsrcsu: {
     name: 'Zenith',
