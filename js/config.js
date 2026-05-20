@@ -19,7 +19,8 @@ export const STAR_WARS_SAGA_ORDER = [
 
 export const PROVIDERS = {
   vidsrccc: {
-    name: 'Default',
+    name: 'Nova',
+    rank: 'Default',
     tier: 1,
     movie: true,
     tv: true,
@@ -31,7 +32,8 @@ export const PROVIDERS = {
     tvUrl: 'https://vidsrc.cc/v3/embed/tv/{id}/{season}/{episode}?autoPlay=false'
   },
   videasy: {
-    name: 'Best',
+    name: 'Helix',
+    rank: '1st',
     tier: 1,
     movie: true,
     tv: true,
@@ -43,7 +45,8 @@ export const PROVIDERS = {
     tvUrl: 'https://player.videasy.net/tv/{id}/{season}/{episode}?nextEpisode=true&episodeSelector=true'
   },
   vidsrcme: {
-    name: '2nd',
+    name: 'Pulse',
+    rank: '2nd',
     tier: 1,
     movie: true,
     tv: true,

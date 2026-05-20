@@ -84,8 +84,9 @@ function renderProviderCards() {
   container.innerHTML = sortedEntries.map(([key, p]) => {
     const isActive = key === currentKey;
     const isBest = p.tier === 1;
+    const rankLabel = p.rank || '';
     const badges = [];
-    if (isBest) badges.push('<span class="provider-badge badge-best"><i class="fas fa-star"></i> Best</span>');
+    if (rankLabel) badges.push(`<span class="provider-badge badge-rank">${rankLabel} ${p.name}</span>`);
     if (p.movie && p.tv) badges.push('<span class="provider-badge"><i class="fas fa-film"></i> Movies + TV</span>');
     else if (p.movie) badges.push('<span class="provider-badge"><i class="fas fa-film"></i> Movies</span>');
     else if (p.tv) badges.push('<span class="provider-badge"><i class="fas fa-tv"></i> TV</span>');
@@ -97,7 +98,7 @@ function renderProviderCards() {
     return `
       <div class="provider-card ${isActive ? 'active' : ''} ${isBest ? 'provider-best' : ''}" data-provider="${key}">
         <div class="provider-card-header">
-          <div class="provider-card-name">${p.name}${isBest ? ' <i class="fas fa-star" style="color:var(--text-primary);font-size:0.75rem;margin-left:0.25rem;"></i>' : ''}</div>
+          <div class="provider-card-name">${rankLabel ? rankLabel + ' ' : ''}${p.name}</div>
           <div class="provider-card-check">${isActive ? '<i class="fas fa-check-circle"></i>' : '<i class="far fa-circle"></i>'}</div>
         </div>
         <div class="provider-card-badges">${badges.join('')}</div>

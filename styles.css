@@ -2226,7 +2226,7 @@ body {
   border-color: var(--text-primary);
 }
 
-.provider-badge.badge-best {
+.provider-badge.badge-rank {
   background: var(--text-primary);
   color: var(--bg-primary);
   border-color: var(--text-primary);
