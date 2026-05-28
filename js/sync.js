@@ -109,6 +109,8 @@ export async function addWatchHistory(userId, item) {
   const sb = getClient();
   if (!sb || !userId) return false;
   try {
+    // Delete any existing entry first to avoid duplicates/unique-constraint issues
+    await sb.from('watch_history').delete().eq('user_id', userId).eq('tmdb_id', item.id);
     const { error } = await sb.from('watch_history').insert({
       user_id: userId,
       tmdb_id: item.id,

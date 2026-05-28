@@ -160,7 +160,7 @@ export async function addToUserHistory(item) {
   const entry = {
     id: item.id,
     media_type: item.media_type,
-    title: item.title,
+    title: item.title || item.name || 'Unknown',
     season: item.season || null,
     episode: item.episode || null,
     duration_watched: item.duration_watched || 0,

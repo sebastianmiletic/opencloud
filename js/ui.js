@@ -1945,23 +1945,21 @@ export async function addToUserHistory(item) {
   const title = historyItem.title || historyItem.name || 'Unknown';
   const year = (historyItem.release_date || historyItem.first_air_date || '').slice(0, 4);
 
+  const newItem = {
+    id: item.id,
+    media_type: item.media_type,
+    title,
+    year,
+    poster_path: historyItem.poster_path || null,
+    vote_average: historyItem.vote_average || 0,
+    watched_at: new Date().toISOString()
+  };
   const existing = userHistory.filter(h => !(h.id === item.id && h.media_type === item.media_type));
-  const nextHistory = [
-    {
-      id: item.id,
-      media_type: item.media_type,
-      title,
-      year,
-      poster_path: historyItem.poster_path || null,
-      vote_average: historyItem.vote_average || 0,
-      watched_at: new Date().toISOString()
-    },
-    ...existing
-  ].slice(0, 200);
+  const nextHistory = [newItem, ...existing].slice(0, 200);
 
   await saveUserHistory(nextHistory);
-  setUserHistory(getUserHistory());
-  await storageAddHistory(historyItem);
+  setUserHistory(nextHistory);
+  await storageAddHistory(newItem);
   if (currentTab === 'history') renderUserHistory();
 }
 

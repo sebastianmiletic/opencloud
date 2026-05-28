@@ -33,7 +33,8 @@ create table if not exists watch_history (
   season integer,
   episode integer,
   duration_watched integer default 0,
-  watched_at timestamp with time zone default timezone('utc'::text, now())
+  watched_at timestamp with time zone default timezone('utc'::text, now()),
+  unique(user_id, tmdb_id)
 );
 
 create table if not exists watch_progress (
