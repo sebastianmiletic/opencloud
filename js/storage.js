@@ -8,7 +8,7 @@ import {
   fetchWatchSessions, recordWatchSession as syncRecordSession,
   updateProfile
 } from './sync.js';
-import { getCurrentAuthUser } from './auth.js';
+import { getCurrentAuthUser, getSupabaseClient } from './auth.js';
 import {
   setUserCollection, setUserHistory, setWatchProgress, setUserFolders
 } from './state.js';
@@ -106,28 +106,29 @@ export async function saveUserHistory(items) {
   if (!userId || !Array.isArray(items)) return false;
   _cache.history = items;
   setUserHistory(items);
-  // Save each item individually to Supabase (overwrite strategy: clear then re-add)
+  // Bulk save to Supabase (clear then re-insert)
+  const supabase = getSupabaseClient();
+  if (!supabase) return false;
   try {
-    // First remove all existing history for user
-    await supabase?.from?.('watch_history')?.delete()?.eq('user_id', userId);
-  } catch (e) { /* RLS or not available */ }
-  // Re-add in batches
-  const batch = items.slice(0, 50).map(item => ({
-    user_id: userId,
-    tmdb_id: Number(item.id) || 0,
-    media_type: item.media_type,
-    title: item.title,
-    season: item.season || null,
-    episode: item.episode || null,
-    duration_watched: item.duration_watched || 0,
-    watched_at: item.watched_at || new Date().toISOString()
-  }));
-  if (batch.length) {
-    try {
-      await supabase?.from?.('watch_history')?.insert(batch);
-    } catch (e) { console.error('[saveUserHistory] batch insert failed:', e); }
+    await supabase.from('watch_history').delete().eq('user_id', userId);
+    const batch = items.slice(0, 50).map(item => ({
+      user_id: userId,
+      tmdb_id: Number(item.id) || 0,
+      media_type: item.media_type,
+      title: item.title,
+      season: item.season || null,
+      episode: item.episode || null,
+      duration_watched: item.duration_watched || 0,
+      watched_at: item.watched_at || new Date().toISOString()
+    }));
+    if (batch.length) {
+      await supabase.from('watch_history').insert(batch);
+    }
+    return true;
+  } catch (e) {
+    console.error('[saveUserHistory] Supabase save failed:', e);
+    return false;
   }
-  return true;
 }
 
 export async function addToUserHistory(item) {
