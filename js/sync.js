@@ -119,6 +119,9 @@ export async function addWatchHistory(userId, item) {
       season: item.season || null,
       episode: item.episode || null,
       duration_watched: item.duration_watched || 0,
+      poster_path: item.poster_path || null,
+      vote_average: item.vote_average || 0,
+      year: item.year || null,
       watched_at: new Date().toISOString()
     });
     if (error) throw error;
@@ -147,6 +150,9 @@ export async function fetchWatchHistory(userId, limit = 100) {
       season: row.season,
       episode: row.episode,
       duration_watched: row.duration_watched,
+      poster_path: row.poster_path,
+      vote_average: row.vote_average,
+      year: row.year,
       watched_at: row.watched_at
     }));
   } catch (err) {
@@ -459,18 +465,30 @@ export async function createProfile(userId, email, username) {
   const sb = getClient();
   if (!sb || !userId) return false;
   try {
-    const isAdmin = email === 'sebastian.miletic043@gmail.com';
     const { error } = await sb.from('profiles').upsert({
       id: userId,
       email: email,
       username: username || email.split('@')[0],
-      is_admin: isAdmin,
+      is_admin: false,
       created_at: new Date().toISOString()
     }, { onConflict: 'id' });
     if (error) throw error;
     return true;
   } catch (err) {
     console.error('[Sync] create profile failed:', err);
+    return false;
+  }
+}
+
+export async function activateAdmin(userId) {
+  const sb = getClient();
+  if (!sb || !userId) return false;
+  try {
+    const { error } = await sb.from('profiles').update({ is_admin: true }).eq('id', userId);
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.error('[Sync] activate admin failed:', err);
     return false;
   }
 }

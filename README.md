@@ -1,6 +1,6 @@
 # Open Cloud
 
-A black-and-white themed streaming tracker web app with TMDB/OMDB integration, inline video player, Supabase authentication, Netflix-style animations, and a built-in ad/popup blocker.
+A black-and-white themed streaming tracker web app with TMDB/OMDB integration, inline video player, Supabase authentication, Netflix-style animations, and a built-in ad/popup blocker. Track what you watch, save your favorites, and resume where you left off.
 
 ---
 
@@ -65,7 +65,7 @@ A black-and-white themed streaming tracker web app with TMDB/OMDB integration, i
 ### Navigating the App
 - **Home** tab — Browse trending content
 - **Collection** tab — Your saved movies/shows with folder support
-- **History** tab — Shows and movies you've watched (auto-tracked)
+- **History** tab — Movies and shows you've watched, with posters, ratings, and watch dates
 
 ### Player
 - Click **Watch Now** on any item to open the inline player
@@ -73,6 +73,7 @@ A black-and-white themed streaming tracker web app with TMDB/OMDB integration, i
 - **Next Episode** button — Automatically skips to the next TV episode
 - **Episodes** button — Opens a popover to choose any season/episode
 - TV episodes auto-resume from where you left off
+- **Watch History** — Items are automatically added to your History when you open the player
 
 ### Account Dropdown (top-right avatar)
 - **Settings** — Opens the settings modal
@@ -87,17 +88,17 @@ A black-and-white themed streaming tracker web app with TMDB/OMDB integration, i
 Open Cloud/
 ├── index.html          # Main app shell with all modals
 ├── styles.css          # Main black-and-white theme styles
-├── beta.css            # Experimental UI styles (deprecated)
 ├── server.py           # Python HTTP server + env injection
 ├── .env                # API keys (gitignored — never commit this)
 ├── .env.example        # Template for .env keys
 ├── version.json        # App version metadata
+├── sw.js               # Service Worker — no hard refreshes needed
 ├── js/
 │   ├── app.js          # Entry point, auth, update checker, app init
 │   ├── auth.js         # Supabase authentication (sign in / up / out / password)
 │   ├── api.js          # TMDB + OMDB fetch helpers
 │   ├── ui.js           # Home, search, item modals, collection, history
-│   ├── player.js       # Inline iframe player, episode picker, progress
+│   ├── player.js       # Inline iframe player, episode picker, progress, history tracking
 │   ├── config.js       # API keys, providers, settings sync
 │   ├── settings.js     # Settings modal logic (general / sources / blocker / stats / account / admin)
 │   ├── storage.js      # Supabase-backed storage with in-memory caching
@@ -109,6 +110,7 @@ Open Cloud/
 │   └── supabase.js     # Watch sessions and stats aggregation
 ├── docs/
 │   ├── supabase_schema.sql   # SQL for creating Supabase tables
+│   ├── SUPABASE_SETUP.md     # Step-by-step Supabase setup guide
 │   └── architecture.md       # Architecture notes
 └── README.md           # This file
 ```
@@ -123,7 +125,7 @@ Open Cloud/
 - **Netflix UI** — Splash screen, hero carousel, smooth animations
 - **Ad Blocker** — Built-in popup blocker with block logs
 - **Continue Watching** — Auto-saves TV progress by season/episode
-- **History** — Movies add after 5 minutes, TV adds after 1 second
+- **History** — Auto-tracks every movie and show you open in the player, with poster, rating, and year
 - **Collections** — Save items and organize with folders
 
 ### Authentication
@@ -131,28 +133,29 @@ Open Cloud/
 - **One Account Per Email** — Strictly enforced
 - **Usernames** — Choose a display name during signup
 - **Account Actions** — Change password, change email, delete account
-- **Admin Dashboard** — Full user management panel for `sebastian.miletic043@gmail.com`
+- **Admin Dashboard** — Full user management panel for admin accounts
   - See all users, last seen time, status
   - Kick users
   - Ban/unban users with reason
   - Wipe all user data
   - View per-user stats (collection, history, progress counts)
+- **Admin Activation** — Users can activate admin access via an activation key in Settings > General
 - **Ban System** — Banned users are prevented from signing in with a suspension message
 
 ### Settings Tabs
-- **General** — Device layout (laptop / TV / phone), auto-play toggle
+- **General** — Device layout (laptop / TV / phone), auto-play toggle, activation key input
 - **Video Sources** — Pick from 7 providers with quality and subtitle info
 - **Blocker** — Toggle protection, configure rules, view block logs
 - **Stats** — Watch heatmap, hours watched, movies/episodes count, current streak
 - **Account** — Avatar upload, color presets, display name, email, password, account deletion
-- **Admin** *(admin only)* — User management panel
+- **Admin** *(admin only)* — User management panel (activated via activation key)
 
 ### Updates
 - **Smart Update Check** — Checks GitHub on every app load for code changes
 - **Update Modal** — Opens a modal showing the commit message, author, date, and changed files. Has "Install Update Now" button
 - **Ignores noise** — Won't notify for README, docs, images, or non-code changes
-- **No more "Install Latest Update"** button in the old dropdown — it's all in the update modal now
 - **After updating**, the badge disappears and the app is up to date
+- **No hard refreshes** — Service Worker handles cache invalidation automatically
 
 ---
 
@@ -178,7 +181,7 @@ Open Cloud/
 4. Run the SQL from `docs/supabase_schema.sql` in the SQL Editor
 5. Copy your project URL and anon key into `.env`
 
-**Admin auto-assignment**: `sebastian.miletic043@gmail.com` automatically gets `is_admin = true` on signup via the `createProfile` function.
+**Admin access** can be activated by any user who enters the correct activation key in **Settings > General**.
 
 ---
 

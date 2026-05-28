@@ -464,7 +464,7 @@ async function initPlayerData() {
       }
       loadPlayerIframe();
       // Add to watch history
-      addToUserHistory({ id: p.id, media_type: p.type, title: data.title || data.name }).catch(() => {});
+      addToUserHistory({ id: p.id, media_type: p.type, title: data.title || data.name, poster_path: data.poster_path, vote_average: data.vote_average, year: data.release_date?.slice(0, 4) }).catch(() => {});
     } else {
       const url = `${BASE_URL}/tv/${p.id}?language=en-US`;
       const res = await fetch(url, {
@@ -485,7 +485,7 @@ async function initPlayerData() {
       await persistProgress(p.id, playerState.season, playerState.episode);
 
       // Add to watch history with season/episode
-      addToUserHistory({ id: p.id, media_type: p.type, title: data.name, season: playerState.season, episode: playerState.episode }).catch(() => {});
+      addToUserHistory({ id: p.id, media_type: p.type, title: data.name, poster_path: data.poster_path, vote_average: data.vote_average, year: data.first_air_date?.slice(0, 4), season: playerState.season, episode: playerState.episode }).catch(() => {});
 
       const [nextS, nextE] = getNextEp(playerState.season, playerState.episode, newTmdbData);
       if (nextS !== null && playerNextBtn) {

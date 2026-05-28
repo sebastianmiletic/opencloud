@@ -142,6 +142,9 @@ export async function saveUserHistory(items) {
       season: item.season || null,
       episode: item.episode || null,
       duration_watched: item.duration_watched || 0,
+      poster_path: item.poster_path || null,
+      vote_average: item.vote_average || 0,
+      year: item.year || null,
       watched_at: item.watched_at || new Date().toISOString()
     }));
     if (batch.length) {
@@ -164,6 +167,9 @@ export async function addToUserHistory(item) {
     season: item.season || null,
     episode: item.episode || null,
     duration_watched: item.duration_watched || 0,
+    poster_path: item.poster_path || null,
+    vote_average: item.vote_average || 0,
+    year: item.year || (item.release_date || item.first_air_date || '').slice(0, 4) || null,
     watched_at: new Date().toISOString()
   };
   // Deduplicate and cap — instant

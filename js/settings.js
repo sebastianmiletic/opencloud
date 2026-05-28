@@ -6,7 +6,7 @@ import { initBlockerUI } from './blocker.js';
 import { getCurrentUser, getLocalProfile, saveLocalProfile } from './storage.js';
 import { getWatchSessions, aggregateStats } from './supabase.js';
 import { isAdmin, getCurrentAuthUser, getUserEmail, updatePassword, updateEmail, deleteAccount, signOut, getSupabaseClient } from './auth.js';
-import { fetchAllUsers, fetchTotalUserCount, fetchUserStats, banUser, unbanUser, deleteUserData, getActiveSessions, kickUser } from './sync.js';
+import { fetchAllUsers, fetchTotalUserCount, fetchUserStats, banUser, unbanUser, deleteUserData, getActiveSessions, kickUser, activateAdmin } from './sync.js';
 
 let settings = getSettings();
 let currentSettingsTab = 'general';
@@ -171,6 +171,33 @@ export function openSettingsModal() {
 
   if (deviceSelect) deviceSelect.value = settings.device;
   if (autoPlay) autoPlay.checked = settings.autoPlay !== false;
+
+  // Activation key
+  const activationInput = document.getElementById('activationKey');
+  const activateBtn = document.getElementById('activateBtn');
+  if (activationInput && activateBtn) {
+    activateBtn.onclick = async () => {
+      const val = activationInput.value.trim();
+      if (val === '1234') {
+        const user = getCurrentAuthUser();
+        if (!user) { showToast('Not signed in', 'error'); return; }
+        const ok = await activateAdmin(user.id);
+        if (ok) {
+          // Refresh admin state from server
+          const { data } = await getSupabaseClient().from('profiles').select('is_admin').eq('id', user.id).single();
+          if (data?.is_admin) {
+            showToast('Admin access granted', 'success');
+            adminTabBtn?.classList.remove('hidden');
+            switchSettingsTab('admin');
+          }
+        } else {
+          showToast('Activation failed', 'error');
+        }
+      } else {
+        showToast('Invalid activation key', 'error');
+      }
+    };
+  }
 
   // Show/hide admin tab
   const adminTabBtn = document.getElementById('adminTabBtn');
