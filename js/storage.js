@@ -148,7 +148,22 @@ export async function saveUserHistory(items) {
       watched_at: item.watched_at || new Date().toISOString()
     }));
     if (batch.length) {
-      await supabase.from('watch_history').insert(batch);
+      const { error } = await supabase.from('watch_history').insert(batch);
+      if (error) {
+        console.warn('[saveUserHistory] Full batch failed, retrying core columns:', error.message);
+        const coreBatch = items.slice(0, 50).map(item => ({
+          user_id: userId,
+          tmdb_id: Number(item.id) || 0,
+          media_type: item.media_type,
+          title: item.title,
+          season: item.season || null,
+          episode: item.episode || null,
+          duration_watched: item.duration_watched || 0,
+          watched_at: item.watched_at || new Date().toISOString()
+        }));
+        const { error: coreError } = await supabase.from('watch_history').insert(coreBatch);
+        if (coreError) throw coreError;
+      }
     }
     return true;
   } catch (e) {

@@ -109,7 +109,10 @@ export async function addWatchHistory(userId, item) {
   const sb = getClient();
   if (!sb || !userId) return false;
   try {
+    // Delete any existing entry first to avoid duplicates
     await sb.from('watch_history').delete().eq('user_id', userId).eq('tmdb_id', item.id);
+    
+    // Try insert with full metadata first
     const { error } = await sb.from('watch_history').insert({
       user_id: userId,
       tmdb_id: item.id,
@@ -123,7 +126,22 @@ export async function addWatchHistory(userId, item) {
       year: item.year || null,
       watched_at: new Date().toISOString()
     });
-    if (error) throw error;
+    
+    // If insert failed (likely missing columns), fallback to core columns only
+    if (error) {
+      console.warn('[Sync] Full history insert failed, retrying with core columns:', error.message);
+      const { error: coreError } = await sb.from('watch_history').insert({
+        user_id: userId,
+        tmdb_id: item.id,
+        media_type: item.media_type,
+        title: item.title,
+        season: item.season || null,
+        episode: item.episode || null,
+        duration_watched: item.duration_watched || 0,
+        watched_at: new Date().toISOString()
+      });
+      if (coreError) throw coreError;
+    }
     return true;
   } catch (err) {
     console.error('[Sync] add watch history failed:', err);
