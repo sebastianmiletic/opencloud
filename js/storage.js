@@ -46,8 +46,15 @@ export async function initStorage() {
   const progress   = progressRes.status   === 'fulfilled' ? progressRes.value   : {};
   const settings   = settingsRes.status   === 'fulfilled' ? settingsRes.value   : {};
 
-  _cache.collection = collection || [];
-  _cache.history    = history || [];
+  _cache.collection = (collection || []).filter(item => item && item.id && item.title && item.title !== 'Unknown');
+  // Deduplicate history by (id, media_type) keeping the most recent
+  const seen = new Set();
+  _cache.history = (history || []).filter(h => {
+    const key = `${h.id}::${h.media_type}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
   _cache.progress   = progress || {};
   _cache.settings   = settings || { device: 'laptop', provider: 'videasy', autoPlay: true, folders: [] };
   _cache.folders    = settings?.folders || [];
@@ -74,15 +81,15 @@ export async function addToUserCollection(item) {
   const normalized = {
     id: item.id,
     media_type: item.media_type,
-    title: item.title,
-    year: item.year,
-    poster_path: item.poster_path,
-    vote_average: item.vote_average,
+    title: item.title || item.name || 'Unknown',
+    year: item.year || (item.release_date || item.first_air_date || '').slice(0, 4) || null,
+    poster_path: item.poster_path || null,
+    vote_average: item.vote_average || 0,
     added_at: item.added_at || new Date().toISOString(),
     folder: item.folder || null
   };
   // Optimistic update — memory + state first, guaranteed instant
-  const exists = _cache.collection.findIndex(i => i.id === normalized.id);
+  const exists = _cache.collection.findIndex(i => i.id === normalized.id && i.media_type === normalized.media_type);
   if (exists >= 0) _cache.collection[exists] = normalized;
   else _cache.collection.unshift(normalized);
   setUserCollection([..._cache.collection]);
@@ -96,11 +103,11 @@ export async function addToUserCollection(item) {
   return true;
 }
 
-export async function removeFromUserCollection(tmdbId) {
+export async function removeFromUserCollection(tmdbId, mediaType) {
   const userId = getUserId();
   if (!userId) return false;
   // Optimistic — remove from local immediately
-  _cache.collection = _cache.collection.filter(i => i.id !== tmdbId);
+  _cache.collection = _cache.collection.filter(i => !(i.id === tmdbId && i.media_type === mediaType));
   setUserCollection([..._cache.collection]);
 
   // Supabase in background

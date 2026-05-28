@@ -1648,8 +1648,9 @@ export async function addToUserCollection(item, folder = null) {
     };
 
     userCollection.unshift(newItem);
-    await saveUserCollection(userCollection);
-    await storageAddCollection(item);
+    setUserCollection([...userCollection]);          // optimistic: state first
+    await saveUserCollection([...userCollection]);    // cache
+    await storageAddCollection(newItem);              // sync (pass normalized, not raw)
     console.log('[addToUserCollection] Saved to Supabase');
 
     if (currentTab === 'collection') renderUserCollection();
@@ -1669,7 +1670,7 @@ async function removeFromUserCollection(id, type) {
   const newCollection = userCollection.filter(c => !(c.id === id && c.media_type === type));
   await saveUserCollection(newCollection);
   setUserCollection(newCollection);
-  await storageRemoveCollection(id);
+    await storageRemoveCollection(id, type);
   if (currentTab === 'collection') renderUserCollection();
   showToast(`${item.title} removed from collection`, 'success');
 }

@@ -5,7 +5,7 @@ import { fetchWithAuth } from './api.js';
 import { BASE_URL, API_KEY } from './config.js';
 import { showToast, lockScroll, unlockScroll } from './utils.js';
 import { recordWatchSession } from './supabase.js';
-import { getWatchProgress, saveWatchProgress, syncWatchProgressItem } from './storage.js';
+import { getWatchProgress, saveWatchProgress, syncWatchProgressItem, addToUserHistory } from './storage.js';
 
 /* DOM refs */
 const playerOverlay = document.getElementById('playerOverlay');
@@ -463,6 +463,8 @@ async function initPlayerData() {
         playerEpBtn.disabled = true;
       }
       loadPlayerIframe();
+      // Add to watch history
+      addToUserHistory({ id: p.id, media_type: p.type, title: data.title || data.name }).catch(() => {});
     } else {
       const url = `${BASE_URL}/tv/${p.id}?language=en-US`;
       const res = await fetch(url, {
@@ -481,6 +483,9 @@ async function initPlayerData() {
 
       // Save progress again now that metadata is confirmed loaded
       await persistProgress(p.id, playerState.season, playerState.episode);
+
+      // Add to watch history with season/episode
+      addToUserHistory({ id: p.id, media_type: p.type, title: data.name, season: playerState.season, episode: playerState.episode }).catch(() => {});
 
       const [nextS, nextE] = getNextEp(playerState.season, playerState.episode, newTmdbData);
       if (nextS !== null && playerNextBtn) {
