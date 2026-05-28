@@ -12,7 +12,7 @@ import {
 import { showToast, lockScroll, unlockScroll } from './utils.js';
 import { getAccounts, saveAccounts, setCurrentUser } from './storage.js';
 import { setAccounts } from './state.js';
-import { applyBetaUi, hydrateSettingsFromCloud } from './config.js';
+import { hydrateSettingsFromCloud } from './config.js';
 import { initSupabase, checkSession, signIn, signUp, signOut, isAuthenticated, getUserDisplayName } from './auth.js';
 
 /* Global error handler */
@@ -328,8 +328,139 @@ async function initAppContent() {
     });
   }
 
-  /* Sign Out */
-  const signOutBtn = document.getElementById('signOutBtn');
+  /* Update Check — background poll + modal UI */
+  const updateCheckBtn = document.getElementById('updateCheckBtn');
+  const updateBadge     = document.getElementById('versionBadge');
+  const GITHUB_REPO     = 'sebastianmiletic/opencloud';
+  const GITHUB_BRANCH   = 'main';
+  const LOCAL_VERSION_KEY = 'openccloud_last_version';
+  const IGNORE_PATTERNS = [
+    /^README/i, /^LICENSE/i, /^CHANGELOG/i, /^CONTRIBUTING/i,
+    /^\.gitignore$/, /^\.env/, /^\.prettier/i, /^\.eslint/i,
+    /^docs\//i, /^\.github\//i, /^screenshots\//i, /^assets\//i,
+    /\.md$/i, /\.txt$/i, /\.log$/i, /\.png$/i, /\.jpg$/i, /\.svg$/i
+  ];
+
+  function isIgnoredFile(filename) {
+    return !filename || IGNORE_PATTERNS.some(pat => pat.test(filename));
+  }
+
+  let _updateAvailable = false;
+  let _lastUpdateInfo  = null;
+
+  async function fetchLatestCommit() {
+    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/commits/${GITHUB_BRANCH}?per_page=1`, { cache: 'no-store' });
+    if (!res.ok) return null;
+    return await res.json();
+  }
+
+  async function fetchCommitDetails(sha) {
+    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/commits/${sha}`, { cache: 'no-store' });
+    if (!res.ok) return null;
+    return await res.json();
+  }
+
+  async function checkForUpdate() {
+    try {
+      const latest = await fetchLatestCommit();
+      if (!latest) return;
+      const remoteSha = latest.sha;
+      const localSha  = localStorage.getItem(LOCAL_VERSION_KEY);
+
+      if (!remoteSha || remoteSha === localSha) {
+        _updateAvailable = false;
+        if (updateBadge) updateBadge.textContent = '';
+        return;
+      }
+
+      const details = await fetchCommitDetails(remoteSha);
+      const files   = details?.files || [];
+      const meaningful = files.filter(f => !isIgnoredFile(f.filename));
+
+      if (meaningful.length > 0) {
+        _updateAvailable = true;
+        _lastUpdateInfo = {
+          sha: remoteSha.slice(0, 7),
+          message: latest.commit?.message || 'Update',
+          author: latest.commit?.author?.name || 'Open Cloud',
+          date: latest.commit?.committer?.date || '',
+          files: meaningful.map(f => f.filename)
+        };
+        if (updateBadge) updateBadge.textContent = 'New!';
+      } else {
+        // Only docs/images changed — silently mark as current
+        localStorage.setItem(LOCAL_VERSION_KEY, remoteSha);
+        _updateAvailable = false;
+        if (updateBadge) updateBadge.textContent = '';
+      }
+    } catch (err) {
+      console.log('[Update] Check failed:', err);
+    }
+  }
+
+  checkForUpdate();
+
+  /* Update Modal */
+  const updateModal = document.getElementById('updateModal');
+  const updateModalClose = document.getElementById('updateModalClose');
+  const updateModalMsg = document.getElementById('updateModalMsg');
+  const updateModalDetails = document.getElementById('updateModalDetails');
+  const updateModalInstallBtn = document.getElementById('updateModalInstallBtn');
+  const updateModalUpToDate = document.getElementById('updateModalUpToDate');
+
+  function openUpdateModal() {
+    if (!updateModal) return;
+    updateModal.classList.remove('hidden');
+
+    if (!_updateAvailable) {
+      if (updateModalMsg) updateModalMsg.innerHTML = 'You are on the latest version.';
+      if (updateModalUpToDate) { updateModalUpToDate.style.display = 'block'; }
+      if (updateModalInstallBtn) { updateModalInstallBtn.style.display = 'none'; }
+      if (updateModalDetails) { updateModalDetails.innerHTML = ''; }
+    } else {
+      if (updateModalUpToDate) updateModalUpToDate.style.display = 'none';
+      if (updateModalInstallBtn) updateModalInstallBtn.style.display = 'block';
+      if (updateModalMsg) {
+        const dateStr = _lastUpdateInfo.date ? new Date(_lastUpdateInfo.date).toLocaleString() : 'Just now';
+        updateModalMsg.innerHTML = `
+          <strong style="color:var(--text-primary);display:block;margin-bottom:0.4rem;">${_lastUpdateInfo.message}</strong>
+          <span style="font-size:0.75rem;color:var(--text-muted);">by ${_lastUpdateInfo.author} · ${dateStr}</span>
+        `;
+      }
+      if (updateModalDetails) {
+        const fileList = _lastUpdateInfo.files.map(f => `• ${f}`).join('\n');
+        updateModalDetails.innerHTML = `<pre style="font-family:monospace;font-size:0.75rem;color:var(--text-secondary);white-space:pre-wrap;line-height:1.6;"
+>${fileList}</pre>`;
+      }
+    }
+  }
+
+  if (updateCheckBtn) {
+    updateCheckBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      accountDropdown?.classList.add('hidden');
+      openUpdateModal();
+    });
+  }
+
+  if (updateModalClose) {
+    updateModalClose.addEventListener('click', () => updateModal?.classList.add('hidden'));
+  }
+
+  if (updateModalInstallBtn) {
+    updateModalInstallBtn.addEventListener('click', async () => {
+      showToast('Installing update...', 'info');
+      try {
+        const latest = await fetchLatestCommit();
+        if (latest?.sha) localStorage.setItem(LOCAL_VERSION_KEY, latest.sha);
+      } catch (e) {}
+      if ('caches' in window) {
+        const cacheNames = await caches.keys();
+        await Promise.all(cacheNames.map(name => caches.delete(name)));
+      }
+      location.reload(true);
+    });
+  }
   if (signOutBtn) {
     signOutBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -429,7 +560,6 @@ async function initApp() {
     if (hasSupabase && !user) {
       showAuthModal();
       // Still init minimal UI so the auth modal works, but don't load content
-      applyBetaUi();
       initSettings(); // needed for auth modal to have settings ready
       // Mark app as loaded so the splash screen clears
       window._appLoaded = true;
@@ -438,7 +568,6 @@ async function initApp() {
 
     // User is authenticated — init everything
     await hydrateSettingsFromCloud();
-    applyBetaUi();
     initSettings();
     updateAuthUI(user);
     await initAppContent();

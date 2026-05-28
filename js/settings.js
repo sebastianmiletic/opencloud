@@ -1,6 +1,6 @@
 /** Open Cloud Settings */
 
-import { getSettings, saveSettings, PROVIDERS, applyDeviceClass, applyBetaUi, getActiveProvider } from './config.js';
+import { getSettings, saveSettings, PROVIDERS, applyDeviceClass, getActiveProvider } from './config.js';
 import { showToast } from './utils.js';
 import { initBlockerUI } from './blocker.js';
 import { getCurrentUser, getLocalProfile, saveLocalProfile } from './storage.js';
@@ -168,11 +168,9 @@ export function openSettingsModal() {
   settings = getSettings();
   const deviceSelect = document.getElementById('settingsDevice');
   const autoPlay = document.getElementById('settingsAutoPlay');
-  const betaUi = document.getElementById('settingsBetaUi');
 
   if (deviceSelect) deviceSelect.value = settings.device;
   if (autoPlay) autoPlay.checked = settings.autoPlay !== false;
-  if (betaUi) betaUi.checked = settings.beta_ui === true;
 
   // Show/hide admin tab
   const adminTabBtn = document.getElementById('adminTabBtn');
@@ -243,12 +241,12 @@ function renderProviderCards() {
 }
 
 async function saveSettingsFromForm() {
-  if (currentSettingsTab === 'profile') {
+  if (currentSettingsTab === 'account') {
     await saveProfile();
     return;
   }
 
-  if (currentSettingsTab === 'sources' || currentSettingsTab === 'blocker' || currentSettingsTab === 'stats' || currentSettingsTab === 'account') {
+  if (currentSettingsTab === 'sources' || currentSettingsTab === 'blocker' || currentSettingsTab === 'stats') {
     // These tabs auto-save on interaction; just close the modal
     document.getElementById('settingsModal')?.classList.add('hidden');
     return;
@@ -256,24 +254,15 @@ async function saveSettingsFromForm() {
 
   const device = document.getElementById('settingsDevice')?.value || 'laptop';
   const autoPlay = document.getElementById('settingsAutoPlay')?.checked ?? true;
-  const betaUi = document.getElementById('settingsBetaUi')?.checked ?? false;
-  const betaChanged = settings.beta_ui !== betaUi;
 
   settings.device = device;
   settings.autoPlay = autoPlay;
-  settings.beta_ui = betaUi;
 
   saveSettings(settings);
   
   applyDeviceClass();
-  applyBetaUi();
 
   document.getElementById('settingsModal')?.classList.add('hidden');
-
-  if (betaChanged) {
-    showToast('BETA UI toggled — reloading...', 'info');
-    setTimeout(() => location.reload(true), 600);
-  }
 }
 
 async function saveProfile() {

@@ -13,7 +13,7 @@ import {
   saveUserFolders as storageSaveFolders
 } from './storage.js';
 import { BASE_URL, IMG_BASE, STAR_WARS_SAGA_ORDER, API_KEY } from './config.js';
-import { fetchWithAuth, getOMDBRatingsBatch, getOMDBRating, getTrailer } from './api.js';
+import { fetchWithAuth, getOMDBRatingsBatch, getOMDBRating } from './api.js';
 import { showToast, lockScroll, unlockScroll, showConfirm } from './utils.js';
 import { openPlayer } from './player.js';
 import { renderHeroSlides } from './hero.js';
@@ -1411,22 +1411,6 @@ export async function openItemModal(id, type) {
         watchBtn.innerHTML = '<i class="fas fa-play"></i> Watch Now';
       }
       watchBtn.onclick = () => openPlayer(id, type);
-    }
-
-    // Trailer button
-    const trailerBtn = document.getElementById('modalTrailerBtn');
-    if (trailerBtn) {
-      trailerBtn.style.display = 'none';
-      getTrailer(id, type).then(url => {
-        if (url && trailerBtn) {
-          trailerBtn.style.display = 'inline-flex';
-          trailerBtn.onclick = () => {
-            window.open(url, '_blank');
-          };
-        }
-      }).catch(() => {
-        if (trailerBtn) trailerBtn.style.display = 'none';
-      });
     }
 
     // Collection button: transforms into folder picker after adding

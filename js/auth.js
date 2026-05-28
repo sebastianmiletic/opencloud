@@ -107,10 +107,24 @@ export async function signIn(email, password) {
     });
     if (error) throw error;
     currentUser = data.user;
-    // Ensure profile exists
+    // Check ban status
     if (data.user) {
+      const { data: profile, error: profileErr } = await supabaseClient
+        .from('profiles')
+        .select('is_banned, ban_reason')
+        .eq('id', data.user.id)
+        .single();
+      if (!profileErr && profile?.is_banned) {
+        await supabaseClient.auth.signOut();
+        currentUser = null;
+        showToast(`Account suspended: ${profile.ban_reason || 'Contact support'}`, 'error');
+        return { user: null, error: new Error('Account suspended') };
+      }
+      // Ensure profile exists
       await createProfile(data.user.id, data.user.email, data.user.email.split('@')[0]);
       _isAdmin = await isUserAdmin(data.user.id);
+      // Update last_seen_at
+      await supabaseClient.from('profiles').update({ last_seen_at: new Date().toISOString() }).eq('id', data.user.id);
     }
     showToast('Signed in successfully', 'success');
     return { user: data.user, error: null };
