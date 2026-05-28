@@ -253,24 +253,49 @@ async function initAppContent() {
 
   manageAccountsClose?.addEventListener('click', () => manageAccountsModal?.classList.add('hidden'));
 
-  /* Install Latest Update */
+  /* Install Latest Update — only notify if code files changed */
   const updateBtn = document.getElementById('updateBtn');
   const versionBadge = document.getElementById('versionBadge');
   const GITHUB_REPO = 'sebastianmiletic/opencloud';
   const GITHUB_BRANCH = 'main';
   const LOCAL_VERSION_KEY = 'openccloud_last_version';
+  // Files/patterns to ignore when checking for meaningful updates
+  const IGNORE_PATTERNS = [
+    /^README/i, /^LICENSE/i, /^CHANGELOG/i, /^CONTRIBUTING/i,
+    /^\.gitignore$/, /^\.env/, /^\.prettier/i, /^\.eslint/i,
+    /^docs\//i, /^\.github\//i, /^screenshots\//i, /^assets\//i,
+    /\.md$/i, /\.txt$/i, /\.log$/i, /\.png$/i, /\.jpg$/i, /\.svg$/i
+  ];
+
+  function isIgnoredFile(filename) {
+    if (!filename) return true;
+    return IGNORE_PATTERNS.some(pat => pat.test(filename));
+  }
 
   async function checkForUpdate() {
     try {
-      const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/commits/${GITHUB_BRANCH}`, { cache: 'no-store' });
+      const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/commits/${GITHUB_BRANCH}?per_page=1`, { cache: 'no-store' });
       if (!res.ok) return;
       const data = await res.json();
-      const remoteSha = data.sha?.slice(0, 7);
+      const remoteSha = data.sha;
       const localSha = localStorage.getItem(LOCAL_VERSION_KEY);
-      if (remoteSha && remoteSha !== localSha) {
-        if (versionBadge) {
-          versionBadge.textContent = 'New!';
-        }
+      if (!remoteSha || remoteSha === localSha) {
+        if (versionBadge) versionBadge.textContent = '';
+        return;
+      }
+      // Fetch changed files for latest commit
+      const filesRes = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/commits/${remoteSha}`, { cache: 'no-store' });
+      if (!filesRes.ok) return;
+      const commitData = await filesRes.json();
+      const files = commitData.files || [];
+      const meaningfulChanges = files.filter(f => !isIgnoredFile(f.filename)).length;
+      if (meaningfulChanges > 0) {
+        if (versionBadge) versionBadge.textContent = 'New!';
+        console.log(`[Update] ${meaningfulChanges} meaningful file(s) changed`);
+      } else {
+        if (versionBadge) versionBadge.textContent = '';
+        // Save SHA anyway so we don't re-check the same non-code commit
+        localStorage.setItem(LOCAL_VERSION_KEY, remoteSha);
       }
     } catch (err) {
       console.log('[Update] Check failed:', err);
@@ -289,7 +314,7 @@ async function initAppContent() {
         const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/commits/${GITHUB_BRANCH}`, { cache: 'no-store' });
         if (res.ok) {
           const data = await res.json();
-          if (data.sha) localStorage.setItem(LOCAL_VERSION_KEY, data.sha.slice(0, 7));
+          if (data.sha) localStorage.setItem(LOCAL_VERSION_KEY, data.sha);
         }
         if ('caches' in window) {
           const cacheNames = await caches.keys();

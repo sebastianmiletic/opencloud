@@ -5,6 +5,9 @@ create table if not exists profiles (
   avatar_url text,
   avatar_color text,
   is_admin boolean default false,
+  is_banned boolean default false,
+  ban_reason text,
+  last_seen_at timestamp with time zone,
   created_at timestamp with time zone default timezone('utc'::text, now())
 );
 

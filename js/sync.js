@@ -272,7 +272,7 @@ export async function fetchAllUsers() {
   try {
     const { data, error } = await sb
       .from('profiles')
-      .select('id, email, username, is_admin, created_at')
+      .select('id, email, username, is_admin, is_banned, ban_reason, last_seen_at, created_at')
       .order('created_at', { ascending: false });
     if (error) throw error;
     return data || [];
@@ -485,5 +485,86 @@ export async function updateProfile(userId, updates) {
   } catch (err) {
     console.error('[Sync] update profile failed:', err);
     return false;
+  }
+}
+
+/* ─── Admin: Ban / Kick / Restore ─── */
+
+export async function banUser(userId, reason = '') {
+  const sb = getClient();
+  if (!sb || !userId) return false;
+  try {
+    const { error } = await sb.from('profiles')
+      .update({ is_banned: true, ban_reason: reason })
+      .eq('id', userId);
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.error('[Sync] ban user failed:', err);
+    return false;
+  }
+}
+
+export async function unbanUser(userId) {
+  const sb = getClient();
+  if (!sb || !userId) return false;
+  try {
+    const { error } = await sb.from('profiles')
+      .update({ is_banned: false, ban_reason: '' })
+      .eq('id', userId);
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.error('[Sync] unban user failed:', err);
+    return false;
+  }
+}
+
+export async function deleteUserData(userId) {
+  const sb = getClient();
+  if (!sb || !userId) return false;
+  try {
+    await Promise.all([
+      sb.from('collections').delete().eq('user_id', userId),
+      sb.from('watch_history').delete().eq('user_id', userId),
+      sb.from('watch_progress').delete().eq('user_id', userId),
+      sb.from('watch_sessions').delete().eq('user_id', userId),
+      sb.from('user_settings').delete().eq('user_id', userId)
+    ]);
+    return true;
+  } catch (err) {
+    console.error('[Sync] delete user data failed:', err);
+    return false;
+  }
+}
+
+export async function kickUser(userId) {
+  const sb = getClient();
+  if (!sb || !userId) return false;
+  try {
+    // Mark user as having a null last_seen_at so they appear offline
+    // Clients will check periodically and log out if they detect a ban
+    await updateProfile(userId, { last_seen_at: null });
+    return true;
+  } catch (err) {
+    console.error('[Sync] kick user failed:', err);
+    return false;
+  }
+}
+
+export async function getActiveSessions(minutes = 15) {
+  const sb = getClient();
+  if (!sb) return [];
+  try {
+    const { data, error } = await sb
+      .from('watch_sessions')
+      .select('user_id, started_at, title')
+      .gte('started_at', new Date(Date.now() - minutes * 60000).toISOString())
+      .order('started_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error('[Sync] get active sessions failed:', err);
+    return [];
   }
 }

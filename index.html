@@ -750,20 +750,41 @@
           </div>
           <div class="settings-tab-panel hidden" data-panel="admin">
             <div class="admin-dashboard" id="adminDashboard">
-              <div class="stats-grid">
+              <div class="stats-grid admin-stats-grid">
                 <div class="stats-card">
                   <div class="stats-card-label">Total Users</div>
                   <div class="stats-card-value" id="adminTotalUsers">0</div>
                 </div>
                 <div class="stats-card">
+                  <div class="stats-card-label">Active Now</div>
+                  <div class="stats-card-value" id="adminActiveNow">0</div>
+                </div>
+                <div class="stats-card">
                   <div class="stats-card-label">Active Today</div>
                   <div class="stats-card-value" id="adminActiveToday">0</div>
                 </div>
+                <div class="stats-card">
+                  <div class="stats-card-label">Banned</div>
+                  <div class="stats-card-value" id="adminBannedCount">0</div>
+                </div>
+              </div>
+              <div class="admin-actions-bar">
+                <button class="btn btn-secondary admin-refresh-btn" id="adminRefreshBtn"><i class="fas fa-rotate"></i> Refresh</button>
               </div>
               <div class="stats-section">
-                <h4>All Users</h4>
-                <div class="admin-user-list" id="adminUserList">
-                  <div class="blocker-empty-logs">Loading users...</div>
+                <h4>User Management</h4>
+                <div class="admin-table-wrap" id="adminUserListWrap">
+                  <table class="admin-table">
+                    <thead><tr>
+                      <th>User</th>
+                      <th>Email</th>
+                      <th>Joined</th>
+                      <th>Last Seen</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr></thead>
+                    <tbody id="adminUserList"><tr><td colspan="6" style="text-align:center;padding:1.5rem;">Loading users...</td></tr></tbody>
+                  </table>
                 </div>
               </div>
             </div>
