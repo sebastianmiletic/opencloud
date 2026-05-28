@@ -232,7 +232,7 @@ function stopSrcPoller() {
   detachIframeLoadListener();
 }
 
-function handleIframeSrcChange(src) {
+async function handleIframeSrcChange(src) {
   if (playerState.type !== 'tv' || !playerState.id) return;
   const parsed = parseSeasonEpisodeFromUrl(src);
   if (!parsed) {
@@ -274,18 +274,18 @@ function handleIframeSrcChange(src) {
       playerNextBtn.style.display = 'flex';
       playerNextBtn.disabled = false;
       playerNextBtn.title = `Next: S${nextS} E${nextE}`;
-      playerNextBtn.onclick = () => {
-        const minutes = addSessionElapsed();
-        const p = getCurrentProgress();
-        const ex = p[String(playerState.id)];
-        if (ex) ex.elapsedMinutes = (ex.elapsedMinutes || 0) + minutes;
-        setCurrentProgress(p);
-        setPlayerState({ ...playerState, season: nextS, episode: nextE });
-        updatePlayerTitle(playerState.tmdbData.title, nextS, nextE);
-        await persistProgress(playerState.id, nextS, nextE, { elapsedMinutes: 0 });
-        _playerOpenedAt = Date.now();
-        initPlayerData();
-      };
+        playerNextBtn.onclick = async () => {
+          const minutes = addSessionElapsed();
+          const p = getCurrentProgress();
+          const ex = p[String(playerState.id)];
+          if (ex) ex.elapsedMinutes = (ex.elapsedMinutes || 0) + minutes;
+          setCurrentProgress(p);
+          setPlayerState({ ...playerState, season: nextS, episode: nextE });
+          updatePlayerTitle(playerState.tmdbData.title, nextS, nextE);
+          await persistProgress(playerState.id, nextS, nextE, { elapsedMinutes: 0 });
+          _playerOpenedAt = Date.now();
+          initPlayerData();
+        };
     } else {
       playerNextBtn.style.display = 'flex';
       playerNextBtn.disabled = true;
@@ -389,7 +389,7 @@ export function closePlayer() {
   }, 350);
 }
 
-export function openPlayer(id, type, season, episode) {
+export async function openPlayer(id, type, season, episode) {
   if (!playerOverlay || !playerFrame) return;
 
   let startSeason = season ?? 1;
@@ -487,7 +487,7 @@ async function initPlayerData() {
         playerNextBtn.style.display = 'flex';
         playerNextBtn.disabled = false;
         playerNextBtn.title = `Next: S${nextS} E${nextE}`;
-        playerNextBtn.onclick = () => {
+        playerNextBtn.onclick = async () => {
           const minutesWatched = addSessionElapsed();
           // Save old episode elapsed first
           const progress = getCurrentProgress();
@@ -644,7 +644,7 @@ function showEpisodes(season) {
   `).join('');
 
   epPopoverList.querySelectorAll('li').forEach(li => {
-    li.addEventListener('click', () => {
+    li.addEventListener('click', async () => {
       const newSeason = li.getAttribute('data-season');
       const newEpisode = li.getAttribute('data-episode');
       const minutesWatched = addSessionElapsed();
