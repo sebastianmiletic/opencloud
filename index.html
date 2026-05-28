@@ -647,6 +647,39 @@
               <button type="button" class="btn btn-secondary" id="blockerResetCounter">Reset Counter</button>
             </div>
           </div>
+          <!-- Stats Panel -->
+          <div class="settings-tab-panel hidden" data-panel="stats">
+            <div class="stats-dashboard" id="statsDashboard">
+              <div class="stats-grid">
+                <div class="stats-card">
+                  <div class="stats-card-label">Total Hours Watched</div>
+                  <div class="stats-card-value" id="statsTotalHours">0</div>
+                </div>
+                <div class="stats-card">
+                  <div class="stats-card-label">Movies Watched</div>
+                  <div class="stats-card-value" id="statsMoviesCount">0</div>
+                </div>
+                <div class="stats-card">
+                  <div class="stats-card-label">TV Episodes</div>
+                  <div class="stats-card-value" id="statsEpisodesCount">0</div>
+                </div>
+                <div class="stats-card">
+                  <div class="stats-card-label">Current Streak</div>
+                  <div class="stats-card-value" id="statsStreak">0 <span style="font-size:0.75rem;font-weight:500;">days</span></div>
+                </div>
+              </div>
+              <div class="stats-section">
+                <h4>Watch Heatmap</h4>
+                <div class="stats-heatmap" id="statsHeatmap"></div>
+              </div>
+              <div class="stats-section">
+                <h4>Activity by Day of Week</h4>
+                <div class="stats-bars" id="statsDayBars"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Account Panel -->
           <div class="settings-tab-panel hidden" data-panel="account">
             <div class="profile-card">
               <div class="profile-avatar-section">
@@ -688,64 +721,6 @@
                   <p style="font-size:0.75rem;color:var(--text-muted);margin-bottom:1rem;">Deleting your account removes all data. This cannot be undone.</p>
                   <button type="button" class="btn btn-secondary" id="accountDeleteBtn" style="width:100%;border-color:#ef4444;color:#ef4444;">Delete Account</button>
                 </div>
-              </div>
-            </div>
-          </div>
-            <div class="stats-dashboard" id="statsDashboard">
-              <div class="stats-grid">
-                <div class="stats-card">
-                  <div class="stats-card-label">Total Hours Watched</div>
-                  <div class="stats-card-value" id="statsTotalHours">0</div>
-                </div>
-                <div class="stats-card">
-                  <div class="stats-card-label">Movies Watched</div>
-                  <div class="stats-card-value" id="statsMoviesCount">0</div>
-                </div>
-                <div class="stats-card">
-                  <div class="stats-card-label">TV Episodes</div>
-                  <div class="stats-card-value" id="statsEpisodesCount">0</div>
-                </div>
-                <div class="stats-card">
-                  <div class="stats-card-label">Current Streak</div>
-                  <div class="stats-card-value" id="statsStreak">0 <span style="font-size:0.75rem;font-weight:500;">days</span></div>
-                </div>
-              </div>
-              <div class="stats-section">
-                <h4>Watch Heatmap</h4>
-                <div class="stats-heatmap" id="statsHeatmap"></div>
-              </div>
-              <div class="stats-section">
-                <h4>Activity by Day of Week</h4>
-                <div class="stats-bars" id="statsDayBars"></div>
-              </div>
-            </div>
-          </div>
-          <div class="settings-tab-panel hidden" data-panel="account">
-            <div class="profile-card">
-              <div class="form-group">
-                <label>Current Email</label>
-                <div id="accountCurrentEmail" style="font-size:0.9375rem;color:var(--text-primary);padding:0.625rem 0.875rem;background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:var(--radius-md);">Not signed in</div>
-              </div>
-              <div style="margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid var(--border-color);">
-                <h4 style="font-size:0.9375rem;font-weight:600;margin-bottom:1rem;">Change Password</h4>
-                <div class="form-group">
-                  <label for="accountNewPassword">New Password</label>
-                  <input type="password" id="accountNewPassword" placeholder="Min 6 characters" minlength="6" autocomplete="new-password">
-                </div>
-                <button type="button" class="btn btn-primary" id="accountUpdatePasswordBtn" style="width:100%;">Update Password</button>
-              </div>
-              <div style="margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid var(--border-color);">
-                <h4 style="font-size:0.9375rem;font-weight:600;margin-bottom:1rem;">Change Email</h4>
-                <div class="form-group">
-                  <label for="accountNewEmail">New Email</label>
-                  <input type="email" id="accountNewEmail" placeholder="your@email.com" autocomplete="email">
-                </div>
-                <button type="button" class="btn btn-primary" id="accountUpdateEmailBtn" style="width:100%;">Update Email</button>
-              </div>
-              <div style="margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--border-color);">
-                <h4 style="font-size:0.9375rem;font-weight:600;margin-bottom:0.5rem;color:var(--text-secondary);">Danger Zone</h4>
-                <p style="font-size:0.75rem;color:var(--text-muted);margin-bottom:1rem;">Deleting your account removes all data. This cannot be undone.</p>
-                <button type="button" class="btn btn-secondary" id="accountDeleteBtn" style="width:100%;border-color:#ef4444;color:#ef4444;">Delete Account</button>
               </div>
             </div>
           </div>
