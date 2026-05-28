@@ -38,7 +38,11 @@ create table watch_history (
   season integer,
   episode integer,
   duration_watched integer default 0,
-  watched_at timestamp with time zone default timezone('utc'::text, now())
+  poster_path text,
+  vote_average numeric(3,1) default 0,
+  year text,
+  watched_at timestamp with time zone default timezone('utc'::text, now()),
+  unique(user_id, tmdb_id)
 );
 
 -- 4. Watch Progress table
@@ -108,7 +112,7 @@ This allows instant signup without email verification.
 
 ## Admin User
 
-When you sign up with `sebastian.miletic043@gmail.com`, the app automatically sets `is_admin = true` in your profile. You can verify this in the Supabase Table Editor → profiles table.
+Users can activate admin access by entering the activation key in **Settings > General**.
 
 ## What Changed
 

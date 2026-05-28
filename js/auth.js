@@ -172,6 +172,10 @@ export function isAdmin() {
   return _isAdmin;
 }
 
+export function setAdmin(value) {
+  _isAdmin = !!value;
+}
+
 export async function updatePassword(newPassword) {
   if (!supabaseClient) {
     showToast('Auth not configured', 'error');

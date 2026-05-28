@@ -33,6 +33,9 @@ create table if not exists watch_history (
   season integer,
   episode integer,
   duration_watched integer default 0,
+  poster_path text,
+  vote_average numeric(3,1) default 0,
+  year text,
   watched_at timestamp with time zone default timezone('utc'::text, now()),
   unique(user_id, tmdb_id)
 );

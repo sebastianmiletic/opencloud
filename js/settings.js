@@ -5,7 +5,7 @@ import { showToast } from './utils.js';
 import { initBlockerUI } from './blocker.js';
 import { getCurrentUser, getLocalProfile, saveLocalProfile } from './storage.js';
 import { getWatchSessions, aggregateStats } from './supabase.js';
-import { isAdmin, getCurrentAuthUser, getUserEmail, updatePassword, updateEmail, deleteAccount, signOut, getSupabaseClient } from './auth.js';
+import { isAdmin, setAdmin, getCurrentAuthUser, getUserEmail, updatePassword, updateEmail, deleteAccount, signOut, getSupabaseClient } from './auth.js';
 import { fetchAllUsers, fetchTotalUserCount, fetchUserStats, banUser, unbanUser, deleteUserData, getActiveSessions, kickUser, activateAdmin } from './sync.js';
 
 let settings = getSettings();
@@ -172,6 +172,16 @@ export function openSettingsModal() {
   if (deviceSelect) deviceSelect.value = settings.device;
   if (autoPlay) autoPlay.checked = settings.autoPlay !== false;
 
+  // Show/hide admin tab — must be declared before activation handler
+  const adminTabBtn = document.getElementById('adminTabBtn');
+  if (adminTabBtn) {
+    if (isAdmin()) {
+      adminTabBtn.classList.remove('hidden');
+    } else {
+      adminTabBtn.classList.add('hidden');
+    }
+  }
+
   // Activation key
   const activationInput = document.getElementById('activationKey');
   const activateBtn = document.getElementById('activateBtn');
@@ -186,6 +196,7 @@ export function openSettingsModal() {
           // Refresh admin state from server
           const { data } = await getSupabaseClient().from('profiles').select('is_admin').eq('id', user.id).single();
           if (data?.is_admin) {
+            setAdmin(true);
             showToast('Admin access granted', 'success');
             adminTabBtn?.classList.remove('hidden');
             switchSettingsTab('admin');
@@ -197,16 +208,6 @@ export function openSettingsModal() {
         showToast('Invalid activation key', 'error');
       }
     };
-  }
-
-  // Show/hide admin tab
-  const adminTabBtn = document.getElementById('adminTabBtn');
-  if (adminTabBtn) {
-    if (isAdmin()) {
-      adminTabBtn.classList.remove('hidden');
-    } else {
-      adminTabBtn.classList.add('hidden');
-    }
   }
 
   // Always re-render provider cards so they're fresh when the Sources tab is shown
