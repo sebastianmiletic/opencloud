@@ -90,6 +90,22 @@ function initAuthModal() {
     signupUsername.addEventListener('input', () => { activateField(signupUsername); signupUsername.classList.toggle('has-value', !!signupUsername.value); });
   }
 
+  /* Close auth modal */
+  const authModalClose = document.getElementById('authModalClose');
+  const authOverlay = authModal?.querySelector('.modal-overlay');
+  if (authModalClose) {
+    authModalClose.addEventListener('click', () => {
+      authModal?.classList.add('hidden');
+      unlockScroll();
+    });
+  }
+  if (authOverlay) {
+    authOverlay.addEventListener('click', () => {
+      authModal?.classList.add('hidden');
+      unlockScroll();
+    });
+  }
+
   /* Tab switching */
   function setActiveTab(targetTab) {
     tabs.forEach(t => t.classList.toggle('active', t.dataset.authTab === targetTab));
@@ -196,21 +212,23 @@ function showAuthModal() {
         if (isPw) el.type = 'text';
       }
     });
-    // Reset to sign-in tab
-    const tabs = document.querySelectorAll('.auth-tab');
-    const indicator = document.querySelector('.auth-tab-indicator');
-    const signinTab = document.querySelector('.auth-tab[data-auth-tab="signin"]');
-    tabs.forEach(t => t.classList.toggle('active', t.dataset.authTab === 'signin'));
-    if (indicator && signinTab) {
-      indicator.style.transform = `translateX(${signinTab.offsetLeft}px)`;
-      indicator.style.width = `${signinTab.offsetWidth}px`;
-    }
-    const signinForm = document.getElementById('signinForm');
-    const signupForm = document.getElementById('signupForm');
-    signupForm?.classList.remove('active');
-    signupForm && (signupForm.style.display = 'none');
-    signinForm?.classList.add('active');
-    signinForm && (signinForm.style.display = 'block');
+    // Reset to sign-in tab after modal renders
+    requestAnimationFrame(() => {
+      const tabs = document.querySelectorAll('.auth-tab');
+      const indicator = document.querySelector('.auth-tab-indicator');
+      const signinTab = document.querySelector('.auth-tab[data-auth-tab="signin"]');
+      tabs.forEach(t => t.classList.toggle('active', t.dataset.authTab === 'signin'));
+      if (indicator && signinTab) {
+        indicator.style.transform = `translateX(${signinTab.offsetLeft}px)`;
+        indicator.style.width = `${signinTab.offsetWidth}px`;
+      }
+      const signinForm = document.getElementById('signinForm');
+      const signupForm = document.getElementById('signupForm');
+      signupForm?.classList.remove('active');
+      signupForm && (signupForm.style.display = 'none');
+      signinForm?.classList.add('active');
+      signinForm && (signinForm.style.display = 'block');
+    });
   }
 }
 
