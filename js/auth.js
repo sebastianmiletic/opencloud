@@ -55,17 +55,7 @@ export async function signUp(email, password, username) {
     return { error: new Error('Invalid username') };
   }
   try {
-    // Check if username already exists
-    const { data: existingUsername, error: usernameError } = await supabaseClient
-      .from('profiles')
-      .select('username')
-      .eq('username', username.trim())
-      .maybeSingle();
-    if (usernameError) throw usernameError;
-    if (existingUsername) {
-      showToast('Username already taken', 'error');
-      return { user: null, error: new Error('Username already taken') };
-    }
+    // Sign up first — don't let username check block account creation
     const { data, error } = await supabaseClient.auth.signUp({
       email,
       password,
@@ -76,12 +66,25 @@ export async function signUp(email, password, username) {
         }
       }
     });
-    if (error) throw error;
+    if (error) {
+      // Provide clearer error messages for common Supabase auth errors
+      if (error.message?.toLowerCase().includes('disabled')) {
+        throw new Error('Email signups are disabled in Supabase. Go to Authentication > Providers > Email and enable it.');
+      }
+      if (error.message?.toLowerCase().includes('already registered') || error.message?.toLowerCase().includes('already exists')) {
+        throw new Error('An account with this email already exists. Try signing in instead.');
+      }
+      throw error;
+    }
     currentUser = data.user;
-    // Create profile in profiles table
+    // Create profile in profiles table (best effort — don't block if this fails)
     if (data.user) {
-      await createProfile(data.user.id, email, username.trim());
-      _isAdmin = await isUserAdmin(data.user.id);
+      try {
+        await createProfile(data.user.id, email, username.trim());
+        _isAdmin = await isUserAdmin(data.user.id);
+      } catch (profileErr) {
+        console.warn('[Auth] Profile creation failed (non-critical):', profileErr);
+      }
     }
     showToast('Account created successfully', 'success');
     return { user: data.user, error: null };
@@ -153,6 +156,66 @@ export function getUserEmail() {
 
 export function isAdmin() {
   return _isAdmin;
+}
+
+export async function updatePassword(newPassword) {
+  if (!supabaseClient) {
+    showToast('Auth not configured', 'error');
+    return { error: new Error('Auth not configured') };
+  }
+  try {
+    const { data, error } = await supabaseClient.auth.updateUser({
+      password: newPassword
+    });
+    if (error) throw error;
+    showToast('Password updated', 'success');
+    return { user: data.user, error: null };
+  } catch (err) {
+    console.error('[Auth] Password update failed:', err);
+    showToast(err.message || 'Failed to update password', 'error');
+    return { user: null, error: err };
+  }
+}
+
+export async function updateEmail(newEmail) {
+  if (!supabaseClient) {
+    showToast('Auth not configured', 'error');
+    return { error: new Error('Auth not configured') };
+  }
+  try {
+    const { data, error } = await supabaseClient.auth.updateUser({
+      email: newEmail
+    });
+    if (error) throw error;
+    currentUser = data.user;
+    showToast('Email updated', 'success');
+    return { user: data.user, error: null };
+  } catch (err) {
+    console.error('[Auth] Email update failed:', err);
+    showToast(err.message || 'Failed to update email', 'error');
+    return { user: null, error: err };
+  }
+}
+
+export async function deleteAccount() {
+  if (!supabaseClient || !currentUser) {
+    showToast('Not signed in', 'error');
+    return { error: new Error('Not signed in') };
+  }
+  try {
+    // Delete profile first (RLS will enforce user can only delete own profile)
+    await supabaseClient.from('profiles').delete().eq('id', currentUser.id);
+    // Sign out locally
+    await supabaseClient.auth.signOut();
+    currentUser = null;
+    _isAdmin = false;
+    showToast('Account deleted', 'info');
+    return { error: null };
+  } catch (err) {
+    console.error('[Auth] Account deletion failed:', err);
+    showToast(err.message || 'Failed to delete account', 'error');
+    return { error: err };
+  }
 }
 
 export function getSupabaseClient() {

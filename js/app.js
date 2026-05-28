@@ -361,19 +361,55 @@ async function initApp() {
     /* Install Latest Update */
     const updateBtn = document.getElementById('updateBtn');
     const versionBadge = document.getElementById('versionBadge');
-    const APP_VERSION = '1.0.0';
-    if (versionBadge) versionBadge.textContent = `v${APP_VERSION}`;
+    const GITHUB_REPO = 'sebastianmiletic/opencloud';
+    const GITHUB_BRANCH = 'main';
+    const LOCAL_VERSION_KEY = 'openccloud_last_version';
+
+    async function checkForUpdate() {
+      try {
+        const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/commits/${GITHUB_BRANCH}`, { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        const remoteSha = data.sha?.slice(0, 7);
+        const localSha = localStorage.getItem(LOCAL_VERSION_KEY);
+        if (remoteSha && remoteSha !== localSha) {
+          if (versionBadge) {
+            versionBadge.textContent = 'Update Available!';
+            versionBadge.style.color = '#ef4444';
+            versionBadge.style.fontWeight = '700';
+          }
+          if (updateBtn) {
+            updateBtn.querySelector('span').innerHTML = 'Install Latest Update <span style="color:#ef4444;font-weight:700;">(New!)</span>';
+          }
+        }
+      } catch (err) {
+        console.log('[Update] Check failed:', err);
+      }
+    }
+
+    // Check for updates on load
+    checkForUpdate();
+    // Also check every 5 minutes
+    setInterval(checkForUpdate, 5 * 60 * 1000);
+
     if (updateBtn) {
       updateBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         accountDropdown?.classList.add('hidden');
-        showToast('Checking for updates...', 'info');
+        showToast('Installing latest update...', 'info');
         try {
-          // Force reload with cache clearing to get latest files
+          // Fetch latest commit SHA and store it
+          const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/commits/${GITHUB_BRANCH}`, { cache: 'no-store' });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.sha) localStorage.setItem(LOCAL_VERSION_KEY, data.sha.slice(0, 7));
+          }
+          // Clear all caches
           if ('caches' in window) {
             const cacheNames = await caches.keys();
             await Promise.all(cacheNames.map(name => caches.delete(name)));
           }
+          // Force reload from server
           location.reload(true);
         } catch (err) {
           console.error('[App] Update failed:', err);

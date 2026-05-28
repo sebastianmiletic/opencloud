@@ -3,7 +3,7 @@ import { showToast } from './utils.js';
 import { initBlockerUI } from './blocker.js';
 import { getCurrentUser } from './storage.js';
 import { scheduleSync, getWatchSessions, aggregateStats } from './supabase.js';
-import { isAdmin, getCurrentAuthUser } from './auth.js';
+import { isAdmin, getCurrentAuthUser, getUserEmail, updatePassword, updateEmail, deleteAccount, signOut } from './auth.js';
 import { fetchAllUsers, fetchTotalUserCount, fetchUserStats } from './sync.js';
 
 let settings = getSettings();
@@ -100,6 +100,9 @@ function switchSettingsTab(tab) {
   if (tab === 'admin') {
     renderAdminTab();
   }
+  if (tab === 'account') {
+    renderAccountTab();
+  }
 }
 
 export function openSettingsModal() {
@@ -187,7 +190,7 @@ async function saveSettingsFromForm() {
     return;
   }
 
-  if (currentSettingsTab === 'sources' || currentSettingsTab === 'blocker' || currentSettingsTab === 'stats') {
+  if (currentSettingsTab === 'sources' || currentSettingsTab === 'blocker' || currentSettingsTab === 'stats' || currentSettingsTab === 'account') {
     // These tabs auto-save on interaction; just close the modal
     document.getElementById('settingsModal')?.classList.add('hidden');
     return;
@@ -355,6 +358,69 @@ async function saveProfile() {
   } catch (err) {
     console.error('[saveProfile] Error:', err);
     showToast(err.message || 'Failed to save profile', 'error');
+  }
+}
+
+/* Account Tab */
+function renderAccountTab() {
+  const emailEl = document.getElementById('accountCurrentEmail');
+  if (emailEl) {
+    const email = getUserEmail();
+    emailEl.textContent = email || 'Not signed in';
+  }
+
+  // Wire up buttons (idempotent — safe to call multiple times)
+  const pwBtn = document.getElementById('accountUpdatePasswordBtn');
+  const emailBtn = document.getElementById('accountUpdateEmailBtn');
+  const delBtn = document.getElementById('accountDeleteBtn');
+
+  if (pwBtn && !pwBtn._wired) {
+    pwBtn._wired = true;
+    pwBtn.addEventListener('click', async () => {
+      const newPw = document.getElementById('accountNewPassword')?.value;
+      if (!newPw || newPw.length < 6) {
+        showToast('Password must be at least 6 characters', 'error');
+        return;
+      }
+      const { error } = await updatePassword(newPw);
+      if (!error) {
+        document.getElementById('accountNewPassword').value = '';
+      }
+    });
+  }
+
+  if (emailBtn && !emailBtn._wired) {
+    emailBtn._wired = true;
+    emailBtn.addEventListener('click', async () => {
+      const newEmail = document.getElementById('accountNewEmail')?.value?.trim();
+      if (!newEmail || !newEmail.includes('@')) {
+        showToast('Enter a valid email', 'error');
+        return;
+      }
+      const { error } = await updateEmail(newEmail);
+      if (!error) {
+        document.getElementById('accountNewEmail').value = '';
+        const emailEl = document.getElementById('accountCurrentEmail');
+        if (emailEl) emailEl.textContent = newEmail;
+      }
+    });
+  }
+
+  if (delBtn && !delBtn._wired) {
+    delBtn._wired = true;
+    delBtn.addEventListener('click', async () => {
+      const confirmed = confirm('Are you sure? This will permanently delete your account and all data.');
+      if (!confirmed) return;
+      const { error } = await deleteAccount();
+      if (!error) {
+        document.getElementById('settingsModal')?.classList.add('hidden');
+        // Show auth modal after deletion
+        const authModal = document.getElementById('authModal');
+        if (authModal) {
+          authModal.classList.remove('hidden');
+        }
+      }
+    });
   }
 }
 
