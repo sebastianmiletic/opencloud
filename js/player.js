@@ -38,9 +38,9 @@ function getCurrentProgress() {
   return getWatchProgress();
 }
 
-async function setCurrentProgress(data) {
+function setCurrentProgress(data) {
   try {
-    await saveWatchProgress(data);
+    saveWatchProgress(data); // fire-and-forget: async but non-blocking
     setWatchProgress(data);
   } catch (e) { console.error('[setCurrentProgress] failed', e); }
 }
@@ -60,7 +60,7 @@ async function persistProgress(id, season, episode, extra = {}) {
       ...extra
     };
     progress[sid] = merged;
-    await setCurrentProgress(progress);
+    setCurrentProgress(progress);
     await syncWatchProgressItem(sid, 'tv', merged.season, merged.episode, merged.elapsedMinutes * 60);
     console.log('[persistProgress] synced', sid, 'S' + season, 'E' + episode);
   } catch (e) {
@@ -87,7 +87,7 @@ function startProgressInterval() {
         if (existing) {
           existing.elapsedMinutes = (existing.elapsedMinutes || 0) + minutes;
           existing.updated_at = new Date().toISOString();
-          await setCurrentProgress(progress);
+          setCurrentProgress(progress);
         }
       }
     }
@@ -116,7 +116,7 @@ function flushElapsedAndSave() {
     elapsedMinutes: (existing.elapsedMinutes || 0) + minutes,
     episodeRuntime: existing.episodeRuntime ?? null
   };
-  await setCurrentProgress(progress);
+  setCurrentProgress(progress);
   console.log('[flushElapsedAndSave] saved', sid, 'S' + p.season, 'E' + p.episode);
 }
 
@@ -259,7 +259,7 @@ function handleIframeSrcChange(src) {
   if (existing) {
     existing.elapsedMinutes = (existing.elapsedMinutes || 0) + minutesWatched;
   }
-  await setCurrentProgress(progress);
+  setCurrentProgress(progress);
   resetWatchSession();
 
   // Update state and title
@@ -495,7 +495,7 @@ async function initPlayerData() {
           if (existing) {
             existing.elapsedMinutes = (existing.elapsedMinutes || 0) + minutesWatched;
           }
-          await setCurrentProgress(progress);
+          setCurrentProgress(progress);
           resetWatchSession();
 
           setPlayerState({ ...playerState, season: nextS, episode: nextE });
@@ -566,7 +566,7 @@ async function loadEpPopoverData(tmdbData) {
       const progress = getCurrentProgress();
       if (progress[String(p.id)]) {
         progress[String(p.id)].episodeRuntime = currentEp.runtime;
-        await setCurrentProgress(progress);
+        setCurrentProgress(progress);
       }
     }
 
@@ -653,7 +653,7 @@ function showEpisodes(season) {
       if (existing) {
         existing.elapsedMinutes = (existing.elapsedMinutes || 0) + minutesWatched;
       }
-      await setCurrentProgress(progress);
+      setCurrentProgress(progress);
       resetWatchSession();
 
       setPlayerState({ ...playerState, season: newSeason, episode: newEpisode });
