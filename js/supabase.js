@@ -1,7 +1,7 @@
 /**
  * Watch Sessions & Stats — Supabase-backed
  */
-import { getWatchSessions as fetchSessionsFromSync, recordWatchSession as syncRecordSession } from './sync.js';
+import { fetchWatchSessions as fetchSessionsFromSync, recordWatchSession as syncRecordSession } from './sync.js';
 import { getCurrentAuthUser } from './auth.js';
 
 function safeParse(value, fallback) {

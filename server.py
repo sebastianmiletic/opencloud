@@ -30,7 +30,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self):
         # Serve env.js endpoint
-        if self.path == '/env.js':
+        if self.path.startswith('/env.js'):
             self.send_response(200)
             self.send_header('Content-Type', 'application/javascript')
             self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate')
