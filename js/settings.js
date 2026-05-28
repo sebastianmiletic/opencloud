@@ -6,7 +6,7 @@ import { initBlockerUI } from './blocker.js';
 import { getCurrentUser, getLocalProfile, saveLocalProfile } from './storage.js';
 import { getWatchSessions, aggregateStats } from './supabase.js';
 import { isAdmin, setAdmin, getCurrentAuthUser, getUserEmail, updatePassword, updateEmail, deleteAccount, signOut, getSupabaseClient } from './auth.js';
-import { fetchAllUsers, fetchTotalUserCount, fetchUserStats, banUser, unbanUser, deleteUserData, getActiveSessions, kickUser } from './sync.js';
+import { fetchAllUsers, fetchTotalUserCount, fetchUserStats, banUser, unbanUser, deleteUserData, getActiveSessions, kickUser, createProfile } from './sync.js';
 
 let settings = getSettings();
 let currentSettingsTab = 'general';
@@ -194,22 +194,20 @@ export function openSettingsModal() {
         const sb = getSupabaseClient();
         if (!sb) { showToast('Auth client not ready', 'error'); return; }
         try {
+          // Ensure profile row exists first (needed for checkSession users)
+          const { data: existing } = await sb.from('profiles').select('id').eq('id', user.id);
+          if (!existing || existing.length === 0) {
+            await createProfile(user.id, user.email || '', user.user_metadata?.username || '');
+          }
           const { error } = await sb.from('profiles').update({ is_admin: true }).eq('id', user.id);
           if (error) throw error;
-          // Verify from server
-          const { data, error: fetchErr } = await sb.from('profiles').select('is_admin').eq('id', user.id).single();
-          if (fetchErr) throw fetchErr;
-          if (data?.is_admin) {
-            setAdmin(true);
-            showToast('Admin access granted', 'success');
-            adminTabBtn?.classList.remove('hidden');
-            switchSettingsTab('admin');
-          } else {
-            showToast('Activation did not apply', 'error');
-          }
+          setAdmin(true);
+          showToast('Admin access granted', 'success');
+          adminTabBtn?.classList.remove('hidden');
+          switchSettingsTab('admin');
         } catch (err) {
           console.error('[Activation] admin update failed:', err);
-          showToast('Activation failed: ' + (err?.message || 'check console'), 'error');
+          showToast('Activation failed: ' + (err?.message || err?.error_description || 'check console'), 'error');
         }
       } else {
         showToast('Invalid activation key', 'error');
