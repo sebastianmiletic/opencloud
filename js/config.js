@@ -109,8 +109,8 @@ export const DEVICES = {
   phone: { name: 'Phone', class: 'device-phone' }
 };
 
-export const DEFAULT_PROVIDER = 'vidsrccc';
-const SETTINGS_VERSION = 2; // bump to force-reset defaults for everyone
+export const DEFAULT_PROVIDER = 'videasy';
+const SETTINGS_VERSION = 3; // bump to force-reset defaults for everyone
 
 export function getSettings() {
   const raw = localStorage.getItem('openccloud_settings');
