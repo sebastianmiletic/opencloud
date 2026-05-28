@@ -118,15 +118,15 @@ function initAuthModal() {
       signupForm?.classList.remove('active');
       setTimeout(() => {
         signinForm?.classList.add('active');
-        signupForm?.style.display = 'none';
-        signinForm && (signinForm.style.display = 'block');
+        if (signupForm) signupForm.style.display = 'none';
+        if (signinForm) signinForm.style.display = 'block';
       }, 50);
     } else {
       signinForm?.classList.remove('active');
       setTimeout(() => {
         signupForm?.classList.add('active');
-        signinForm && (signinForm.style.display = 'none');
-        signupForm && (signupForm.style.display = 'block');
+        if (signinForm) signinForm.style.display = 'none';
+        if (signupForm) signupForm.style.display = 'block';
       }, 50);
     }
   }
