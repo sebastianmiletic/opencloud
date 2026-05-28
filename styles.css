@@ -1761,6 +1761,10 @@ body {
   padding: 2rem;
 }
 
+.hidden {
+  display: none !important;
+}
+
 .modal.hidden {
   display: none !important;
 }
