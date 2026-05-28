@@ -20,6 +20,8 @@ export let playerState = {
   epData: null,
   view: 'seasons'
 };
+export let searchGalleryResults = [];
+export let searchGalleryQuery = '';
 
 export function setAccounts(v) { accounts = v; }
 export function setCollection(v) { collection = v; }
@@ -34,3 +36,5 @@ export function setHeroSlides(v) { heroSlides = v; }
 export function setCurrentHeroIndex(v) { currentHeroIndex = v; }
 export function setHeroSlideInterval(v) { heroSlideInterval = v; }
 export function setPlayerState(v) { playerState = v; }
+export function setSearchGalleryResults(v) { searchGalleryResults = v; }
+export function setSearchGalleryQuery(v) { searchGalleryQuery = v; }

@@ -6,12 +6,34 @@ import {
 } from './storage.js';
 import { showToast, showConfirm } from './utils.js';
 
+function getLocalProfile(user) {
+  if (!user) return null;
+  try {
+    return JSON.parse(localStorage.getItem(`openccloud_user_${user}_profile`)) || {};
+  } catch (e) {
+    return {};
+  }
+}
+
 export function initUser() {
   const user = getCurrentUser();
   const avatar = document.getElementById('accountAvatar');
   const name = document.getElementById('accountName');
-  if (avatar) avatar.textContent = user ? user.charAt(0).toUpperCase() : 'D';
-  if (name) name.textContent = user || 'Default';
+  const profile = getLocalProfile(user);
+  const displayName = profile?.username || user || 'Default';
+
+  if (name) name.textContent = displayName;
+  if (avatar) {
+    if (profile?.avatar_url) {
+      avatar.innerHTML = `<img src="${profile.avatar_url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+    } else {
+      avatar.innerHTML = '';
+      avatar.textContent = displayName.charAt(0).toUpperCase();
+      avatar.style.background = profile?.avatar_color || 'var(--text-primary)';
+      avatar.style.color = 'var(--bg-primary)';
+    }
+  }
+
   setUserCollection(getUserCollection());
   setUserHistory(getUserHistory());
   setWatchProgress(getWatchProgress());

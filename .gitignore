@@ -20,3 +20,6 @@ node_modules/
 # Server output
 server.log
 nohup.out
+
+# Environment variables (contains API keys)
+.env

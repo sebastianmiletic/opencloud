@@ -37,7 +37,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             js = f"""window.ENV = {{
   TMDB_BEARER_TOKEN: '{ENV.get('TMDB_BEARER_TOKEN', '')}',
-  OMDB_API_KEY: '{ENV.get('OMDB_API_KEY', '')}'
+  OMDB_API_KEY: '{ENV.get('OMDB_API_KEY', '')}',
+  SUPABASE_URL: '{ENV.get('SUPABASE_URL', '')}',
+  SUPABASE_ANON_KEY: '{ENV.get('SUPABASE_ANON_KEY', '')}'
 }};"""
             self.wfile.write(js.encode('utf-8'))
             return

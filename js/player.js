@@ -4,6 +4,7 @@ import { getProviderUrl } from './config.js';
 import { fetchWithAuth } from './api.js';
 import { BASE_URL, API_KEY } from './config.js';
 import { showToast, lockScroll, unlockScroll } from './utils.js';
+import { recordWatchSession } from './supabase.js';
 
 /* DOM refs */
 const playerOverlay = document.getElementById('playerOverlay');
@@ -24,6 +25,13 @@ let _playerOpenedAt = 0;
 let _progressInterval = null;
 let _srcPoller = null;
 let _lastKnownSrc = '';
+
+/* Active watch tracking */
+let _sessionStart = 0;
+let _totalPausedMs = 0;
+let _pausedAt = null;
+let _watchListenersAttached = false;
+let _lastSessionSnapshot = 0;
 
 function getCurrentProgress() {
   try {
@@ -113,6 +121,69 @@ function flushElapsedAndSave() {
   console.log('[flushElapsedAndSave] saved', sid, 'S' + p.season, 'E' + p.episode);
 }
 
+/* Active watch time helpers */
+function getActiveDurationMs() {
+  if (!_sessionStart) return 0;
+  let paused = _totalPausedMs;
+  if (_pausedAt) paused += (Date.now() - _pausedAt);
+  return Math.max(0, Date.now() - _sessionStart - paused);
+}
+
+function pauseWatch() {
+  if (_pausedAt) return;
+  _pausedAt = Date.now();
+}
+
+function resumeWatch() {
+  if (!_pausedAt) return;
+  _totalPausedMs += (Date.now() - _pausedAt);
+  _pausedAt = null;
+}
+
+function attachWatchActivityListeners() {
+  if (_watchListenersAttached) return;
+  _watchListenersAttached = true;
+  document.addEventListener('visibilitychange', onVisibilityChange);
+  window.addEventListener('blur', pauseWatch);
+  window.addEventListener('focus', resumeWatch);
+}
+
+function detachWatchActivityListeners() {
+  if (!_watchListenersAttached) return;
+  _watchListenersAttached = false;
+  document.removeEventListener('visibilitychange', onVisibilityChange);
+  window.removeEventListener('blur', pauseWatch);
+  window.removeEventListener('focus', resumeWatch);
+}
+
+function onVisibilityChange() {
+  if (document.hidden) pauseWatch();
+  else resumeWatch();
+}
+
+function recordCurrentSession() {
+  const dur = getActiveDurationMs();
+  if (dur < 5000) return; // ignore < 5s
+  const p = playerState;
+  if (!p.id) return;
+  recordWatchSession({
+    tmdb_id: p.id,
+    type: p.type,
+    season: p.type === 'tv' ? p.season : null,
+    episode: p.type === 'tv' ? p.episode : null,
+    started_at: new Date(Date.now() - dur - _totalPausedMs - (_pausedAt ? (Date.now() - _pausedAt) : 0)).toISOString(),
+    ended_at: new Date().toISOString(),
+    duration_seconds: Math.round(dur / 1000)
+  });
+}
+
+function resetWatchSession() {
+  recordCurrentSession();
+  _sessionStart = Date.now();
+  _totalPausedMs = 0;
+  _pausedAt = null;
+}
+
 /* Track our own iframe loads vs user-initiated embed navigation */
 let _intentionalLoad = false;
 let _iframeLoadHandler = null;
@@ -182,7 +253,7 @@ function handleIframeSrcChange(src) {
 
   console.log('[handleIframeSrcChange] detected change', 'S' + newS, 'E' + newE);
 
-  // Save elapsed for old episode
+  // Save elapsed for old episode and record active watch session
   const minutesWatched = addSessionElapsed();
   const progress = getCurrentProgress();
   const existing = progress[String(playerState.id)];
@@ -190,12 +261,12 @@ function handleIframeSrcChange(src) {
     existing.elapsedMinutes = (existing.elapsedMinutes || 0) + minutesWatched;
   }
   setCurrentProgress(progress);
+  resetWatchSession();
 
   // Update state and title
   setPlayerState({ ...playerState, season: newS, episode: newE });
   updatePlayerTitle(playerState.tmdbData?.title || '', newS, newE);
   persistProgress(playerState.id, newS, newE, { elapsedMinutes: 0 });
-  _playerOpenedAt = Date.now();
 
   // Update Next button state
   if (playerState.tmdbData && playerNextBtn) {
@@ -251,6 +322,7 @@ function parseSeasonEpisodeFromUrl(url) {
 /* beforeunload: always do a final save */
 window.addEventListener('beforeunload', () => {
   flushElapsedAndSave();
+  recordCurrentSession();
 });
 
 export function initPlayer() {
@@ -302,7 +374,12 @@ export function closePlayer() {
   flushElapsedAndSave();
   stopProgressInterval();
   stopSrcPoller();
+  recordCurrentSession();
+  detachWatchActivityListeners();
   _playerOpenedAt = 0;
+  _sessionStart = 0;
+  _totalPausedMs = 0;
+  _pausedAt = null;
   playerOverlay.classList.add('closing');
   setTimeout(() => {
     playerOverlay.classList.add('hidden');
@@ -348,6 +425,10 @@ export function openPlayer(id, type, season, episode) {
   }
 
   _playerOpenedAt = Date.now();
+  _sessionStart = Date.now();
+  _totalPausedMs = 0;
+  _pausedAt = null;
+  attachWatchActivityListeners();
   playerOverlay.classList.remove('hidden');
   playerOverlay.classList.remove('closing');
   lockScroll();
@@ -416,11 +497,11 @@ async function initPlayerData() {
             existing.elapsedMinutes = (existing.elapsedMinutes || 0) + minutesWatched;
           }
           setCurrentProgress(progress);
+          resetWatchSession();
 
           setPlayerState({ ...playerState, season: nextS, episode: nextE });
           updatePlayerTitle(newTmdbData.title, nextS, nextE);
           persistProgress(p.id, nextS, nextE, { elapsedMinutes: 0 });
-          _playerOpenedAt = Date.now();
           initPlayerData();
         };
       } else if (playerNextBtn) {
@@ -574,10 +655,10 @@ function showEpisodes(season) {
         existing.elapsedMinutes = (existing.elapsedMinutes || 0) + minutesWatched;
       }
       setCurrentProgress(progress);
+      resetWatchSession();
 
       setPlayerState({ ...playerState, season: newSeason, episode: newEpisode });
       persistProgress(playerState.id, newSeason, newEpisode, { elapsedMinutes: 0 });
-      _playerOpenedAt = Date.now();
       closeEpPopover();
       initPlayerData();
     });

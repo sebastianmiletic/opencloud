@@ -2,14 +2,16 @@
 import {
   userCollection, userHistory, watchProgress, userFolders, currentTab, currentModalItem, setCurrentTab,
   setSearchTimeout, setCurrentModalItem, heroSlides, setHeroSlides,
-  setUserCollection, setUserHistory, setWatchProgress, setUserFolders
+  setUserCollection, setUserHistory, setWatchProgress, setUserFolders,
+  searchGalleryResults, setSearchGalleryResults, searchGalleryQuery, setSearchGalleryQuery
 } from './state.js';
 import {
   getUserCollection, saveUserCollection, getUserHistory, saveUserHistory,
   getWatchProgress, saveWatchProgress, getUserFolders, saveUserFolders
 } from './storage.js';
 import { BASE_URL, IMG_BASE, STAR_WARS_SAGA_ORDER, API_KEY } from './config.js';
-import { fetchWithAuth, getOMDBRatingsBatch, getOMDBRating } from './api.js';
+import { fetchWithAuth, getOMDBRatingsBatch, getOMDBRating, getTrailer } from './api.js';
+import { scheduleSync } from './supabase.js';
 import { showToast, lockScroll, unlockScroll, showConfirm } from './utils.js';
 import { openPlayer } from './player.js';
 import { renderHeroSlides } from './hero.js';
@@ -25,6 +27,11 @@ const collectionView = document.getElementById('collectionView');
 const collectionGrid = document.getElementById('collectionGrid');
 const historyView = document.getElementById('historyView');
 const historyGrid = document.getElementById('historyGrid');
+const searchView = document.getElementById('searchView');
+const searchGrid = document.getElementById('searchGrid');
+const searchQueryTitle = document.getElementById('searchQueryTitle');
+const searchResultCount = document.getElementById('searchResultCount');
+const searchBackBtn = document.getElementById('searchBackBtn');
 const itemModal = document.getElementById('itemModal');
 const collectionSort = document.getElementById('collectionSort');
 const historySort = document.getElementById('historySort');
@@ -37,6 +44,146 @@ let _creatingFolder = false;
 
 /* Move popover state */
 let _movePopoverOpen = false;
+
+/* Previous view for back navigation */
+let _previousView = 'home';
+
+/* Saved home scroll position for back navigation */
+let _homeScrollY = 0;
+
+/* Franchise / genre search mapping */
+const FRANCHISE_MAP = {
+  'marvel': { companies: [420], keywords: [180547, 335711], name: 'Marvel' },
+  'star wars': { keywords: [1605, 161257], collections: [10], name: 'Star Wars' },
+  'dc': { companies: [429], keywords: [234700, 270768], name: 'DC' },
+  'dc comics': { companies: [429], keywords: [234700, 270768], name: 'DC' },
+  'pixar': { companies: [3], name: 'Pixar' },
+  'disney': { companies: [2], name: 'Disney' },
+  'harry potter': { keywords: [2343, 2344], collections: [1241], name: 'Harry Potter' },
+  'lord of the rings': { keywords: [12565, 1956], collections: [119], name: 'Lord of the Rings' },
+  'hobbit': { keywords: [12565, 1956], collections: [121938], name: 'The Hobbit' },
+  'fast and furious': { keywords: [13057], collections: [130], name: 'Fast & Furious' },
+  'james bond': { keywords: [470], collections: [645], name: 'James Bond' },
+  'jurassic park': { keywords: [10085], collections: [328], name: 'Jurassic Park' },
+  'mission impossible': { keywords: [182778], collections: [87361], name: 'Mission: Impossible' },
+  'transformers': { keywords: [9887], collections: [14890], name: 'Transformers' },
+  'terminator': { keywords: [296], collections: [528], name: 'Terminator' },
+  'batman': { keywords: [10065, 1945], collections: [120794], name: 'Batman' },
+  'superman': { keywords: [10065, 8534], name: 'Superman' },
+  'spider-man': { keywords: [10065, 9887], name: 'Spider-Man' },
+  'spiderman': { keywords: [10065, 9887], name: 'Spider-Man' },
+  'avengers': { keywords: [9926, 180547], name: 'Avengers' },
+  'indiana jones': { keywords: [13302], collections: [84], name: 'Indiana Jones' },
+  'matrix': { keywords: [1694], collections: [2344], name: 'The Matrix' },
+  'pirates of the caribbean': { keywords: [335711], collections: [295], name: 'Pirates of the Caribbean' },
+  'john wick': { keywords: [185106], collections: [404609], name: 'John Wick' },
+  'rocky': { keywords: [5331], collections: [531], name: 'Rocky' },
+  'alien': { keywords: [1601], collections: [8091], name: 'Alien' },
+  'predator': { keywords: [184], collections: [166], name: 'Predator' },
+  'godzilla': { keywords: [3947, 12654], collections: [535313], name: 'Godzilla' },
+  'king kong': { keywords: [10263, 12654], collections: [535313], name: 'King Kong' },
+  'sherlock holmes': { keywords: [414], name: 'Sherlock Holmes' },
+  'planet of the apes': { keywords: [10266], collections: [173710], name: 'Planet of the Apes' },
+  'mad max': { keywords: [417], collections: [5289], name: 'Mad Max' },
+  'die hard': { keywords: [1711], collections: [1579], name: 'Die Hard' },
+  'men in black': { keywords: [10370], collections: [86082], name: 'Men in Black' },
+  'ghostbusters': { keywords: [2452], collections: [2980], name: 'Ghostbusters' },
+  'back to the future': { keywords: [1601], collections: [264], name: 'Back to the Future' },
+  'the mummy': { keywords: [2412], collections: [3535], name: 'The Mummy' },
+  'hunger games': { keywords: [13183], collections: [131635], name: 'The Hunger Games' },
+  'twilight': { keywords: [13184], collections: [33566], name: 'Twilight' },
+  'divergent': { keywords: [13183], collections: [283597], name: 'Divergent' },
+  ' maze runner': { keywords: [13183], collections: [227544], name: 'The Maze Runner' },
+  'fantastic beasts': { keywords: [2343], collections: [435259], name: 'Fantastic Beasts' },
+  'monsterverse': { keywords: [12654], collections: [535313], name: 'MonsterVerse' },
+  'wizarding world': { keywords: [2343], name: 'Wizarding World' },
+  'x-men': { keywords: [10065, 13290], name: 'X-Men' },
+  'xmen': { keywords: [10065, 13290], name: 'X-Men' },
+  'blade runner': { keywords: [221], collections: [422837], name: 'Blade Runner' },
+  'dune': { keywords: [210024], collections: [726871], name: 'Dune' },
+  'interstellar': { keywords: [10373], name: 'Interstellar' },
+  'inception': { keywords: [10373], name: 'Inception' },
+  'tenet': { keywords: [10373], name: 'Tenet' },
+  'dark knight': { keywords: [10065, 1945], name: 'The Dark Knight' },
+  'gladiator': { keywords: [10373], name: 'Gladiator' },
+};
+
+function getMatchedFranchise(query) {
+  const lower = query.toLowerCase();
+  for (const [key, value] of Object.entries(FRANCHISE_MAP)) {
+    if (lower.includes(key)) return value;
+  }
+  return null;
+}
+
+async function fetchFranchiseResults(franchise) {
+  const results = [];
+  const seen = new Set();
+  const opts = { headers: { 'Authorization': `Bearer ${API_KEY}`, 'Accept': 'application/json' } };
+
+  const addItems = (items, mediaType) => {
+    items.forEach(item => {
+      if (!item?.id || seen.has(item.id)) return;
+      seen.add(item.id);
+      results.push({ ...item, media_type: mediaType });
+    });
+  };
+
+  // 1. Try collection endpoints (most reliable)
+  if (franchise.collections?.length) {
+    await Promise.all(franchise.collections.map(async (id) => {
+      try {
+        const res = await fetch(`${BASE_URL}/collection/${id}?language=en-US`, opts);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.parts?.length) addItems(data.parts, 'movie');
+      } catch (e) { /* skip */ }
+    }));
+  }
+
+  // 2. Try search as fallback (very reliable)
+  try {
+    const searchRes = await fetch(
+      `${BASE_URL}/search/movie?query=${encodeURIComponent(franchise.name)}&language=en-US&page=1`,
+      opts
+    );
+    if (searchRes.ok) {
+      const searchData = await searchRes.json();
+      if (searchData.results?.length) addItems(searchData.results.slice(0, 20), 'movie');
+    }
+  } catch (e) { /* skip */ }
+
+  // 3. Try discover for movies
+  try {
+    const params = new URLSearchParams({
+      language: 'en-US', page: '1', sort_by: 'popularity.desc',
+      include_adult: 'false'
+    });
+    if (franchise.companies?.length) params.append('with_companies', franchise.companies.join(','));
+    if (franchise.keywords?.length) params.append('with_keywords', franchise.keywords.join(','));
+    const discRes = await fetch(`${BASE_URL}/discover/movie?${params.toString()}`, opts);
+    if (discRes.ok) {
+      const discData = await discRes.json();
+      if (discData.results?.length) addItems(discData.results, 'movie');
+    }
+  } catch (e) { /* skip */ }
+
+  // 4. Try TV discover
+  try {
+    const tvParams = new URLSearchParams({
+      language: 'en-US', page: '1', sort_by: 'popularity.desc',
+      include_adult: 'false'
+    });
+    if (franchise.keywords?.length) tvParams.append('with_keywords', franchise.keywords.join(','));
+    const tvRes = await fetch(`${BASE_URL}/discover/tv?${tvParams.toString()}`, opts);
+    if (tvRes.ok) {
+      const tvData = await tvRes.json();
+      if (tvData.results?.length) addItems(tvData.results, 'tv');
+    }
+  } catch (e) { /* skip */ }
+
+  return results;
+}
 
 /* Nav */
 export function initNav() {
@@ -55,6 +202,8 @@ function toggleView(tab) {
   homeView?.classList.toggle('hidden', tab !== 'home');
   collectionView?.classList.toggle('hidden', tab !== 'collection');
   historyView?.classList.toggle('hidden', tab !== 'history');
+  searchView?.classList.add('hidden');
+  document.getElementById('collectionsView')?.classList.add('hidden');
   if (tab === 'collection') renderUserCollection();
   if (tab === 'history') renderUserHistory();
   if (tab === 'home') {
@@ -86,7 +235,7 @@ export function initSearch() {
     if (e.key === 'Enter') {
       clearTimeout(window._searchTimeout);
       const q = searchInput.value.trim();
-      if (q.length >= 2) searchTMDB(q);
+      if (q.length >= 2) showSearchGallery(q);
     }
     if (e.key === 'Escape') {
       searchResults?.classList.add('hidden');
@@ -98,6 +247,44 @@ export function initSearch() {
     searchInput.value = '';
     clearSearchBtn.classList.add('hidden');
     searchResults?.classList.add('hidden');
+    if (searchView && !searchView.classList.contains('hidden')) {
+      const prevBtn = document.querySelector(`.nav-btn[data-tab="${currentTab}"]`);
+      if (prevBtn) prevBtn.click();
+      // Restore home scroll position if going back to home
+      if (currentTab === 'home') {
+        requestAnimationFrame(() => {
+          window.scrollTo(0, _homeScrollY);
+        });
+      }
+    }
+  });
+
+  searchBackBtn?.addEventListener('click', () => {
+    searchView?.classList.add('hidden');
+    if (_previousView === 'collections') {
+      document.getElementById('collectionsView')?.classList.remove('hidden');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      const prevBtn = document.querySelector(`.nav-btn[data-tab="${currentTab}"]`);
+      if (prevBtn) prevBtn.click();
+      // Restore home scroll position
+      requestAnimationFrame(() => {
+        window.scrollTo(0, _homeScrollY);
+      });
+    }
+  });
+
+  // Collections view back button
+  const collectionsBackBtn = document.getElementById('collectionsBackBtn');
+  collectionsBackBtn?.addEventListener('click', () => {
+    document.getElementById('collectionsView')?.classList.add('hidden');
+    homeView?.classList.remove('hidden');
+    const homeBtn = document.querySelector('.nav-btn[data-tab="home"]');
+    if (homeBtn) homeBtn.click();
+    // Restore home scroll position
+    requestAnimationFrame(() => {
+      window.scrollTo(0, _homeScrollY);
+    });
   });
 
   document.addEventListener('click', (e) => {
@@ -108,6 +295,37 @@ export function initSearch() {
 
   collectionSort?.addEventListener('change', renderUserCollection);
   historySort?.addEventListener('change', renderUserHistory);
+
+  // Search gallery filter dropdown toggle
+  const filtersToggle = document.getElementById('searchFiltersToggle');
+  const filtersDropdown = document.getElementById('searchFiltersDropdown');
+  if (filtersToggle && filtersDropdown) {
+    filtersToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isOpen = !filtersDropdown.classList.contains('hidden');
+      if (isOpen) {
+        filtersDropdown.classList.add('hidden');
+        filtersToggle.classList.remove('active');
+      } else {
+        filtersDropdown.classList.remove('hidden');
+        filtersToggle.classList.add('active');
+      }
+    });
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.search-filters-dropdown-wrap')) {
+        filtersDropdown.classList.add('hidden');
+        filtersToggle.classList.remove('active');
+      }
+    });
+  }
+
+  // Search gallery filter listeners
+  ['searchFilterType', 'searchFilterRating', 'searchFilterSort'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', () => {
+      if (searchGalleryResults.length > 0) renderSearchGallery(searchGalleryResults, searchGalleryQuery);
+    });
+  });
 }
 
 async function searchTMDB(query) {
@@ -122,10 +340,26 @@ async function searchTMDB(query) {
     ]);
     const movies = await movieRes.json();
     const tvShows = await tvRes.json();
-    const results = [
+    let results = [
       ...movies.results.map(item => ({ ...item, media_type: 'movie' })),
       ...tvShows.results.map(item => ({ ...item, media_type: 'tv' }))
-    ].sort((a, b) => (b.popularity || 0) - (a.popularity || 0)).slice(0, 15);
+    ];
+
+    // Franchise search: if query matches a known franchise, merge discover results
+    const franchise = getMatchedFranchise(query);
+    if (franchise) {
+      const franchiseResults = await fetchFranchiseResults(franchise);
+      const seen = new Set(results.map(r => r.id));
+      franchiseResults.forEach(item => {
+        if (!seen.has(item.id)) {
+          seen.add(item.id);
+          results.push(item);
+        }
+      });
+    }
+
+    results.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+    results = results.slice(0, 15);
 
     const omdbRatings = await getOMDBRatingsBatch(results);
     results.forEach(item => { if (omdbRatings[item.id]) item.omdbRating = omdbRatings[item.id]; });
@@ -203,6 +437,664 @@ function renderSearchResults(results) {
   });
 }
 
+/* Search Gallery View */
+function showSearchGallery(query) {
+  if (!query || query.length < 2) return;
+  _previousView = 'home';
+  _homeScrollY = window.scrollY;
+  searchResults?.classList.add('hidden');
+  homeView?.classList.add('hidden');
+  collectionView?.classList.add('hidden');
+  historyView?.classList.add('hidden');
+  document.getElementById('collectionsView')?.classList.add('hidden');
+  searchView?.classList.remove('hidden');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  searchTMDBGallery(query);
+}
+
+async function searchTMDBGallery(query) {
+  if (!searchGrid) return;
+  document.getElementById('collectionsView')?.classList.add('hidden');
+  searchGrid.innerHTML = '<div class="search-loading"><i class="fas fa-spinner"></i> Searching...</div>';
+  try {
+    const [movieRes, tvRes] = await Promise.all([
+      fetch(`${BASE_URL}/search/movie?query=${encodeURIComponent(query)}&page=1`, {
+        headers: { 'Authorization': `Bearer ${API_KEY}`, 'Accept': 'application/json' }
+      }),
+      fetch(`${BASE_URL}/search/tv?query=${encodeURIComponent(query)}&page=1`, {
+        headers: { 'Authorization': `Bearer ${API_KEY}`, 'Accept': 'application/json' }
+      })
+    ]);
+    const movies = await movieRes.json();
+    const tvShows = await tvRes.json();
+    let results = [
+      ...movies.results.map(item => ({ ...item, media_type: 'movie' })),
+      ...tvShows.results.map(item => ({ ...item, media_type: 'tv' }))
+    ];
+
+    // Franchise search: if query matches a known franchise, merge discover results
+    const franchise = getMatchedFranchise(query);
+    if (franchise) {
+      const franchiseResults = await fetchFranchiseResults(franchise);
+      const seen = new Set(results.map(r => r.id));
+      franchiseResults.forEach(item => {
+        if (!seen.has(item.id)) {
+          seen.add(item.id);
+          results.push(item);
+        }
+      });
+    }
+
+    results.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+
+    const omdbRatings = await getOMDBRatingsBatch(results);
+    results.forEach(item => { if (omdbRatings[item.id]) item.omdbRating = omdbRatings[item.id]; });
+
+    setSearchGalleryResults(results);
+    setSearchGalleryQuery(query);
+    renderSearchGallery(results, query);
+  } catch (error) {
+    searchGrid.innerHTML = '<div class="search-loading">Search failed. Please try again.</div>';
+    if (searchResultCount) searchResultCount.textContent = 'Error';
+  }
+}
+
+function getSearchFilters() {
+  return {
+    type: document.getElementById('searchFilterType')?.value || 'all',
+    rating: document.getElementById('searchFilterRating')?.value || 'all',
+    sort: document.getElementById('searchFilterSort')?.value || 'popularity'
+  };
+}
+
+function applySearchFilters(results) {
+  const filters = getSearchFilters();
+  let filtered = [...results];
+
+  if (filters.type !== 'all') {
+    filtered = filtered.filter(item => item.media_type === filters.type);
+  }
+  if (filters.rating !== 'all') {
+    const min = parseFloat(filters.rating);
+    filtered = filtered.filter(item => {
+      const r = item.omdbRating || item.vote_average || 0;
+      return r >= min;
+    });
+  }
+
+  switch (filters.sort) {
+    case 'rating-desc': filtered.sort((a, b) => (b.omdbRating || b.vote_average || 0) - (a.omdbRating || a.vote_average || 0)); break;
+    case 'rating-asc': filtered.sort((a, b) => (a.omdbRating || a.vote_average || 0) - (b.omdbRating || b.vote_average || 0)); break;
+    case 'year-desc': filtered.sort((a, b) => ((b.release_date || b.first_air_date || '').localeCompare(a.release_date || a.first_air_date || ''))); break;
+    case 'year-asc': filtered.sort((a, b) => ((a.release_date || a.first_air_date || '').localeCompare(b.release_date || b.first_air_date || ''))); break;
+    default: filtered.sort((a, b) => (b.popularity || 0) - (a.popularity || 0)); break;
+  }
+
+  return filtered;
+}
+
+/* Genre Gallery */
+export async function showGenreGallery(genreId, genreName) {
+  _previousView = 'home';
+  _homeScrollY = window.scrollY;
+  searchResults?.classList.add('hidden');
+  homeView?.classList.add('hidden');
+  collectionView?.classList.add('hidden');
+  historyView?.classList.add('hidden');
+  document.getElementById('collectionsView')?.classList.add('hidden');
+  searchView?.classList.remove('hidden');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  if (!searchGrid) return;
+  searchGrid.innerHTML = '<div class="search-loading"><i class="fas fa-spinner"></i> Loading...</div>';
+  if (searchQueryTitle) searchQueryTitle.textContent = genreName || 'Genre Results';
+  if (searchResultCount) searchResultCount.textContent = '';
+
+  try {
+    const [movieRes, tvRes] = await Promise.all([
+      fetch(`${BASE_URL}/discover/movie?with_genres=${genreId}&language=en-US&page=1&sort_by=popularity.desc`, {
+        headers: { 'Authorization': `Bearer ${API_KEY}`, 'Accept': 'application/json' }
+      }),
+      fetch(`${BASE_URL}/discover/tv?with_genres=${genreId}&language=en-US&page=1&sort_by=popularity.desc`, {
+        headers: { 'Authorization': `Bearer ${API_KEY}`, 'Accept': 'application/json' }
+      })
+    ]);
+    const movies = await movieRes.json();
+    const tvShows = await tvRes.json();
+    const results = [
+      ...movies.results.map(item => ({ ...item, media_type: 'movie' })),
+      ...tvShows.results.map(item => ({ ...item, media_type: 'tv' }))
+    ].sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+
+    const omdbRatings = await getOMDBRatingsBatch(results);
+    results.forEach(item => { if (omdbRatings[item.id]) item.omdbRating = omdbRatings[item.id]; });
+
+    setSearchGalleryResults(results);
+    setSearchGalleryQuery('');
+    renderSearchGallery(results, '', `${genreName} Movies & TV Shows`);
+  } catch (error) {
+    searchGrid.innerHTML = '<div class="search-loading">Failed to load genre results.</div>';
+  }
+}
+
+/* Collection Gallery */
+export async function showCollectionGallery(collectionId, collectionName) {
+  const fromCollections = !document.getElementById('collectionsView')?.classList.contains('hidden');
+  _previousView = fromCollections ? 'collections' : 'home';
+  if (!fromCollections) _homeScrollY = window.scrollY;
+  searchResults?.classList.add('hidden');
+  homeView?.classList.add('hidden');
+  collectionView?.classList.add('hidden');
+  historyView?.classList.add('hidden');
+  document.getElementById('collectionsView')?.classList.add('hidden');
+  searchView?.classList.remove('hidden');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  if (!searchGrid) return;
+  searchGrid.innerHTML = '<div class="search-loading"><i class="fas fa-spinner"></i> Loading...</div>';
+  if (searchQueryTitle) searchQueryTitle.textContent = collectionName || 'Collection';
+  if (searchResultCount) searchResultCount.textContent = '';
+
+  const seen = new Set();
+  const results = [];
+  const opts = { headers: { 'Authorization': `Bearer ${API_KEY}`, 'Accept': 'application/json' } };
+
+  // 1. Try collection endpoint
+  try {
+    const data = await fetchWithAuth(`${BASE_URL}/collection/${collectionId}?language=en-US`);
+    if (data.parts?.length) {
+      data.parts.forEach(item => {
+        if (!item.poster_path || seen.has(item.id)) return;
+        seen.add(item.id);
+        results.push({ ...item, media_type: 'movie' });
+      });
+    }
+  } catch (e) { /* skip */ }
+
+  // 2. Always search by collection name to find more movies
+  if (collectionName) {
+    try {
+      const searchRes = await fetch(`${BASE_URL}/search/movie?query=${encodeURIComponent(collectionName)}&language=en-US&page=1`, opts);
+      if (searchRes.ok) {
+        const searchData = await searchRes.json();
+        if (searchData.results?.length) {
+          searchData.results.forEach(item => {
+            if (!item.poster_path || seen.has(item.id)) return;
+            seen.add(item.id);
+            results.push({ ...item, media_type: 'movie' });
+          });
+        }
+      }
+    } catch (e) { /* skip */ }
+  }
+
+  // 3. Always try franchise discover to get ALL franchise movies (merges with collection)
+  if (collectionName) {
+    const franchise = getMatchedFranchise(collectionName);
+    if (franchise) {
+      const franchiseResults = await fetchFranchiseResults(franchise);
+      franchiseResults.forEach(item => {
+        if (!item.poster_path || seen.has(item.id)) return;
+        seen.add(item.id);
+        results.push(item);
+      });
+    }
+  }
+
+  // Sort by release date
+  results.sort((a, b) => {
+    const aDate = a.release_date || a.first_air_date || '';
+    const bDate = b.release_date || b.first_air_date || '';
+    return aDate.localeCompare(bDate);
+  });
+
+  if (results.length === 0) {
+    searchGrid.innerHTML = '<div class="search-loading">No movies found in this collection.</div>';
+    return;
+  }
+
+  const omdbRatings = await getOMDBRatingsBatch(results);
+  results.forEach(item => { if (omdbRatings[item.id]) item.omdbRating = omdbRatings[item.id]; });
+
+  setSearchGalleryResults(results);
+  setSearchGalleryQuery('');
+  renderSearchGallery(results, '', collectionName);
+}
+
+/* Popular Collections on Home — verified TMDB collection IDs */
+const POPULAR_COLLECTIONS = [
+  { id: 1241, name: 'Harry Potter' },
+  { id: 10, name: 'Star Wars' },
+  { id: 86311, name: 'Marvel: The Infinity Saga' },
+  { id: 119, name: 'The Lord of the Rings' },
+  { id: 121938, name: 'The Hobbit' },
+  { id: 130, name: 'Fast & Furious' },
+  { id: 645, name: 'James Bond' },
+  { id: 328, name: 'Jurassic Park' },
+  { id: 528, name: 'Terminator' },
+  { id: 120794, name: 'Batman' },
+  { id: 84, name: 'Indiana Jones' },
+  { id: 2344, name: 'The Matrix' },
+  { id: 295, name: 'Pirates of the Caribbean' },
+  { id: 404609, name: 'John Wick' },
+  { id: 531, name: 'Rocky' },
+  { id: 8091, name: 'Alien' },
+  { id: 166, name: 'Predator' },
+  { id: 5289, name: 'Mad Max' },
+  { id: 1579, name: 'Die Hard' },
+  { id: 86082, name: 'Men in Black' },
+  { id: 2980, name: 'Ghostbusters' },
+  { id: 264, name: 'Back to the Future' },
+  { id: 3535, name: 'The Mummy' },
+  { id: 131635, name: 'The Hunger Games' },
+  { id: 33566, name: 'Twilight' },
+  { id: 283597, name: 'Divergent' },
+  { id: 227544, name: 'The Maze Runner' },
+  { id: 435259, name: 'Fantastic Beasts' },
+  { id: 748, name: 'X-Men' },
+  { id: 726871, name: 'Dune' },
+  { id: 264, name: 'Back to the Future' },
+  { id: 14890, name: 'Transformers' },
+  { id: 87361, name: 'Mission: Impossible' },
+  { id: 1241, name: 'Harry Potter' },
+  { id: 10, name: 'Star Wars' },
+];
+
+/* All Collections for See All view */
+const ALL_COLLECTIONS = [
+  ...POPULAR_COLLECTIONS,
+  { id: 553717, name: 'Creed' },
+  { id: 168, name: 'Planet of the Apes' },
+  { id: 2604, name: 'Scream' },
+  { id: 2607, name: 'Friday the 13th' },
+  { id: 8580, name: 'A Nightmare on Elm Street' },
+  { id: 10451, name: 'Child\'s Play' },
+  { id: 91361, name: 'Halloween' },
+  { id: 402322, name: 'The Conjuring Universe' },
+  { id: 259187, name: 'Annabelle' },
+  { id: 230932, name: 'Kick-Ass' },
+  { id: 391860, name: 'Kingsman' },
+  { id: 430863, name: 'Now You See Me' },
+  { id: 128, name: 'Ocean\'s' },
+  { id: 86119, name: 'The Hangover' },
+  { id: 151687, name: 'The Transporter' },
+  { id: 5039, name: 'Rambo' },
+  { id: 126125, name: 'The Expendables' },
+  { id: 332402, name: 'Taken' },
+  { id: 372983, name: 'The Mechanic' },
+  { id: 111583, name: 'Crank' },
+  { id: 222938, name: 'Anchorman' },
+  { id: 250616, name: 'Zoolander' },
+  { id: 252374, name: 'Step Brothers' },
+  { id: 146130, name: 'Wedding Crashers' },
+  { id: 139370, name: 'Old School' },
+  { id: 306809, name: 'Ted' },
+  { id: 352854, name: 'Neighbors' },
+  { id: 392562, name: '21 Jump Street' },
+  { id: 630322, name: 'The Equalizer' },
+  { id: 172699, name: 'RED' },
+  { id: 392583, name: 'Olympus Has Fallen' },
+  { id: 848, name: 'The Naked Gun' },
+  { id: 221147, name: 'Pitch Perfect' },
+  { id: 386770, name: 'Ride Along' },
+  { id: 306810, name: 'Get Hard' },
+  { id: 306812, name: 'Horrible Bosses' },
+  { id: 306813, name: 'Bridesmaids' },
+  { id: 504359, name: 'Central Intelligence' },
+  { id: 392861, name: 'We\'re the Millers' },
+  { id: 392862, name: 'Identity Thief' },
+  { id: 392863, name: 'The Heat' },
+  { id: 392864, name: 'Spy' },
+  { id: 392865, name: 'Girls Trip' },
+  { id: 392866, name: 'Night School' },
+  { id: 378386, name: 'Think Like a Man' },
+  { id: 306811, name: 'About Last Night' },
+  { id: 238155, name: 'The Best Man' },
+  { id: 159440, name: 'Barbershop' },
+  { id: 120658, name: 'Ride Along' },
+  { id: 96601, name: 'Evil Dead' },
+  { id: 65633, name: 'Saw' },
+  { id: 231617, name: 'The Texas Chainsaw Massacre' },
+  { id: 142638, name: 'The Hills Have Eyes' },
+  { id: 158097, name: 'The Grudge' },
+  { id: 102322, name: 'The Ring' },
+  { id: 223247, name: 'Paranormal Activity' },
+  { id: 855094, name: 'Joker' },
+  { id: 2746, name: 'The Crow' },
+  { id: 3167, name: 'RoboCop' },
+  { id: 5282, name: 'Total Recall' },
+  { id: 136835, name: 'Starship Troopers' },
+  { id: 3945, name: 'Stargate' },
+  { id: 173311, name: 'Independence Day' },
+  { id: 230, name: 'Spaceballs' },
+  { id: 15121, name: 'Super Troopers' },
+  { id: 302322, name: 'Hot Shots!' },
+  { id: 118990, name: 'Austin Powers' },
+  { id: 5350, name: 'Wayne\'s World' },
+  { id: 91766, name: 'Bill & Ted' },
+  { id: 531242, name: 'The Lego Movie' },
+  { id: 173710, name: 'Planet of the Apes (Reboot)' },
+  { id: 535313, name: 'MonsterVerse' },
+  { id: 422837, name: 'Blade Runner' },
+  { id: 529892, name: 'DC Extended Universe' },
+  { id: 531241, name: 'Spider-Man (MCU)' },
+  { id: 531241, name: 'Spider-Man' },
+];
+
+/* Full Franchises for See All view (uses discover, not collections) */
+const FULL_FRANCHISES = [
+  { key: 'marvel', name: 'Marvel Cinematic Universe', gradient: 'linear-gradient(135deg, #8B0000 0%, #DC143C 50%, #FF4500 100%)' },
+  { key: 'star wars', name: 'Star Wars Saga', gradient: 'linear-gradient(135deg, #0B1426 0%, #1a3a5c 50%, #4a90c2 100%)' },
+  { key: 'dc', name: 'DC Universe', gradient: 'linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%)' },
+  { key: 'harry potter', name: 'Wizarding World', gradient: 'linear-gradient(135deg, #1a0a00 0%, #4a2511 50%, #8B6914 100%)' },
+  { key: 'lord of the rings', name: 'Middle-earth', gradient: 'linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%)' },
+  { key: 'fast and furious', name: 'Fast & Furious', gradient: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #e94560 100%)' },
+  { key: 'james bond', name: 'James Bond', gradient: 'linear-gradient(135deg, #000000 0%, #1a1a1a 50%, #4a4a4a 100%)' },
+  { key: 'jurassic park', name: 'Jurassic World', gradient: 'linear-gradient(135deg, #0a2f0a 0%, #1a5c1a 50%, #2e8b57 100%)' },
+  { key: 'mission impossible', name: 'Mission: Impossible', gradient: 'linear-gradient(135deg, #1a0a1a 0%, #4a1a4a 50%, #8B008B 100%)' },
+  { key: 'transformers', name: 'Transformers', gradient: 'linear-gradient(135deg, #1a1a00 0%, #4a4a1a 50%, #8B8B00 100%)' },
+  { key: 'terminator', name: 'Terminator', gradient: 'linear-gradient(135deg, #1a0000 0%, #4a0a0a 50%, #8B0000 100%)' },
+  { key: 'batman', name: 'Batman', gradient: 'linear-gradient(135deg, #050505 0%, #1a1a1a 50%, #333333 100%)' },
+  { key: 'spider-man', name: 'Spider-Man', gradient: 'linear-gradient(135deg, #1a0000 0%, #4a0000 50%, #8B0000 100%)' },
+  { key: 'x-men', name: 'X-Men', gradient: 'linear-gradient(135deg, #0a0a2e 0%, #1a1a5e 50%, #4a4a8B 100%)' },
+  { key: 'avengers', name: 'The Avengers', gradient: 'linear-gradient(135deg, #2e0000 0%, #5c0000 50%, #8B0000 100%)' },
+  { key: 'indiana jones', name: 'Indiana Jones', gradient: 'linear-gradient(135deg, #3d2b1f 0%, #6b4423 50%, #8B6914 100%)' },
+  { key: 'matrix', name: 'The Matrix', gradient: 'linear-gradient(135deg, #000000 0%, #003300 50%, #00cc00 100%)' },
+  { key: 'pirates of the caribbean', name: 'Pirates of the Caribbean', gradient: 'linear-gradient(135deg, #0a1a2e 0%, #1a3a5c 50%, #2e5c8B 100%)' },
+  { key: 'john wick', name: 'John Wick', gradient: 'linear-gradient(135deg, #1a0a00 0%, #3d2b1f 50%, #5c4033 100%)' },
+  { key: 'rocky', name: 'Rocky / Creed', gradient: 'linear-gradient(135deg, #2e0000 0%, #5c1a1a 50%, #8B4513 100%)' },
+  { key: 'alien', name: 'Alien / Prometheus', gradient: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #2e2e2e 100%)' },
+  { key: 'predator', name: 'Predator', gradient: 'linear-gradient(135deg, #0a1a0a 0%, #1a3a1a 50%, #2e5c2e 100%)' },
+  { key: 'godzilla', name: 'Godzilla / King Kong', gradient: 'linear-gradient(135deg, #1a1a1a 0%, #0a2e0a 50%, #1a5c1a 100%)' },
+  { key: 'planet of the apes', name: 'Planet of the Apes', gradient: 'linear-gradient(135deg, #2e2e1a 0%, #4a4a2e 50%, #6b6b4a 100%)' },
+  { key: 'mad max', name: 'Mad Max', gradient: 'linear-gradient(135deg, #3d2b1f 0%, #5c4033 50%, #8B4513 100%)' },
+  { key: 'die hard', name: 'Die Hard', gradient: 'linear-gradient(135deg, #2e0000 0%, #5c0000 50%, #8B0000 100%)' },
+  { key: 'men in black', name: 'Men in Black', gradient: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #2e2e5c 100%)' },
+  { key: 'ghostbusters', name: 'Ghostbusters', gradient: 'linear-gradient(135deg, #0a1a0a 0%, #1a3a1a 50%, #2e5c2e 100%)' },
+  { key: 'back to the future', name: 'Back to the Future', gradient: 'linear-gradient(135deg, #2e2e1a 0%, #5c5c2e 50%, #8B8B00 100%)' },
+  { key: 'hunger games', name: 'The Hunger Games', gradient: 'linear-gradient(135deg, #2e0000 0%, #5c1a0a 50%, #8B4513 100%)' },
+  { key: 'twilight', name: 'The Twilight Saga', gradient: 'linear-gradient(135deg, #0a0a1a 0%, #1a1a3a 50%, #2e2e5c 100%)' },
+  { key: 'dune', name: 'Dune', gradient: 'linear-gradient(135deg, #3d2b1f 0%, #5c4033 50%, #8B6914 100%)' },
+  { key: 'blade runner', name: 'Blade Runner', gradient: 'linear-gradient(135deg, #0a1a2e 0%, #1a3a4a 50%, #2e5c6b 100%)' },
+  { key: 'pixar', name: 'Pixar', gradient: 'linear-gradient(135deg, #0a2e5c 0%, #1a5c8B 50%, #4a90c2 100%)' },
+  { key: 'disney', name: 'Disney Animation', gradient: 'linear-gradient(135deg, #2e2e5c 0%, #4a4a8B 50%, #6b6bb6 100%)' },
+];
+
+export async function loadPopularCollections() {
+  const section = document.getElementById('popularCollectionsSection');
+  const container = document.getElementById('popularCollectionsRow');
+  if (!section || !container) return;
+
+  section.classList.remove('hidden');
+  container.innerHTML = '<div class="row-loading"><i class="fas fa-spinner"></i></div>';
+
+  const seen = new Set();
+  const collections = [];
+
+  for (const col of POPULAR_COLLECTIONS) {
+    if (seen.has(col.id)) continue;
+    seen.add(col.id);
+    try {
+      const data = await fetchWithAuth(`${BASE_URL}/collection/${col.id}?language=en-US`);
+      if (data.parts?.length > 0) {
+        const backdrop = data.backdrop_path || data.parts[0]?.backdrop_path || '';
+        collections.push({
+          id: col.id,
+          name: data.name || col.name,
+          count: data.parts.length,
+          backdrop,
+        });
+      }
+    } catch (e) { /* skip invalid collection IDs */ }
+  }
+
+  if (collections.length === 0) {
+    section.classList.add('hidden');
+    return;
+  }
+
+  // Render as horizontal cards in a row (first 10 only)
+  const toShow = collections.slice(0, 10);
+  container.innerHTML = toShow.map(col => {
+    const bg = col.backdrop ? `${IMG_BASE}w780${col.backdrop}` : '';
+    return `
+      <div class="collection-card" data-id="${col.id}" data-name="${col.name}">
+        <div class="collection-card-bg" style="background-image:url('${bg}')"></div>
+        <div class="collection-card-overlay"></div>
+        <div class="collection-card-content">
+          <div class="collection-card-name">${col.name}</div>
+          <div class="collection-card-count">${col.count} movies</div>
+        </div>
+      </div>`;
+  }).join('');
+
+  container.querySelectorAll('.collection-card').forEach(card => {
+    card.addEventListener('click', () => {
+      showCollectionGallery(parseInt(card.dataset.id), card.dataset.name);
+    });
+  });
+
+  // Wire up See All button
+  const seeAllBtn = document.getElementById('seeAllCollectionsBtn');
+  if (seeAllBtn) {
+    seeAllBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showCollectionsGallery();
+    });
+  }
+}
+
+/* Collections Gallery (See All) */
+export async function showCollectionsGallery() {
+  const view = document.getElementById('collectionsView');
+  const movieGrid = document.getElementById('movieCollectionsGrid');
+  const franchiseGrid = document.getElementById('franchisesGrid');
+  const movieCount = document.getElementById('movieCollectionsCount');
+  const franchiseCount = document.getElementById('franchisesCount');
+
+  if (!view) return;
+
+  // Save scroll position before leaving home
+  _homeScrollY = window.scrollY;
+
+  // Hide other views
+  homeView?.classList.add('hidden');
+  collectionView?.classList.add('hidden');
+  historyView?.classList.add('hidden');
+  searchView?.classList.add('hidden');
+  view.classList.remove('hidden');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  // Render franchises grid immediately
+  if (franchiseGrid) {
+    franchiseGrid.innerHTML = FULL_FRANCHISES.map(f => `
+      <div class="franchise-tile" data-key="${f.key}" data-name="${f.name}">
+        <div class="franchise-tile-bg" style="background:${f.gradient};"></div>
+        <div class="franchise-tile-overlay"></div>
+        <div class="franchise-tile-content">
+          <div class="franchise-tile-name">${f.name}</div>
+          <div class="franchise-tile-desc">Movies & TV Shows</div>
+        </div>
+      </div>
+    `).join('');
+
+    franchiseGrid.querySelectorAll('.franchise-tile').forEach(tile => {
+      tile.addEventListener('click', () => {
+        const franchise = getMatchedFranchise(tile.dataset.key);
+        if (franchise) {
+          showFranchiseGallery(franchise, tile.dataset.name);
+        }
+      });
+    });
+  }
+  if (franchiseCount) franchiseCount.textContent = FULL_FRANCHISES.length;
+
+  // Load all movie collections
+  if (movieGrid) {
+    movieGrid.innerHTML = '<div class="row-loading"><i class="fas fa-spinner"></i> Loading collections...</div>';
+    const collections = [];
+    for (const col of ALL_COLLECTIONS) {
+      try {
+        const data = await fetchWithAuth(`${BASE_URL}/collection/${col.id}?language=en-US`);
+        if (data.parts?.length > 0) {
+          const backdrop = data.backdrop_path || data.parts[0]?.backdrop_path || '';
+          const poster = data.parts[0]?.poster_path || '';
+          collections.push({
+            id: col.id,
+            name: data.name || col.name,
+            count: data.parts.length,
+            backdrop,
+            poster,
+          });
+        }
+      } catch (e) { /* skip invalid */ }
+    }
+
+    if (collections.length === 0) {
+      movieGrid.innerHTML = '<div class="row-loading">No collections found</div>';
+    } else {
+      movieGrid.innerHTML = collections.map(col => {
+        const bg = col.backdrop ? `${IMG_BASE}w780${col.backdrop}` : (col.poster ? `${IMG_BASE}w300${col.poster}` : '');
+        return `
+          <div class="collection-tile" data-id="${col.id}" data-name="${col.name}">
+            <div class="collection-tile-bg" style="background-image:url('${bg}')"></div>
+            <div class="collection-tile-overlay"></div>
+            <div class="collection-tile-content">
+              <div class="collection-tile-name">${col.name}</div>
+              <div class="collection-tile-count">${col.count} movies</div>
+            </div>
+          </div>`;
+      }).join('');
+
+      movieGrid.querySelectorAll('.collection-tile').forEach(tile => {
+        tile.addEventListener('click', () => {
+          showCollectionGallery(parseInt(tile.dataset.id), tile.dataset.name);
+        });
+      });
+    }
+    if (movieCount) movieCount.textContent = collections.length;
+  }
+}
+
+/* Show a full franchise gallery (all movies + TV) */
+async function showFranchiseGallery(franchise, displayName) {
+  _previousView = 'collections';
+  searchResults?.classList.add('hidden');
+  homeView?.classList.add('hidden');
+  collectionView?.classList.add('hidden');
+  historyView?.classList.add('hidden');
+  document.getElementById('collectionsView')?.classList.add('hidden');
+  searchView?.classList.remove('hidden');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  if (!searchGrid) return;
+  searchGrid.innerHTML = '<div class="search-loading"><i class="fas fa-spinner"></i> Loading franchise...</div>';
+  if (searchQueryTitle) searchQueryTitle.textContent = displayName || 'Franchise Results';
+  if (searchResultCount) searchResultCount.textContent = '';
+
+  try {
+    const results = await fetchFranchiseResults(franchise);
+    results.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+
+    const omdbRatings = await getOMDBRatingsBatch(results);
+    results.forEach(item => { if (omdbRatings[item.id]) item.omdbRating = omdbRatings[item.id]; });
+
+    setSearchGalleryResults(results);
+    setSearchGalleryQuery('');
+    renderSearchGallery(results, '', displayName);
+  } catch (error) {
+    searchGrid.innerHTML = '<div class="search-loading">Failed to load franchise results.</div>';
+  }
+}
+
+function renderSearchGallery(results, query, customTitle = null) {
+  if (!searchGrid) return;
+  const filtered = applySearchFilters(results);
+  if (searchQueryTitle) {
+    if (customTitle) {
+      searchQueryTitle.textContent = customTitle;
+    } else {
+      const franchise = query ? getMatchedFranchise(query) : null;
+      if (franchise) {
+        searchQueryTitle.textContent = `${franchise.name} Franchise Results`;
+      } else {
+        searchQueryTitle.textContent = query ? `Results for "${query}"` : 'Search Results';
+      }
+    }
+  }
+  if (searchResultCount) searchResultCount.textContent = `${filtered.length} result${filtered.length !== 1 ? 's' : ''}`;
+
+  if (filtered.length === 0) {
+    searchGrid.innerHTML = `
+      <div class="empty-state">
+        <i class="fas fa-search"></i>
+        <h3>No results match your filters</h3>
+        <p>Try adjusting the filters above</p>
+      </div>`;
+    return;
+  }
+
+  searchGrid.innerHTML = filtered.map(item => {
+    const poster = item.poster_path ? `${IMG_BASE}w300${item.poster_path}` : '';
+    const title = item.media_type === 'movie' ? item.title : item.name;
+    const year = item.media_type === 'movie' ? item.release_date?.slice(0, 4) : item.first_air_date?.slice(0, 4);
+    const rating = item.omdbRating ? item.omdbRating.toFixed(1) : (item.vote_average ? item.vote_average.toFixed(1) : 'N/A');
+    const isInCollection = userCollection.some(c => c.id === item.id && c.media_type === item.media_type);
+
+    return `
+      <div class="grid-item" data-id="${item.id}" data-type="${item.media_type}">
+        <div class="item-poster">
+          <img src="${poster}" alt="${title}" loading="lazy" onerror="this.style.display='none'">
+          <span class="type-badge">${item.media_type === 'movie' ? 'Movie' : 'TV'}</span>
+          <div class="item-overlay">
+            <div class="item-actions">
+              <button class="item-action-btn watch-btn" data-id="${item.id}" data-type="${item.media_type}" title="Watch Now"><i class="fas fa-play"></i></button>
+              <button class="item-action-btn collection-btn" data-id="${item.id}" data-type="${item.media_type}" title="Save to Collection" ${isInCollection ? 'disabled' : ''}><i class="fas ${isInCollection ? 'fa-check' : 'fa-plus'}"></i></button>
+            </div>
+          </div>
+        </div>
+        <div class="item-info">
+          <div class="item-title">${title}</div>
+          <div class="item-meta">
+            <span class="item-rating"><i class="fas fa-star"></i> ${rating}</span>
+            <span style="color:var(--text-muted);font-size:0.625rem;">${year || ''}</span>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  searchGrid.querySelectorAll('.grid-item').forEach(card => {
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.item-actions')) return;
+      openItemModal(parseInt(card.dataset.id), card.dataset.type);
+    });
+  });
+
+  searchGrid.querySelectorAll('.watch-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openPlayer(parseInt(btn.dataset.id), btn.dataset.type);
+    });
+  });
+
+  searchGrid.querySelectorAll('.collection-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (btn.disabled) return;
+      const id = parseInt(btn.dataset.id);
+      const type = btn.dataset.type;
+      try {
+        const data = await fetchWithAuth(`${BASE_URL}/${type}/${id}?language=en-US`);
+        addToUserCollection({ ...data, media_type: type });
+        btn.innerHTML = '<i class="fas fa-check"></i>';
+        btn.disabled = true;
+      } catch (err) {
+        showToast('Failed to add to collection', 'error');
+      }
+    });
+  });
+}
+
 /* Categories */
 export async function loadHomeCategories() {
   const endpoints = [
@@ -238,6 +1130,22 @@ export async function loadHomeCategories() {
     loadRecommendations();
     loadStarWarsSaga();
     loadContinueWatching();
+    loadPopularCollections();
+
+    // Attach See All listeners to genre headers
+    document.querySelectorAll('.category-header[data-genre]').forEach(header => {
+      const btn = header.querySelector('.see-all-btn');
+      if (btn) {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const genreId = header.dataset.genre;
+          const genreName = header.dataset.genreName;
+          if (genreId && genreName) {
+            showGenreGallery(genreId, genreName);
+          }
+        });
+      }
+    });
   } catch (err) {
     endpoints.forEach(ep => {
       const el = document.getElementById(ep.id);
@@ -503,6 +1411,22 @@ export async function openItemModal(id, type) {
       watchBtn.onclick = () => openPlayer(id, type);
     }
 
+    // Trailer button
+    const trailerBtn = document.getElementById('modalTrailerBtn');
+    if (trailerBtn) {
+      trailerBtn.style.display = 'none';
+      getTrailer(id, type).then(url => {
+        if (url && trailerBtn) {
+          trailerBtn.style.display = 'inline-flex';
+          trailerBtn.onclick = () => {
+            window.open(url, '_blank');
+          };
+        }
+      }).catch(() => {
+        if (trailerBtn) trailerBtn.style.display = 'none';
+      });
+    }
+
     // Collection button: transforms into folder picker after adding
     if (colBtn) {
       colBtn.disabled = false;
@@ -565,11 +1489,9 @@ export async function openItemModal(id, type) {
 
 /* Modals close handling */
 export function initModals() {
-  const itemModalOverlay = itemModal?.querySelector('.modal-overlay');
   const addAccountModal = document.getElementById('addAccountModal');
   const manageAccountsModal = document.getElementById('manageAccountsModal');
   const settingsModal = document.getElementById('settingsModal');
-
   function closeModal(modal) {
     if (!modal) return;
     modal.classList.add('hidden');
@@ -741,6 +1663,7 @@ export function addToUserCollection(item, folder = null) {
 
     userCollection.unshift(newItem);
     saveUserCollection(userCollection);
+    scheduleSync();
     console.log('[addToUserCollection] Saved to localStorage');
 
     if (currentTab === 'collection') renderUserCollection();
@@ -760,6 +1683,7 @@ async function removeFromUserCollection(id, type) {
   const newCollection = userCollection.filter(c => !(c.id === id && c.media_type === type));
   saveUserCollection(newCollection);
   setUserCollection(newCollection);
+  scheduleSync();
   if (currentTab === 'collection') renderUserCollection();
   showToast(`${item.title} removed from collection`, 'success');
 }
@@ -864,6 +1788,19 @@ export function renderUserCollection() {
     const rating = item.vote_average ? item.vote_average.toFixed(1) : 'N/A';
     const prog = item.media_type === 'tv' ? watchProgress[String(item.id)] : null;
     const progressBadge = prog ? `<span class="grid-progress">S${prog.season} E${prog.episode}</span>` : '';
+
+    // Progress bar for items with watch progress (same as Continue Watching)
+    let progressBar = '';
+    if (prog && prog.episodeRuntime) {
+      const elapsed = prog.elapsedMinutes || 0;
+      const runtime = prog.episodeRuntime;
+      const pct = Math.min(Math.round((elapsed / runtime) * 100), 100);
+      progressBar = `
+        <div class="card-progress-bar-wrap">
+          <div class="card-progress-bar" style="width:${pct}%"></div>
+        </div>`;
+    }
+
     return `
       <div class="grid-item" data-id="${item.id}" data-type="${item.media_type}">
         <div class="item-poster">
@@ -878,6 +1815,7 @@ export function renderUserCollection() {
             </div>
           </div>
         </div>
+        ${progressBar}
         <div class="item-info">
           <div class="item-title">${item.title}</div>
           <div class="item-meta">
@@ -1036,6 +1974,7 @@ export async function addToUserHistory(item) {
 
   saveUserHistory(nextHistory);
   setUserHistory(getUserHistory());
+  scheduleSync();
   if (currentTab === 'history') renderUserHistory();
 }
 
@@ -1060,6 +1999,7 @@ async function removeFromUserHistory(id, type) {
     }
   }
 
+  scheduleSync();
   if (currentTab === 'history') renderUserHistory();
   showToast(`${item.title} removed from history`, 'success');
 }

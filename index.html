@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="styles.css">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
 <body>
   <!-- Netflix-style Splash Intro -->
@@ -130,9 +131,10 @@
               <i class="fas fa-chevron-down"></i>
             </button>
             <div class="account-dropdown hidden" id="accountDropdown">
-              <div class="dropdown-label">Switch Account</div>
+              <div class="dropdown-label" id="accountDropdownLabel">Switch Account</div>
               <div id="accountList"></div>
               <div class="dropdown-divider"></div>
+              <div class="dropdown-divider" id="localAccountsDivider"></div>
               <button class="dropdown-item" id="addAccountBtn">
                 <div class="dropdown-avatar" style="background:var(--text-primary);color:var(--bg-primary);"><i class="fas fa-plus" style="font-size:0.625rem;"></i></div>
                 <span>Add Account</span>
@@ -144,6 +146,16 @@
               <button class="dropdown-item" id="settingsBtn">
                 <div class="dropdown-avatar" style="background:transparent;border-color:var(--text-muted);color:var(--text-muted);"><i class="fas fa-sliders" style="font-size:0.625rem;"></i></div>
                 <span>Settings</span>
+              </button>
+              <div class="dropdown-divider"></div>
+              <button class="dropdown-item" id="updateBtn">
+                <div class="dropdown-avatar" style="background:transparent;border-color:var(--text-muted);color:var(--text-muted);"><i class="fas fa-download" style="font-size:0.625rem;"></i></div>
+                <span>Install Latest Update <span id="versionBadge" style="font-size:0.625rem;color:var(--text-muted);margin-left:0.25rem;"></span></span>
+              </button>
+              <div class="dropdown-divider"></div>
+              <button class="dropdown-item" id="signOutBtn">
+                <div class="dropdown-avatar" style="background:transparent;border-color:var(--text-muted);color:var(--text-muted);"><i class="fas fa-sign-out-alt" style="font-size:0.625rem;"></i></div>
+                <span>Sign Out</span>
               </button>
             </div>
           </div>
@@ -206,31 +218,62 @@
         </div>
 
         <div class="category-section">
-          <div class="category-header">
+          <div class="category-header" data-genre="35" data-genre-name="Comedy">
             <h3>Comedy</h3>
+            <button class="see-all-btn">See All <i class="fas fa-chevron-right"></i></button>
           </div>
           <div class="category-row" id="comedyRow"></div>
         </div>
 
         <div class="category-section">
-          <div class="category-header">
+          <div class="category-header" data-genre="28" data-genre-name="Action">
             <h3>Action</h3>
+            <button class="see-all-btn">See All <i class="fas fa-chevron-right"></i></button>
           </div>
           <div class="category-row" id="actionRow"></div>
         </div>
 
         <div class="category-section">
-          <div class="category-header">
+          <div class="category-header" data-genre="27" data-genre-name="Horror">
             <h3>Horror</h3>
+            <button class="see-all-btn">See All <i class="fas fa-chevron-right"></i></button>
           </div>
           <div class="category-row" id="horrorRow"></div>
         </div>
 
         <div class="category-section">
-          <div class="category-header">
+          <div class="category-header" data-genre="878" data-genre-name="Science Fiction">
             <h3>Science Fiction</h3>
+            <button class="see-all-btn">See All <i class="fas fa-chevron-right"></i></button>
           </div>
           <div class="category-row" id="scifiRow"></div>
+        </div>
+
+        <div class="category-section hidden" id="popularCollectionsSection">
+          <div class="category-header">
+            <h3>Popular Collections</h3>
+            <button class="see-all-btn" id="seeAllCollectionsBtn">See All <i class="fas fa-chevron-right"></i></button>
+          </div>
+          <div class="category-row" id="popularCollectionsRow"></div>
+        </div>
+      </section>
+
+      <section id="collectionsView" class="collections-view hidden">
+        <div class="collections-view-header">
+          <button class="collections-back-btn" id="collectionsBackBtn">
+            <i class="fas fa-arrow-left"></i>
+          </button>
+          <h2>Collections & Franchises</h2>
+        </div>
+        <div class="collections-view-content">
+          <div class="collections-section">
+            <h3 class="collections-section-title">Full Franchises <span class="collections-count" id="franchisesCount"></span></h3>
+            <div class="collections-grid-large" id="franchisesGrid"></div>
+          </div>
+          <div class="collections-section">
+            <h3 class="collections-section-title">Movie Collections <span class="collections-count" id="movieCollectionsCount"></span></h3>
+            <div class="collections-grid-large" id="movieCollectionsGrid"></div>
+          </div>
         </div>
       </section>
 
@@ -279,6 +322,61 @@
         </div>
       </section>
 
+      <section id="searchView" class="search-view hidden">
+        <div class="search-header">
+          <div class="search-header-left">
+            <button class="search-back-btn" id="searchBackBtn">
+              <i class="fas fa-arrow-left"></i>
+            </button>
+            <h2 id="searchQueryTitle">Search Results</h2>
+          </div>
+          <span id="searchResultCount" class="search-result-count"></span>
+        </div>
+        <div class="search-filters-dropdown-wrap">
+          <button class="search-filters-toggle" id="searchFiltersToggle">
+            <i class="fas fa-filter"></i> Filters
+          </button>
+          <div class="search-filters-dropdown hidden" id="searchFiltersDropdown">
+            <div class="search-filter-group">
+              <label>Type</label>
+              <select id="searchFilterType">
+                <option value="all">All Types</option>
+                <option value="movie">Movies</option>
+                <option value="tv">TV Shows</option>
+              </select>
+            </div>
+            <div class="search-filter-group">
+              <label>Rating</label>
+              <select id="searchFilterRating">
+                <option value="all">All Ratings</option>
+                <option value="9">9+</option>
+                <option value="8">8+</option>
+                <option value="7">7+</option>
+                <option value="6">6+</option>
+                <option value="5">5+</option>
+              </select>
+            </div>
+            <div class="search-filter-group">
+              <label>Sort</label>
+              <select id="searchFilterSort">
+                <option value="popularity">Popularity</option>
+                <option value="rating-desc">Highest Rated</option>
+                <option value="rating-asc">Lowest Rated</option>
+                <option value="year-desc">Year (Newest First)</option>
+                <option value="year-asc">Year (Oldest First)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div id="searchGrid" class="search-grid">
+          <div class="empty-state">
+            <i class="fas fa-search"></i>
+            <h3>Type something to search</h3>
+            <p>Results will appear here</p>
+          </div>
+        </div>
+      </section>
+
     </main>
   </div>
 
@@ -311,6 +409,9 @@
               <button id="modalWatchBtn" class="btn btn-primary">
                 <i class="fas fa-play"></i>
                 Watch Now
+              </button>
+              <button id="modalTrailerBtn" class="btn btn-secondary" title="Watch Trailer" style="padding:0.625rem 0.875rem;">
+                <i class="fas fa-film"></i>
               </button>
               <button id="modalCollectionBtn" class="btn btn-secondary">
                 <i class="fas fa-plus"></i>
@@ -415,6 +516,54 @@
     </div>
   </div>
 
+  <!-- Auth Modal -->
+  <div id="authModal" class="modal hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-content edit-modal" style="max-width:420px;">
+      <div class="edit-modal-body" style="padding:2rem;">
+        <div style="text-align:center;margin-bottom:1.5rem;">
+          <div style="font-size:2rem;font-weight:800;display:flex;align-items:center;justify-content:center;gap:0.75rem;margin-bottom:0.5rem;">
+            <i class="fas fa-cloud"></i> Open Cloud
+          </div>
+          <p style="color:var(--text-muted);font-size:0.875rem;">Sign in or create an account</p>
+        </div>
+        
+        <div class="auth-tabs" style="display:flex;gap:0.5rem;margin-bottom:1.5rem;border-bottom:1px solid var(--border-color);">
+          <button class="auth-tab-btn active" data-auth-tab="signin" style="flex:1;padding:0.75rem;background:none;border:none;color:var(--text-primary);font-weight:600;cursor:pointer;border-bottom:2px solid var(--text-primary);">Sign In</button>
+          <button class="auth-tab-btn" data-auth-tab="signup" style="flex:1;padding:0.75rem;background:none;border:none;color:var(--text-muted);font-weight:500;cursor:pointer;border-bottom:2px solid transparent;">Create Account</button>
+        </div>
+        
+        <form id="signinForm" class="auth-form" autocomplete="off">
+          <div class="form-group">
+            <label for="signinEmail">Email</label>
+            <input type="email" id="signinEmail" value="" required autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label for="signinPassword">Password</label>
+            <input type="password" id="signinPassword" value="" required autocomplete="off">
+          </div>
+          <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:0.5rem;">Sign In</button>
+        </form>
+        
+        <form id="signupForm" class="auth-form hidden" autocomplete="off">
+          <div class="form-group">
+            <label for="signupUsername">Username</label>
+            <input type="text" id="signupUsername" value="" required autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label for="signupEmail">Email</label>
+            <input type="email" id="signupEmail" value="" required autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label for="signupPassword">Password</label>
+            <input type="password" id="signupPassword" value="" required autocomplete="off">
+          </div>
+          <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:0.5rem;">Create Account</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <!-- Settings Modal -->
   <div id="settingsModal" class="modal hidden">
     <div class="modal-overlay"></div>
@@ -428,6 +577,9 @@
           <button class="settings-tab-btn active" data-tab="general">General</button>
           <button class="settings-tab-btn" data-tab="sources">Video Sources</button>
           <button class="settings-tab-btn" data-tab="blocker">Blocker</button>
+          <button class="settings-tab-btn" data-tab="profile">Profile</button>
+          <button class="settings-tab-btn" data-tab="stats">Stats</button>
+          <button class="settings-tab-btn hidden" data-tab="admin" id="adminTabBtn">Admin</button>
         </div>
         <form id="settingsForm">
           <div class="settings-tab-panel" data-panel="general">
@@ -494,6 +646,72 @@
 
             <div class="form-actions" style="margin-top:1rem;">
               <button type="button" class="btn btn-secondary" id="blockerResetCounter">Reset Counter</button>
+            </div>
+          </div>
+          <div class="settings-tab-panel hidden" data-panel="profile">
+            <div class="profile-card">
+              <div class="profile-avatar-section">
+                <div class="profile-avatar" id="profileAvatar">D</div>
+                <button type="button" class="btn btn-secondary" id="profileAvatarUploadBtn" style="font-size:0.75rem;padding:0.4rem 0.75rem;">
+                  <i class="fas fa-upload"></i> Upload Photo
+                </button>
+                <input type="file" id="profileAvatarInput" accept="image/*" style="display:none;">
+              </div>
+              <div class="profile-avatar-presets" id="profileAvatarPresets"></div>
+              <div class="form-group">
+                <label for="profileUsername">Display Name</label>
+                <input type="text" id="profileUsername" placeholder="Enter display name">
+              </div>
+            </div>
+          </div>
+          <div class="settings-tab-panel hidden" data-panel="stats">
+            <div class="stats-dashboard" id="statsDashboard">
+              <div class="stats-grid">
+                <div class="stats-card">
+                  <div class="stats-card-label">Total Hours Watched</div>
+                  <div class="stats-card-value" id="statsTotalHours">0</div>
+                </div>
+                <div class="stats-card">
+                  <div class="stats-card-label">Movies Watched</div>
+                  <div class="stats-card-value" id="statsMoviesCount">0</div>
+                </div>
+                <div class="stats-card">
+                  <div class="stats-card-label">TV Episodes</div>
+                  <div class="stats-card-value" id="statsEpisodesCount">0</div>
+                </div>
+                <div class="stats-card">
+                  <div class="stats-card-label">Current Streak</div>
+                  <div class="stats-card-value" id="statsStreak">0 <span style="font-size:0.75rem;font-weight:500;">days</span></div>
+                </div>
+              </div>
+              <div class="stats-section">
+                <h4>Watch Heatmap</h4>
+                <div class="stats-heatmap" id="statsHeatmap"></div>
+              </div>
+              <div class="stats-section">
+                <h4>Activity by Day of Week</h4>
+                <div class="stats-bars" id="statsDayBars"></div>
+              </div>
+            </div>
+          </div>
+          <div class="settings-tab-panel hidden" data-panel="admin">
+            <div class="admin-dashboard" id="adminDashboard">
+              <div class="stats-grid">
+                <div class="stats-card">
+                  <div class="stats-card-label">Total Users</div>
+                  <div class="stats-card-value" id="adminTotalUsers">0</div>
+                </div>
+                <div class="stats-card">
+                  <div class="stats-card-label">Active Today</div>
+                  <div class="stats-card-value" id="adminActiveToday">0</div>
+                </div>
+              </div>
+              <div class="stats-section">
+                <h4>All Users</h4>
+                <div class="admin-user-list" id="adminUserList">
+                  <div class="blocker-empty-logs">Loading users...</div>
+                </div>
+              </div>
             </div>
           </div>
           <div class="form-actions">
