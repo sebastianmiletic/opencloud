@@ -64,26 +64,63 @@ function initAuthModal() {
   const signinPassword = document.getElementById('signinPassword');
   const signupEmail = document.getElementById('signupEmail');
   const signupPassword = document.getElementById('signupPassword');
-  const tabBtns = document.querySelectorAll('.auth-tab-btn');
+  const tabs = document.querySelectorAll('.auth-tab');
+  const indicator = document.querySelector('.auth-tab-indicator');
 
-  // Tab switching
-  tabBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-      const tab = btn.dataset.authTab;
-      tabBtns.forEach(b => {
-        b.classList.toggle('active', b.dataset.authTab === tab);
-        b.style.borderBottom = b.dataset.authTab === tab ? '2px solid var(--text-primary)' : '2px solid transparent';
-        b.style.color = b.dataset.authTab === tab ? 'var(--text-primary)' : 'var(--text-muted)';
-      });
-      if (tab === 'signin') {
-        signinForm?.classList.remove('hidden');
-        signupForm?.classList.add('hidden');
-      } else {
-        signinForm?.classList.add('hidden');
-        signupForm?.classList.remove('hidden');
-      }
-    });
+  /* Anti-autofill: remove readonly and switch password types on first real interaction */
+  function activateField(input, isPassword = false) {
+    if (input.readOnly) {
+      input.readOnly = false;
+      if (isPassword) input.type = 'password';
+    }
+  }
+  [signinEmail, signupEmail].forEach(el => {
+    if (!el) return;
+    el.addEventListener('focus', () => activateField(el));
+    el.addEventListener('input', () => { activateField(el); el.classList.toggle('has-value', !!el.value); });
   });
+  [signinPassword, signupPassword].forEach(el => {
+    if (!el) return;
+    el.addEventListener('focus', () => activateField(el, true));
+    el.addEventListener('input', () => { activateField(el, true); el.classList.toggle('has-value', !!el.value); });
+  });
+  const signupUsername = document.getElementById('signupUsername');
+  if (signupUsername) {
+    signupUsername.addEventListener('focus', () => activateField(signupUsername));
+    signupUsername.addEventListener('input', () => { activateField(signupUsername); signupUsername.classList.toggle('has-value', !!signupUsername.value); });
+  }
+
+  /* Tab switching */
+  function setActiveTab(targetTab) {
+    tabs.forEach(t => t.classList.toggle('active', t.dataset.authTab === targetTab));
+    const activeTab = document.querySelector(`.auth-tab[data-auth-tab="${targetTab}"]`);
+    if (indicator && activeTab) {
+      indicator.style.transform = `translateX(${activeTab.offsetLeft}px)`;
+      indicator.style.width = `${activeTab.offsetWidth}px`;
+    }
+    if (targetTab === 'signin') {
+      signupForm?.classList.remove('active');
+      setTimeout(() => {
+        signinForm?.classList.add('active');
+        signupForm?.style.display = 'none';
+        signinForm && (signinForm.style.display = 'block');
+      }, 50);
+    } else {
+      signinForm?.classList.remove('active');
+      setTimeout(() => {
+        signupForm?.classList.add('active');
+        signinForm && (signinForm.style.display = 'none');
+        signupForm && (signupForm.style.display = 'block');
+      }, 50);
+    }
+  }
+
+  tabs.forEach(btn => {
+    btn.addEventListener('click', () => setActiveTab(btn.dataset.authTab));
+  });
+
+  // initialize indicator position
+  setTimeout(() => setActiveTab('signin'), 0);
 
   // Sign In
   signinForm?.addEventListener('submit', async (e) => {
@@ -104,7 +141,7 @@ function initAuthModal() {
   // Sign Up
   signupForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const username = document.getElementById('signupUsername')?.value.trim();
+    const username = signupUsername?.value.trim();
     const email = signupEmail?.value.trim();
     const password = signupPassword?.value;
     if (!username || !email || !password) return;
@@ -142,18 +179,38 @@ function showAuthModal() {
   if (authModal) {
     authModal.classList.remove('hidden');
     lockScroll();
-    // Force clear all auth inputs to prevent browser autofill
-    const clearInputs = () => {
-      const ids = ['signinEmail','signinPassword','signupUsername','signupEmail','signupPassword'];
-      ids.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) { el.value = ''; }
-      });
-    };
-    clearInputs();
-    // Browser autofill runs after a delay; clear again
-    setTimeout(clearInputs, 50);
-    setTimeout(clearInputs, 150);
+    // Reset all auth fields: clear values, restore readonly, remove has-value class
+    const ids = [
+      ['signinEmail', false],
+      ['signinPassword', true],
+      ['signupUsername', false],
+      ['signupEmail', false],
+      ['signupPassword', true]
+    ];
+    ids.forEach(([id, isPw]) => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.value = '';
+        el.readOnly = true;
+        el.classList.remove('has-value');
+        if (isPw) el.type = 'text';
+      }
+    });
+    // Reset to sign-in tab
+    const tabs = document.querySelectorAll('.auth-tab');
+    const indicator = document.querySelector('.auth-tab-indicator');
+    const signinTab = document.querySelector('.auth-tab[data-auth-tab="signin"]');
+    tabs.forEach(t => t.classList.toggle('active', t.dataset.authTab === 'signin'));
+    if (indicator && signinTab) {
+      indicator.style.transform = `translateX(${signinTab.offsetLeft}px)`;
+      indicator.style.width = `${signinTab.offsetWidth}px`;
+    }
+    const signinForm = document.getElementById('signinForm');
+    const signupForm = document.getElementById('signupForm');
+    signupForm?.classList.remove('active');
+    signupForm && (signupForm.style.display = 'none');
+    signinForm?.classList.add('active');
+    signinForm && (signinForm.style.display = 'block');
   }
 }
 

@@ -508,46 +508,50 @@
   <!-- Auth Modal -->
   <div id="authModal" class="modal hidden">
     <div class="modal-overlay"></div>
-    <div class="modal-content edit-modal" style="max-width:420px;">
-      <div class="edit-modal-body" style="padding:2rem;">
-        <div style="text-align:center;margin-bottom:1.5rem;">
-          <div style="font-size:2rem;font-weight:800;display:flex;align-items:center;justify-content:center;gap:0.75rem;margin-bottom:0.5rem;">
-            <i class="fas fa-cloud"></i> Open Cloud
+    <div class="auth-card">
+      <div class="auth-header">
+        <div class="auth-brand">Open Cloud</div>
+        <p class="auth-subtitle">Welcome back</p>
+      </div>
+      
+      <div class="auth-tabs">
+        <button class="auth-tab active" data-auth-tab="signin">Sign In</button>
+        <button class="auth-tab" data-auth-tab="signup">Create Account</button>
+        <div class="auth-tab-indicator"></div>
+      </div>
+      
+      <div class="auth-forms">
+        <form id="signinForm" class="auth-form active" autocomplete="off" novalidate>
+          <div class="auth-field">
+            <input type="text" inputmode="email" id="signinEmail" required readonly class="auth-input">
+            <label for="signinEmail" class="auth-label">Email</label>
+            <div class="auth-field-line"></div>
           </div>
-          <p style="color:var(--text-muted);font-size:0.875rem;">Sign in or create an account</p>
-        </div>
-        
-        <div class="auth-tabs" style="display:flex;gap:0.5rem;margin-bottom:1.5rem;border-bottom:1px solid var(--border-color);">
-          <button class="auth-tab-btn active" data-auth-tab="signin" style="flex:1;padding:0.75rem;background:none;border:none;color:var(--text-primary);font-weight:600;cursor:pointer;border-bottom:2px solid var(--text-primary);">Sign In</button>
-          <button class="auth-tab-btn" data-auth-tab="signup" style="flex:1;padding:0.75rem;background:none;border:none;color:var(--text-muted);font-weight:500;cursor:pointer;border-bottom:2px solid transparent;">Create Account</button>
-        </div>
-        
-        <form id="signinForm" class="auth-form" autocomplete="off">
-          <div class="form-group">
-            <label for="signinEmail">Email</label>
-            <input type="email" id="signinEmail" value="" required autocomplete="off">
+          <div class="auth-field">
+            <input type="text" id="signinPassword" required readonly class="auth-input auth-pw">
+            <label for="signinPassword" class="auth-label">Password</label>
+            <div class="auth-field-line"></div>
           </div>
-          <div class="form-group">
-            <label for="signinPassword">Password</label>
-            <input type="password" id="signinPassword" value="" required autocomplete="off">
-          </div>
-          <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:0.5rem;">Sign In</button>
+          <button type="submit" class="auth-submit">Sign In</button>
         </form>
         
-        <form id="signupForm" class="auth-form hidden" autocomplete="off">
-          <div class="form-group">
-            <label for="signupUsername">Username</label>
-            <input type="text" id="signupUsername" value="" required autocomplete="off">
+        <form id="signupForm" class="auth-form" autocomplete="off" novalidate>
+          <div class="auth-field">
+            <input type="text" id="signupUsername" required readonly class="auth-input">
+            <label for="signupUsername" class="auth-label">Username</label>
+            <div class="auth-field-line"></div>
           </div>
-          <div class="form-group">
-            <label for="signupEmail">Email</label>
-            <input type="email" id="signupEmail" value="" required autocomplete="off">
+          <div class="auth-field">
+            <input type="text" inputmode="email" id="signupEmail" required readonly class="auth-input">
+            <label for="signupEmail" class="auth-label">Email</label>
+            <div class="auth-field-line"></div>
           </div>
-          <div class="form-group">
-            <label for="signupPassword">Password</label>
-            <input type="password" id="signupPassword" value="" required autocomplete="off">
+          <div class="auth-field">
+            <input type="text" id="signupPassword" required readonly class="auth-input auth-pw">
+            <label for="signupPassword" class="auth-label">Password</label>
+            <div class="auth-field-line"></div>
           </div>
-          <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:0.5rem;">Create Account</button>
+          <button type="submit" class="auth-submit">Create Account</button>
         </form>
       </div>
     </div>
