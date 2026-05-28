@@ -101,6 +101,35 @@ export function getUserHistory() {
   return _cache.history;
 }
 
+export async function saveUserHistory(items) {
+  const userId = getUserId();
+  if (!userId || !Array.isArray(items)) return false;
+  _cache.history = items;
+  setUserHistory(items);
+  // Save each item individually to Supabase (overwrite strategy: clear then re-add)
+  try {
+    // First remove all existing history for user
+    await supabase?.from?.('watch_history')?.delete()?.eq('user_id', userId);
+  } catch (e) { /* RLS or not available */ }
+  // Re-add in batches
+  const batch = items.slice(0, 50).map(item => ({
+    user_id: userId,
+    tmdb_id: Number(item.id) || 0,
+    media_type: item.media_type,
+    title: item.title,
+    season: item.season || null,
+    episode: item.episode || null,
+    duration_watched: item.duration_watched || 0,
+    watched_at: item.watched_at || new Date().toISOString()
+  }));
+  if (batch.length) {
+    try {
+      await supabase?.from?.('watch_history')?.insert(batch);
+    } catch (e) { console.error('[saveUserHistory] batch insert failed:', e); }
+  }
+  return true;
+}
+
 export async function addToUserHistory(item) {
   const userId = getUserId();
   if (!userId) return false;
