@@ -47,14 +47,35 @@ export async function initStorage() {
   const settings   = settingsRes.status   === 'fulfilled' ? settingsRes.value   : {};
 
   _cache.collection = (collection || []).filter(item => item && item.id && item.title && item.title !== 'Unknown');
-  // Deduplicate history by (id, media_type) keeping the most recent
-  const seen = new Set();
-  _cache.history = (history || []).filter(h => {
-    const key = `${h.id}::${h.media_type}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
+
+  // Load localStorage backup to restore poster/rating/year that Supabase may have stripped
+  let backup = [];
+  try {
+    const raw = localStorage.getItem('oc_history_backup');
+    if (raw) backup = JSON.parse(raw);
+  } catch (e) { /* ignore */ }
+  const backupMap = new Map();
+  (Array.isArray(backup) ? backup : []).forEach(b => {
+    if (b?.id) backupMap.set(`${b.id}::${b.media_type}`, b);
   });
+
+  // Merge Supabase history with backup metadata
+  const seen = new Set();
+  _cache.history = (history || []).map(h => {
+    const key = `${h.id}::${h.media_type}`;
+    seen.add(key);
+    const b = backupMap.get(key);
+    if (b) {
+      return {
+        ...h,
+        poster_path: h.poster_path || b.poster_path || null,
+        vote_average: h.vote_average != null ? h.vote_average : (b.vote_average || 0),
+        year: h.year || b.year || null
+      };
+    }
+    return h;
+  }).filter(h => !!h.id);
+
   _cache.progress   = progress || {};
   _cache.settings   = settings || { device: 'laptop', provider: 'videasy', autoPlay: true, folders: [] };
   _cache.folders    = settings?.folders || [];
@@ -192,6 +213,11 @@ export async function addToUserHistory(item) {
   _cache.history.unshift(entry);
   if (_cache.history.length > 200) _cache.history = _cache.history.slice(0, 200);
   setUserHistory([..._cache.history]);
+
+  // Backup to localStorage so metadata survives even if Supabase is missing columns
+  try {
+    localStorage.setItem('oc_history_backup', JSON.stringify(_cache.history));
+  } catch (e) { /* ignore quota errors */ }
 
   // Supabase in background with silent failure
   try {

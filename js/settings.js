@@ -6,7 +6,7 @@ import { initBlockerUI } from './blocker.js';
 import { getCurrentUser, getLocalProfile, saveLocalProfile } from './storage.js';
 import { getWatchSessions, aggregateStats } from './supabase.js';
 import { isAdmin, setAdmin, getCurrentAuthUser, getUserEmail, updatePassword, updateEmail, deleteAccount, signOut, getSupabaseClient } from './auth.js';
-import { fetchAllUsers, fetchTotalUserCount, fetchUserStats, banUser, unbanUser, deleteUserData, getActiveSessions, kickUser, activateAdmin } from './sync.js';
+import { fetchAllUsers, fetchTotalUserCount, fetchUserStats, banUser, unbanUser, deleteUserData, getActiveSessions, kickUser } from './sync.js';
 
 let settings = getSettings();
 let currentSettingsTab = 'general';
@@ -191,18 +191,25 @@ export function openSettingsModal() {
       if (val === '1234') {
         const user = getCurrentAuthUser();
         if (!user) { showToast('Not signed in', 'error'); return; }
-        const ok = await activateAdmin(user.id);
-        if (ok) {
-          // Refresh admin state from server
-          const { data } = await getSupabaseClient().from('profiles').select('is_admin').eq('id', user.id).single();
+        const sb = getSupabaseClient();
+        if (!sb) { showToast('Auth client not ready', 'error'); return; }
+        try {
+          const { error } = await sb.from('profiles').update({ is_admin: true }).eq('id', user.id);
+          if (error) throw error;
+          // Verify from server
+          const { data, error: fetchErr } = await sb.from('profiles').select('is_admin').eq('id', user.id).single();
+          if (fetchErr) throw fetchErr;
           if (data?.is_admin) {
             setAdmin(true);
             showToast('Admin access granted', 'success');
             adminTabBtn?.classList.remove('hidden');
             switchSettingsTab('admin');
+          } else {
+            showToast('Activation did not apply', 'error');
           }
-        } else {
-          showToast('Activation failed', 'error');
+        } catch (err) {
+          console.error('[Activation] admin update failed:', err);
+          showToast('Activation failed: ' + (err?.message || 'check console'), 'error');
         }
       } else {
         showToast('Invalid activation key', 'error');
