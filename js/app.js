@@ -1,19 +1,17 @@
 /** Main App Entry Point */
 import { initStorage } from './storage.js';
-import { initUser, renderManageAccounts, renderAccountDropdown } from './accounts.js';
+import { initUser } from './accounts.js';
 import { initSettings } from './settings.js';
 import { initPlayer } from './player.js';
 import { initHero } from './hero.js';
 import { initBlocker } from './blocker.js';
 import {
   initNav, initSearch, initModals, loadHomeCategories, openItemModal,
-  addToUserCollection, addToUserHistory, renderUserCollection
+  addToUserCollection
 } from './ui.js';
 import { showToast, lockScroll, unlockScroll } from './utils.js';
-import { getAccounts, saveAccounts, setCurrentUser } from './storage.js';
-import { setAccounts } from './state.js';
 import { hydrateSettingsFromCloud } from './config.js';
-import { initSupabase, checkSession, signIn, signUp, signOut, isAuthenticated, getUserDisplayName } from './auth.js';
+import { initSupabase, checkSession, signIn, signUp, signOut, getUserDisplayName } from './auth.js';
 
 /* Global error handler */
 window.onerror = (msg, url, line) => {
@@ -160,6 +158,17 @@ async function initAppContent() {
   initModals();
   initPlayer();
   initHero();
+
+  /* Hero slide click opens item modal */
+  window.addEventListener('heroOpenModal', (e) => {
+    if (e.detail?.id) openItemModal(e.detail.id, e.detail.type || 'movie');
+  });
+
+  /* Hero add-to-collection event */
+  window.addEventListener('heroAddToCollection', (e) => {
+    if (e.detail) addToUserCollection(e.detail).catch(err => console.error('[Hero] Add to collection failed:', err));
+  });
+
   initBlocker();
 
   /* Logo click -> home */
@@ -190,70 +199,6 @@ async function initAppContent() {
       accountBtn?.classList.remove('open');
     }
   });
-
-  /* Add Account */
-  const addAccountBtn = document.getElementById('addAccountBtn');
-  const addAccountModal = document.getElementById('addAccountModal');
-  const addAccountClose = document.getElementById('addAccountClose');
-  const addAccountCancel = document.getElementById('addAccountCancel');
-  const addAccountForm = document.getElementById('addAccountForm');
-  const newAccountName = document.getElementById('newAccountName');
-
-  if (addAccountBtn) {
-    addAccountBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      accountDropdown?.classList.add('hidden');
-      addAccountModal?.classList.remove('hidden');
-      if (newAccountName) {
-        newAccountName.value = '';
-        newAccountName.focus();
-      }
-    });
-  }
-
-  addAccountClose?.addEventListener('click', () => addAccountModal?.classList.add('hidden'));
-  addAccountCancel?.addEventListener('click', () => addAccountModal?.classList.add('hidden'));
-
-  if (addAccountForm) {
-    addAccountForm.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const name = newAccountName?.value.trim();
-      if (!name) return;
-      const accounts = getAccounts();
-      if (accounts.includes(name)) {
-        showToast('Account already exists', 'error');
-        return;
-      }
-      accounts.push(name);
-      saveAccounts(accounts);
-      setAccounts(accounts);
-      if (accounts.length === 1) {
-        setCurrentUser(name);
-        initUser();
-      }
-      renderAccountDropdown();
-      addAccountModal?.classList.add('hidden');
-      showToast(`Account "${name}" created`, 'success');
-    });
-  }
-
-  /* Manage Accounts */
-  const manageAccountsBtn = document.getElementById('manageAccountsBtn');
-  const manageAccountsModal = document.getElementById('manageAccountsModal');
-  const manageAccountsClose = document.getElementById('manageAccountsClose');
-
-  if (manageAccountsBtn) {
-    manageAccountsBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      accountDropdown?.classList.add('hidden');
-      renderManageAccounts();
-      manageAccountsModal?.classList.remove('hidden');
-    });
-  }
-
-  manageAccountsClose?.addEventListener('click', () => manageAccountsModal?.classList.add('hidden'));
-
-  /* Update Check — background poll + modal UI */
   const updateCheckBtn = document.getElementById('updateCheckBtn');
   const updateBadge     = document.getElementById('versionBadge');
   const GITHUB_REPO     = 'sebastianmiletic/opencloud';
@@ -284,46 +229,6 @@ async function initAppContent() {
     if (!res.ok) return null;
     return await res.json();
   }
-
-  async function checkForUpdate() {
-    try {
-      const latest = await fetchLatestCommit();
-      if (!latest) return;
-      const remoteSha = latest.sha;
-      const localSha  = localStorage.getItem(LOCAL_VERSION_KEY);
-
-      if (!remoteSha || remoteSha === localSha) {
-        _updateAvailable = false;
-        if (updateBadge) updateBadge.textContent = '';
-        return;
-      }
-
-      const details = await fetchCommitDetails(remoteSha);
-      const files   = details?.files || [];
-      const meaningful = files.filter(f => !isIgnoredFile(f.filename));
-
-      if (meaningful.length > 0) {
-        _updateAvailable = true;
-        _lastUpdateInfo = {
-          sha: remoteSha.slice(0, 7),
-          message: latest.commit?.message || 'Update',
-          author: latest.commit?.author?.name || 'Open Cloud',
-          date: latest.commit?.committer?.date || '',
-          files: meaningful.map(f => f.filename)
-        };
-        if (updateBadge) updateBadge.textContent = 'New!';
-      } else {
-        // Only docs/images changed — silently mark as current
-        localStorage.setItem(LOCAL_VERSION_KEY, remoteSha);
-        _updateAvailable = false;
-        if (updateBadge) updateBadge.textContent = '';
-      }
-    } catch (err) {
-      console.log('[Update] Check failed:', err);
-    }
-  }
-
-  checkForUpdate();
 
   /* Update Modal */
   const updateModal = document.getElementById('updateModal');
@@ -361,13 +266,50 @@ async function initAppContent() {
   }
 
   if (updateCheckBtn) {
-    updateCheckBtn.addEventListener('click', (e) => {
+    updateCheckBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       accountDropdown?.classList.add('hidden');
+      // Always fetch fresh data when user explicitly clicks
+      _updateAvailable = false;
+      _lastUpdateInfo = null;
+      const latest = await fetchLatestCommit();
+      if (latest?.sha) {
+        const localSha = localStorage.getItem(LOCAL_VERSION_KEY);
+        if (latest.sha !== localSha) {
+          const details = await fetchCommitDetails(latest.sha);
+          const meaningful = (details?.files || []).filter(f => !isIgnoredFile(f.filename));
+          if (meaningful.length > 0) {
+            _updateAvailable = true;
+            _lastUpdateInfo = {
+              sha: latest.sha.slice(0, 7),
+              message: latest.commit?.message || 'Update',
+              author: latest.commit?.author?.name || 'Open Cloud',
+              date: latest.commit?.committer?.date || '',
+              files: meaningful.map(f => f.filename)
+            };
+            if (updateBadge) updateBadge.textContent = 'New!';
+          } else {
+            localStorage.setItem(LOCAL_VERSION_KEY, latest.sha);
+            if (updateBadge) updateBadge.textContent = '';
+          }
+        }
+      }
       openUpdateModal();
     });
   }
 
+  /* Sign Out */
+  const signOutBtn = document.getElementById('signOutBtn');
+  if (signOutBtn) {
+    signOutBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      accountDropdown?.classList.add('hidden');
+      await signOut();
+      location.reload(true);
+    });
+  }
+
+  /* Update Modal close + install */
   if (updateModalClose) {
     updateModalClose.addEventListener('click', () => updateModal?.classList.add('hidden'));
   }
@@ -383,14 +325,10 @@ async function initAppContent() {
         const cacheNames = await caches.keys();
         await Promise.all(cacheNames.map(name => caches.delete(name)));
       }
-      location.reload(true);
-    });
-  }
-  if (signOutBtn) {
-    signOutBtn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      accountDropdown?.classList.add('hidden');
-      await signOut();
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+      }
       location.reload(true);
     });
   }

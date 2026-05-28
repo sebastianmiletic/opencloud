@@ -37,29 +37,3 @@ export async function getOMDBRatingsBatch(items) {
   }));
   return results;
 }
-
-export async function getTrailer(id, type) {
-  try {
-    const res = await fetch(`${BASE_URL}/${type}/${id}/videos?language=en-US`, {
-      headers: { 'Authorization': `Bearer ${API_KEY}`, 'Accept': 'application/json' }
-    });
-    const data = await res.json();
-    if (!data.results?.length) return null;
-    // Prefer official YouTube trailers
-    const trailer = data.results.find(v =>
-      v.site === 'YouTube' &&
-      v.type === 'Trailer' &&
-      v.official === true
-    ) || data.results.find(v =>
-      v.site === 'YouTube' &&
-      v.type === 'Trailer'
-    ) || data.results.find(v =>
-      v.site === 'YouTube'
-    );
-    if (trailer?.key) return `https://www.youtube.com/watch?v=${trailer.key}`;
-    return null;
-  } catch (e) {
-    console.error('[getTrailer]', e);
-    return null;
-  }
-}

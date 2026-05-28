@@ -211,7 +211,6 @@ export async function saveUserSettings(userId, settings) {
       device: settings.device || 'laptop',
       provider: settings.provider || 'vidsrccc',
       auto_play: settings.autoPlay !== false,
-      beta_ui: settings.beta_ui === true,
       folders: settings.folders || [],
       updated_at: new Date().toISOString()
     }, { onConflict: 'user_id' });
@@ -238,7 +237,6 @@ export async function fetchUserSettings(userId) {
       device: data.device,
       provider: data.provider,
       autoPlay: data.auto_play,
-      beta_ui: data.beta_ui,
       folders: data.folders || []
     };
   } catch (err) {
