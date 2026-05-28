@@ -211,6 +211,8 @@ export async function saveUserSettings(userId, settings) {
       device: settings.device || 'laptop',
       provider: settings.provider || 'vidsrccc',
       auto_play: settings.autoPlay !== false,
+      beta_ui: settings.beta_ui === true,
+      folders: settings.folders || [],
       updated_at: new Date().toISOString()
     }, { onConflict: 'user_id' });
     if (error) throw error;
@@ -230,12 +232,14 @@ export async function fetchUserSettings(userId) {
       .select('*')
       .eq('user_id', userId)
       .single();
-    if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows
+    if (error && error.code !== 'PGRST116') throw error;
     if (!data) return null;
     return {
       device: data.device,
       provider: data.provider,
-      autoPlay: data.auto_play
+      autoPlay: data.auto_play,
+      beta_ui: data.beta_ui,
+      folders: data.folders || []
     };
   } catch (err) {
     console.error('[Sync] fetch settings failed:', err);
@@ -343,6 +347,108 @@ export async function fetchUserHistory(userId) {
     return data || [];
   } catch (err) {
     console.error('[Sync] fetch user history failed:', err);
+    return [];
+  }
+}
+
+export async function removeWatchHistory(userId, tmdbId) {
+  const sb = getClient();
+  if (!sb || !userId) return false;
+  try {
+    const { error } = await sb.from('watch_history').delete().eq('user_id', userId).eq('tmdb_id', tmdbId);
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.error('[Sync] remove watch history failed:', err);
+    return false;
+  }
+}
+
+/* ─── Watch Sessions ─── */
+
+export async function recordWatchSession(userId, session) {
+  const sb = getClient();
+  if (!sb || !userId) return false;
+  try {
+    const { error } = await sb.from('watch_sessions').insert({
+      user_id: userId,
+      tmdb_id: session.tmdb_id,
+      media_type: session.media_type,
+      title: session.title,
+      season: session.season || null,
+      episode: session.episode || null,
+      started_at: session.started_at || new Date().toISOString(),
+      ended_at: session.ended_at || new Date().toISOString(),
+      duration_seconds: session.duration_seconds || 0
+    });
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.error('[Sync] record session failed:', err);
+    return false;
+  }
+}
+
+export async function fetchWatchSessions(userId, days = 365) {
+  const sb = getClient();
+  if (!sb || !userId) return [];
+  try {
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+    const { data, error } = await sb
+      .from('watch_sessions')
+      .select('*')
+      .eq('user_id', userId)
+      .gte('started_at', since.toISOString())
+      .order('started_at', { ascending: false });
+    if (error) throw error;
+    return (data || []).map(row => ({
+      tmdb_id: row.tmdb_id,
+      media_type: row.media_type,
+      title: row.title,
+      season: row.season,
+      episode: row.episode,
+      started_at: row.started_at,
+      ended_at: row.ended_at,
+      duration_seconds: row.duration_seconds
+    }));
+  } catch (err) {
+    console.error('[Sync] fetch sessions failed:', err);
+    return [];
+  }
+}
+
+/* ─── Folders ─── */
+
+export async function saveFolders(userId, folders) {
+  const sb = getClient();
+  if (!sb || !userId) return false;
+  try {
+    const { error } = await sb.from('user_settings').update({
+      folders: folders,
+      updated_at: new Date().toISOString()
+    }).eq('user_id', userId);
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.error('[Sync] save folders failed:', err);
+    return false;
+  }
+}
+
+export async function fetchFolders(userId) {
+  const sb = getClient();
+  if (!sb || !userId) return [];
+  try {
+    const { data, error } = await sb
+      .from('user_settings')
+      .select('folders')
+      .eq('user_id', userId)
+      .single();
+    if (error && error.code !== 'PGRST116') throw error;
+    return data?.folders || [];
+  } catch (err) {
+    console.error('[Sync] fetch folders failed:', err);
     return [];
   }
 }

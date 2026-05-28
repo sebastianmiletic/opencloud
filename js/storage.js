@@ -1,179 +1,257 @@
-/** localStorage & Cache Wrappers */
-import { setAccounts, setCollection, setUserCollection, setUserHistory, setWatchProgress, setUserFolders } from './state.js';
+/** Storage Module — Supabase-backed with in-memory state */
+import {
+  fetchCollection, addToCollection as syncAddCollection, removeFromCollection as syncRemoveCollection,
+  fetchWatchHistory, addWatchHistory as syncAddHistory, removeWatchHistory as syncRemoveHistory,
+  fetchWatchProgress, saveWatchProgress as syncSaveProgress,
+  fetchUserSettings, saveUserSettings as syncSaveSettings,
+  fetchFolders, saveFolders as syncSaveFolders,
+  fetchWatchSessions, recordWatchSession as syncRecordSession,
+  updateProfile
+} from './sync.js';
+import { getCurrentAuthUser } from './auth.js';
+import {
+  setUserCollection, setUserHistory, setWatchProgress, setUserFolders
+} from './state.js';
 
-const DEFAULT_ACCOUNT = 'Default';
-const PRIVACY_RESET_KEY = 'openccloud_privacy_reset_v2';
+// In-memory state cache (hydrated from Supabase on login)
+let _cache = {
+  collection: [],
+  history: [],
+  progress: {},
+  folders: [],
+  settings: null,
+  profile: null
+};
 
-function safeParse(value, fallback) {
-  if (!value) return fallback;
+function getUserId() {
+  return getCurrentAuthUser()?.id || null;
+}
+
+/* ─── Init ─── */
+export async function initStorage() {
+  const userId = getUserId();
+  if (!userId) return;
   try {
-    return JSON.parse(value);
+    const [collection, history, progress, settings] = await Promise.all([
+      fetchCollection(userId),
+      fetchWatchHistory(userId, 200),
+      fetchWatchProgress(userId),
+      fetchUserSettings(userId)
+    ]);
+    _cache.collection = collection || [];
+    _cache.history = history || [];
+    _cache.progress = progress || {};
+    _cache.settings = settings || { device: 'laptop', provider: 'vidsrccc', autoPlay: true, beta_ui: false, folders: [] };
+    _cache.folders = settings?.folders || [];
+    // Sync to state module
+    setUserCollection(_cache.collection);
+    setUserHistory(_cache.history);
+    setWatchProgress(_cache.progress);
+    setUserFolders(_cache.folders);
   } catch (err) {
-    return fallback;
+    console.error('[Storage] init failed:', err);
   }
 }
 
-function runOneTimePrivacyReset() {
-  if (localStorage.getItem(PRIVACY_RESET_KEY)) return;
-
-  const keysToRemove = [];
-  for (let i = 0; i < localStorage.length; i += 1) {
-    const key = localStorage.key(i);
-    if (!key) continue;
-    if (key.startsWith('openccloud_user_')) keysToRemove.push(key);
-  }
-  keysToRemove.forEach(key => localStorage.removeItem(key));
-  localStorage.removeItem('openccloud_accounts');
-  localStorage.removeItem('openccloud_current_user');
-
-  localStorage.setItem('openccloud_accounts', JSON.stringify([DEFAULT_ACCOUNT]));
-  localStorage.setItem('openccloud_current_user', DEFAULT_ACCOUNT);
-  localStorage.setItem(PRIVACY_RESET_KEY, new Date().toISOString());
-}
-
-export function getAccounts() {
-  const parsed = safeParse(localStorage.getItem('openccloud_accounts'), []);
-  const cleaned = Array.isArray(parsed)
-    ? [...new Set(parsed.map(v => String(v || '').trim()).filter(Boolean))]
-    : [];
-  return cleaned.length > 0 ? cleaned : [DEFAULT_ACCOUNT];
-}
-
-export function saveAccounts(data) {
-  localStorage.setItem('openccloud_accounts', JSON.stringify(data));
-}
-
-export function getCurrentUser() {
-  const user = localStorage.getItem('openccloud_current_user') || DEFAULT_ACCOUNT;
-  return String(user).trim() || DEFAULT_ACCOUNT;
-}
-
-export function setCurrentUser(user) {
-  localStorage.setItem('openccloud_current_user', user);
-}
-
-export function getUserPrefix() {
-  const user = getCurrentUser();
-  return user ? `openccloud_user_${user}` : '';
-}
-
-export function getCollection() {
-  const prefix = getUserPrefix();
-  if (!prefix) return [];
-  return JSON.parse(localStorage.getItem(`${prefix}_collection`)) || [];
-}
-
-export function saveCollection(data) {
-  const prefix = getUserPrefix();
-  if (!prefix) return;
-  localStorage.setItem(`${prefix}_collection`, JSON.stringify(data));
-}
-
+/* ─── Collections ─── */
 export function getUserCollection() {
-  const prefix = getUserPrefix();
-  if (!prefix) return [];
-  return safeParse(localStorage.getItem(`${prefix}_usercollection`), []);
+  return _cache.collection;
 }
 
-export function saveUserCollection(data) {
-  const prefix = getUserPrefix();
-  if (!prefix) return;
-  localStorage.setItem(`${prefix}_usercollection`, JSON.stringify(data));
+export async function saveUserCollection(items) {
+  _cache.collection = items;
+  setUserCollection(items);
+  // We don't bulk sync here — individual add/remove handles it
 }
 
-export function getUserCollectionForUser(user) {
-  if (!user) return [];
-  return safeParse(localStorage.getItem(`openccloud_user_${user}_usercollection`), []);
+export async function addToUserCollection(item) {
+  const userId = getUserId();
+  if (!userId) return false;
+  const normalized = {
+    id: item.id,
+    media_type: item.media_type,
+    title: item.title,
+    year: item.year,
+    poster_path: item.poster_path,
+    vote_average: item.vote_average,
+    added_at: item.added_at || new Date().toISOString(),
+    folder: item.folder || null
+  };
+  // Optimistic update
+  const exists = _cache.collection.findIndex(i => i.id === normalized.id);
+  if (exists >= 0) _cache.collection[exists] = normalized;
+  else _cache.collection.unshift(normalized);
+  setUserCollection(_cache.collection);
+  // Sync to Supabase
+  await syncAddCollection(userId, normalized);
+  return true;
 }
 
-export function saveUserCollectionForUser(user, data) {
-  if (!user) return;
-  localStorage.setItem(`openccloud_user_${user}_usercollection`, JSON.stringify(data));
+export async function removeFromUserCollection(tmdbId) {
+  const userId = getUserId();
+  if (!userId) return false;
+  _cache.collection = _cache.collection.filter(i => i.id !== tmdbId);
+  setUserCollection(_cache.collection);
+  await syncRemoveCollection(userId, tmdbId);
+  return true;
 }
 
+/* ─── History ─── */
+export function getUserHistory() {
+  return _cache.history;
+}
+
+export async function addToUserHistory(item) {
+  const userId = getUserId();
+  if (!userId) return false;
+  const entry = {
+    id: item.id,
+    media_type: item.media_type,
+    title: item.title,
+    season: item.season || null,
+    episode: item.episode || null,
+    duration_watched: item.duration_watched || 0,
+    watched_at: new Date().toISOString()
+  };
+  // Deduplicate and cap
+  _cache.history = _cache.history.filter(h => !(h.id === entry.id && h.media_type === entry.media_type));
+  _cache.history.unshift(entry);
+  if (_cache.history.length > 200) _cache.history = _cache.history.slice(0, 200);
+  setUserHistory(_cache.history);
+  await syncAddHistory(userId, entry);
+  return true;
+}
+
+export async function removeFromUserHistory(tmdbId, mediaType) {
+  const userId = getUserId();
+  if (!userId) return false;
+  _cache.history = _cache.history.filter(h => h.id !== tmdbId);
+  setUserHistory(_cache.history);
+  await syncRemoveHistory(userId, tmdbId);
+  // Also remove progress
+  delete _cache.progress[tmdbId];
+  setWatchProgress(_cache.progress);
+  await syncSaveProgress(userId, { id: tmdbId, media_type: mediaType, progress_seconds: 0 });
+  return true;
+}
+
+/* ─── Progress ─── */
+export function getWatchProgress() {
+  return _cache.progress;
+}
+
+export async function saveWatchProgress(data) {
+  const userId = getUserId();
+  if (!userId) return false;
+  _cache.progress = { ..._cache.progress, ...data };
+  setWatchProgress(_cache.progress);
+  // Batch sync: we don't write every key individually, the caller should call syncSaveProgress for specific items
+  return true;
+}
+
+export async function syncWatchProgressItem(tmdbId, mediaType, season, episode, progressSeconds) {
+  const userId = getUserId();
+  if (!userId) return false;
+  _cache.progress[tmdbId] = { season, episode, progress_seconds: progressSeconds };
+  setWatchProgress(_cache.progress);
+  await syncSaveProgress(userId, { id: tmdbId, media_type: mediaType, season, episode, progress_seconds: progressSeconds });
+  return true;
+}
+
+/* ─── Folders ─── */
+export function getUserFolders() {
+  return _cache.folders;
+}
+
+export async function saveUserFolders(folders) {
+  const userId = getUserId();
+  if (!userId) return false;
+  _cache.folders = folders;
+  setUserFolders(folders);
+  await syncSaveFolders(userId, folders);
+  return true;
+}
+
+/* ─── Settings ─── */
+export function getSettings() {
+  return _cache.settings || { device: 'laptop', provider: 'vidsrccc', autoPlay: true, beta_ui: false, folders: [] };
+}
+
+export async function saveSettings(settings) {
+  const userId = getUserId();
+  _cache.settings = { ..._cache.settings, ...settings };
+  if (userId) {
+    await syncSaveSettings(userId, _cache.settings);
+  }
+  return true;
+}
+
+/* ─── Profile ─── */
+export function getLocalProfile() {
+  return _cache.profile || {};
+}
+
+export async function saveLocalProfile(profile) {
+  const userId = getUserId();
+  _cache.profile = { ..._cache.profile, ...profile };
+  if (userId) {
+    const updates = {};
+    if (profile.username !== undefined) updates.username = profile.username;
+    if (profile.avatar_url !== undefined) updates.avatar_url = profile.avatar_url;
+    if (profile.avatar_color !== undefined) updates.avatar_color = profile.avatar_color;
+    if (Object.keys(updates).length > 0) {
+      await updateProfile(userId, updates);
+    }
+  }
+  return true;
+}
+
+/* ─── Watch Sessions ─── */
+export async function recordWatchSession(session) {
+  const userId = getUserId();
+  if (!userId) return false;
+  await syncRecordSession(userId, session);
+  return true;
+}
+
+export async function getWatchSessions(days = 365) {
+  const userId = getUserId();
+  if (!userId) return [];
+  return await fetchWatchSessions(userId, days);
+}
+
+/* ─── OMDB Cache (non-user data, can stay local) ─── */
 export function getOMDBCache() {
-  return safeParse(localStorage.getItem('openccloud_omdb_cache'), {});
+  try {
+    return JSON.parse(localStorage.getItem('openccloud_omdb_cache')) || {};
+  } catch (e) {
+    return {};
+  }
 }
 
 export function setOMDBCache(key, value) {
   const cache = getOMDBCache();
-  cache[key] = { value, timestamp: Date.now() };
+  cache[key] = { value, ts: Date.now() };
   localStorage.setItem('openccloud_omdb_cache', JSON.stringify(cache));
 }
 
-export function getUserHistory() {
-  const prefix = getUserPrefix();
-  if (!prefix) return [];
-  return safeParse(localStorage.getItem(`${prefix}_history`), []);
-}
+/* ─── Old local account helpers (deprecated, keep for compatibility) ─── */
+export function getAccounts() { return []; }
+export function saveAccounts(data) {}
+export function getCurrentUser() { return getCurrentAuthUser()?.email?.split('@')[0] || 'User'; }
+export function setCurrentUser(user) {}
 
-export function saveUserHistory(data) {
-  const prefix = getUserPrefix();
-  if (!prefix) return;
-  localStorage.setItem(`${prefix}_history`, JSON.stringify(data));
-}
-
-export function getUserHistoryForUser(user) {
-  if (!user) return [];
-  return safeParse(localStorage.getItem(`openccloud_user_${user}_history`), []);
-}
-
-export function getWatchProgress() {
-  const prefix = getUserPrefix();
-  if (!prefix) return {};
-  return safeParse(localStorage.getItem(`${prefix}_progress`), {});
-}
-
-export function saveWatchProgress(data) {
-  const prefix = getUserPrefix();
-  if (!prefix) return;
-  localStorage.setItem(`${prefix}_progress`, JSON.stringify(data));
-}
-
-export function getWatchProgressForUser(user) {
-  if (!user) return {};
-  return safeParse(localStorage.getItem(`openccloud_user_${user}_progress`), {});
-}
-
-export function saveWatchProgressForUser(user, data) {
-  if (!user) return;
-  localStorage.setItem(`openccloud_user_${user}_progress`, JSON.stringify(data));
-}
-
-export function getUserFolders() {
-  const prefix = getUserPrefix();
-  if (!prefix) return [];
-  const parsed = safeParse(localStorage.getItem(`${prefix}_folders`), []);
-  return Array.isArray(parsed) ? parsed : [];
-}
-
-export function saveUserFolders(data) {
-  const prefix = getUserPrefix();
-  if (!prefix) return;
-  localStorage.setItem(`${prefix}_folders`, JSON.stringify(data));
-}
-
-export function getUserFoldersForUser(user) {
-  if (!user) return [];
-  const parsed = safeParse(localStorage.getItem(`openccloud_user_${user}_folders`), []);
-  return Array.isArray(parsed) ? parsed : [];
-}
-
-export function saveUserFoldersForUser(user, data) {
-  if (!user) return;
-  localStorage.setItem(`openccloud_user_${user}_folders`, JSON.stringify(data));
-}
-
-export function initStorage() {
-  runOneTimePrivacyReset();
-  const accountList = getAccounts();
-  setAccounts(accountList);
-  if (!accountList.includes(getCurrentUser())) {
-    setCurrentUser(accountList[0] || DEFAULT_ACCOUNT);
+/* ─── Privacy reset (one-time cleanup of old localStorage) ─── */
+const PRIVACY_RESET_KEY = 'openccloud_privacy_reset_v3';
+export function runOneTimePrivacyReset() {
+  if (localStorage.getItem(PRIVACY_RESET_KEY)) return;
+  const keysToRemove = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('openccloud_user_')) keysToRemove.push(key);
   }
-  setCollection(getCollection());
-  setUserCollection(getUserCollection());
-  setUserHistory(getUserHistory());
-  setWatchProgress(getWatchProgress());
-  setUserFolders(getUserFolders());
+  keysToRemove.forEach(key => localStorage.removeItem(key));
+  localStorage.removeItem('openccloud_accounts');
+  localStorage.removeItem('openccloud_current_user');
+  localStorage.setItem(PRIVACY_RESET_KEY, new Date().toISOString());
 }

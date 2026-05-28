@@ -1,46 +1,26 @@
 /**
- * Watch Sessions & Stats (local-only)
- *
- * All watch session data is stored in localStorage.
- * There is no server. This is 100% offline-local.
+ * Watch Sessions & Stats — Supabase-backed
  */
-
-const SESSIONS_KEY = 'openccloud_watch_sessions';
+import { getWatchSessions as fetchSessionsFromSync, recordWatchSession as syncRecordSession } from './sync.js';
+import { getCurrentAuthUser } from './auth.js';
 
 function safeParse(value, fallback) {
   if (!value) return fallback;
   try { return JSON.parse(value); } catch (e) { return fallback; }
 }
 
-function getLocalSessions() {
-  return safeParse(localStorage.getItem(SESSIONS_KEY), []);
-}
-
-function saveLocalSessions(sessions) {
-  localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
-}
-
-/* ─── Sync (no-op since everything is local) ─── */
-
-export function scheduleSync() {
-  // Local-only: nothing to sync
-}
-
 /* ─── Watch Sessions / Stats ─── */
 
 export async function recordWatchSession(session) {
-  const sessions = getLocalSessions();
-  sessions.push(session);
-  // Keep last 500 to prevent unbounded growth
-  if (sessions.length > 500) sessions.splice(0, sessions.length - 500);
-  saveLocalSessions(sessions);
+  const user = getCurrentAuthUser();
+  if (!user?.id) return;
+  await syncRecordSession(user.id, session);
 }
 
 export async function getWatchSessions(days = 365) {
-  const since = new Date();
-  since.setDate(since.getDate() - days);
-  const sessions = getLocalSessions();
-  return sessions.filter(s => new Date(s.started_at) >= since);
+  const user = getCurrentAuthUser();
+  if (!user?.id) return [];
+  return await fetchSessionsFromSync(user.id, days);
 }
 
 export function aggregateStats(sessions) {
@@ -57,7 +37,7 @@ export function aggregateStats(sessions) {
   sessions.forEach(s => {
     const dur = s.duration_seconds || 0;
     stats.totalSeconds += dur;
-    if (s.type === 'movie') stats.movies += 1;
+    if (s.media_type === 'movie') stats.movies += 1;
     else stats.episodes += 1;
     const date = new Date(s.started_at);
     const dateKey = date.toISOString().slice(0, 10);

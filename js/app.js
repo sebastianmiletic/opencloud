@@ -12,7 +12,7 @@ import {
 import { showToast, lockScroll, unlockScroll } from './utils.js';
 import { getAccounts, saveAccounts, setCurrentUser } from './storage.js';
 import { setAccounts } from './state.js';
-import { applyBetaUi } from './config.js';
+import { applyBetaUi, hydrateSettingsFromCloud } from './config.js';
 import { initSupabase, checkSession, signIn, signUp, signOut, isAuthenticated, getUserDisplayName } from './auth.js';
 
 /* Global error handler */
@@ -124,7 +124,8 @@ function initAuthModal() {
       unlockScroll();
       updateAuthUI(user);
       showToast(`Welcome back, ${getUserDisplayName()}!`, 'success');
-      initAppContent();
+      await hydrateSettingsFromCloud();
+      await initAppContent();
     }
   });
 
@@ -146,13 +147,13 @@ function initAuthModal() {
       unlockScroll();
       updateAuthUI(user);
       showToast(`Welcome, ${getUserDisplayName()}!`, 'success');
-      initAppContent();
+      await initAppContent();
     }
   });
 }
 
-function initAppContent() {
-  initStorage();
+async function initAppContent() {
+  await initStorage();
   initUser();
   initNav();
   initSearch();
@@ -411,10 +412,11 @@ async function initApp() {
     }
 
     // User is authenticated — init everything
+    await hydrateSettingsFromCloud();
     applyBetaUi();
     initSettings();
     updateAuthUI(user);
-    initAppContent();
+    await initAppContent();
 
     /* Mark app as loaded */
     window._appLoaded = true;

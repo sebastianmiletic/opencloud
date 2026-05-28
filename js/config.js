@@ -140,6 +140,47 @@ export function getSettings() {
 
 export function saveSettings(settings) {
   localStorage.setItem('openccloud_settings', JSON.stringify({ ...settings, _version: SETTINGS_VERSION }));
+  queueSettingsSync();
+}
+
+/* Sync settings to Supabase when authenticated */
+let _settingsSyncTimeout = null;
+export function queueSettingsSync() {
+  if (_settingsSyncTimeout) clearTimeout(_settingsSyncTimeout);
+  _settingsSyncTimeout = setTimeout(() => {
+    syncSettingsToCloud();
+  }, 1000);
+}
+
+async function syncSettingsToCloud() {
+  try {
+    const { getCurrentAuthUser } = await import('./auth.js');
+    const { saveUserSettings } = await import('./sync.js');
+    const user = getCurrentAuthUser();
+    if (user?.id) {
+      const settings = getSettings();
+      await saveUserSettings(user.id, settings);
+    }
+  } catch (err) {
+    console.error('[Config] Settings sync failed:', err);
+  }
+}
+
+/* Hydrate settings from Supabase after login */
+export async function hydrateSettingsFromCloud() {
+  try {
+    const { getCurrentAuthUser } = await import('./auth.js');
+    const { fetchUserSettings } = await import('./sync.js');
+    const user = getCurrentAuthUser();
+    if (!user?.id) return;
+    const cloudSettings = await fetchUserSettings(user.id);
+    if (cloudSettings) {
+      const merged = { ...getSettings(), ...cloudSettings, _version: SETTINGS_VERSION };
+      saveSettings(merged);
+    }
+  } catch (err) {
+    console.error('[Config] Settings hydration failed:', err);
+  }
 }
 
 export function getProviderUrl(type, id, season = 1, episode = 1) {

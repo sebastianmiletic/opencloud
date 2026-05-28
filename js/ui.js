@@ -7,11 +7,13 @@ import {
 } from './state.js';
 import {
   getUserCollection, saveUserCollection, getUserHistory, saveUserHistory,
-  getWatchProgress, saveWatchProgress, getUserFolders, saveUserFolders
+  getWatchProgress, saveWatchProgress, getUserFolders, saveUserFolders,
+  addToUserCollection as storageAddCollection, removeFromUserCollection as storageRemoveCollection,
+  addToUserHistory as storageAddHistory, removeFromUserHistory as storageRemoveHistory,
+  saveUserFolders as storageSaveFolders
 } from './storage.js';
 import { BASE_URL, IMG_BASE, STAR_WARS_SAGA_ORDER, API_KEY } from './config.js';
 import { fetchWithAuth, getOMDBRatingsBatch, getOMDBRating, getTrailer } from './api.js';
-import { scheduleSync } from './supabase.js';
 import { showToast, lockScroll, unlockScroll, showConfirm } from './utils.js';
 import { openPlayer } from './player.js';
 import { renderHeroSlides } from './hero.js';
@@ -1624,7 +1626,7 @@ function renderModalFolderPicker(btn, id, type) {
 }
 
 /* Add / Remove from Collection */
-export function addToUserCollection(item, folder = null) {
+export async function addToUserCollection(item, folder = null) {
   console.log('[addToUserCollection] Called with:', item, 'folder:', folder);
 
   if (!item || !item.id || !item.media_type) {
@@ -1662,9 +1664,9 @@ export function addToUserCollection(item, folder = null) {
     };
 
     userCollection.unshift(newItem);
-    saveUserCollection(userCollection);
-    scheduleSync();
-    console.log('[addToUserCollection] Saved to localStorage');
+    await saveUserCollection(userCollection);
+    await storageAddCollection(item);
+    console.log('[addToUserCollection] Saved to Supabase');
 
     if (currentTab === 'collection') renderUserCollection();
     if (currentTab === 'history') renderUserHistory();
@@ -1681,9 +1683,9 @@ async function removeFromUserCollection(id, type) {
   const confirmed = await showConfirm('Remove from Collection?', `Remove "${item.title}" from your collection? This cannot be undone.`);
   if (!confirmed) return;
   const newCollection = userCollection.filter(c => !(c.id === id && c.media_type === type));
-  saveUserCollection(newCollection);
+  await saveUserCollection(newCollection);
   setUserCollection(newCollection);
-  scheduleSync();
+  await storageRemoveCollection(id);
   if (currentTab === 'collection') renderUserCollection();
   showToast(`${item.title} removed from collection`, 'success');
 }
@@ -1852,7 +1854,7 @@ export function renderUserCollection() {
   });
 }
 
-function saveNewFolder(name) {
+async function saveNewFolder(name) {
   if (!name) {
     cancelNewFolder();
     return;
@@ -1867,7 +1869,7 @@ function saveNewFolder(name) {
     return;
   }
   const nextFolders = [...userFolders, cleanName];
-  saveUserFolders(nextFolders);
+  await saveUserFolders(nextFolders);
   setUserFolders(nextFolders);
   _creatingFolder = false;
   _collectionFolder = cleanName;
@@ -1972,9 +1974,9 @@ export async function addToUserHistory(item) {
     ...existing
   ].slice(0, 200);
 
-  saveUserHistory(nextHistory);
+  await saveUserHistory(nextHistory);
   setUserHistory(getUserHistory());
-  scheduleSync();
+  await storageAddHistory(historyItem);
   if (currentTab === 'history') renderUserHistory();
 }
 
@@ -1984,22 +1986,22 @@ async function removeFromUserHistory(id, type) {
   const confirmed = await showConfirm('Remove from History?', `Remove "${item.title}" from your history?`);
   if (!confirmed) return;
   const nextHistory = userHistory.filter(h => !(h.id === id && h.media_type === type));
-  saveUserHistory(nextHistory);
+  await saveUserHistory(nextHistory);
   setUserHistory(nextHistory);
+  await storageRemoveHistory(id, type);
 
   // Also remove from Continue Watching / progress
   if (type === 'tv') {
     const progress = getWatchProgress();
     if (progress[String(id)]) {
       delete progress[String(id)];
-      saveWatchProgress(progress);
+      await saveWatchProgress(progress);
       setWatchProgress(progress);
       // Refresh Continue Watching if on home
       if (currentTab === 'home') loadContinueWatching();
     }
   }
 
-  scheduleSync();
   if (currentTab === 'history') renderUserHistory();
   showToast(`${item.title} removed from history`, 'success');
 }

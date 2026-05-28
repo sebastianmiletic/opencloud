@@ -1,8 +1,8 @@
 import { getSettings, saveSettings, PROVIDERS, applyDeviceClass, applyBetaUi, getActiveProvider } from './config.js';
 import { showToast } from './utils.js';
 import { initBlockerUI } from './blocker.js';
-import { getCurrentUser } from './storage.js';
-import { scheduleSync, getWatchSessions, aggregateStats } from './supabase.js';
+import { getCurrentUser, getLocalProfile, saveLocalProfile } from './storage.js';
+import { getWatchSessions, aggregateStats } from './supabase.js';
 import { isAdmin, getCurrentAuthUser, getUserEmail, updatePassword, updateEmail, deleteAccount, signOut } from './auth.js';
 import { fetchAllUsers, fetchTotalUserCount, fetchUserStats } from './sync.js';
 
@@ -13,27 +13,6 @@ const PRESET_COLORS = [
   '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#10b981',
   '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#d946ef', '#f43f5e'
 ];
-
-function getUserProfileKey() {
-  const user = getCurrentUser();
-  return user ? `openccloud_user_${user}_profile` : '';
-}
-
-function getLocalProfile() {
-  const key = getUserProfileKey();
-  if (!key) return null;
-  try {
-    return JSON.parse(localStorage.getItem(key)) || {};
-  } catch (e) {
-    return {};
-  }
-}
-
-function saveLocalProfile(profile) {
-  const key = getUserProfileKey();
-  if (!key) return;
-  localStorage.setItem(key, JSON.stringify(profile));
-}
 
 export function initSettings() {
   const btn = document.getElementById('settingsBtn');
@@ -177,7 +156,7 @@ function renderProviderCards() {
       const key = card.dataset.provider;
       settings.provider = key;
       saveSettings(settings);
-      scheduleSync();
+      
       renderProviderCards();
       showToast(`Switched to ${PROVIDERS[key].name}`, 'success');
     });
@@ -206,7 +185,7 @@ async function saveSettingsFromForm() {
   settings.beta_ui = betaUi;
 
   saveSettings(settings);
-  scheduleSync();
+  
   applyDeviceClass();
   applyBetaUi();
 
@@ -329,7 +308,7 @@ async function saveProfile() {
       profile.avatar_url = null;
     }
 
-    saveLocalProfile(profile);
+    await saveLocalProfile(profile);
 
     // Reset pending changes
     _pendingProfileChanges = { avatar_url: null, avatar_color: null };

@@ -5,6 +5,7 @@ import { fetchWithAuth } from './api.js';
 import { BASE_URL, API_KEY } from './config.js';
 import { showToast, lockScroll, unlockScroll } from './utils.js';
 import { recordWatchSession } from './supabase.js';
+import { getWatchProgress, saveWatchProgress, syncWatchProgressItem } from './storage.js';
 
 /* DOM refs */
 const playerOverlay = document.getElementById('playerOverlay');
@@ -34,27 +35,23 @@ let _watchListenersAttached = false;
 let _lastSessionSnapshot = 0;
 
 function getCurrentProgress() {
-  try {
-    const user = localStorage.getItem('openccloud_current_user') || 'Default';
-    return JSON.parse(localStorage.getItem(`openccloud_user_${user}_progress`) || '{}');
-  } catch (e) { return {}; }
+  return getWatchProgress();
 }
 
-function setCurrentProgress(data) {
+async function setCurrentProgress(data) {
   try {
-    const user = localStorage.getItem('openccloud_current_user') || 'Default';
-    localStorage.setItem(`openccloud_user_${user}_progress`, JSON.stringify(data));
+    await saveWatchProgress(data);
     setWatchProgress(data);
   } catch (e) { console.error('[setCurrentProgress] failed', e); }
 }
 
-function persistProgress(id, season, episode, extra = {}) {
+async function persistProgress(id, season, episode, extra = {}) {
   if (!id || season == null || episode == null) return;
   try {
     const sid = String(id);
     const progress = getCurrentProgress();
     const existing = progress[sid] || {};
-    progress[sid] = {
+    const merged = {
       season: parseInt(season),
       episode: parseInt(episode),
       updated_at: new Date().toISOString(),
@@ -62,8 +59,10 @@ function persistProgress(id, season, episode, extra = {}) {
       episodeRuntime: extra.episodeRuntime ?? existing.episodeRuntime ?? null,
       ...extra
     };
-    setCurrentProgress(progress);
-    console.log('[persistProgress] saved', sid, 'S' + season, 'E' + episode, progress[sid]);
+    progress[sid] = merged;
+    await setCurrentProgress(progress);
+    await syncWatchProgressItem(sid, 'tv', merged.season, merged.episode, merged.elapsedMinutes * 60);
+    console.log('[persistProgress] synced', sid, 'S' + season, 'E' + episode);
   } catch (e) {
     console.error('[persistProgress] failed', e);
   }
@@ -88,7 +87,7 @@ function startProgressInterval() {
         if (existing) {
           existing.elapsedMinutes = (existing.elapsedMinutes || 0) + minutes;
           existing.updated_at = new Date().toISOString();
-          setCurrentProgress(progress);
+          await setCurrentProgress(progress);
         }
       }
     }
@@ -117,7 +116,7 @@ function flushElapsedAndSave() {
     elapsedMinutes: (existing.elapsedMinutes || 0) + minutes,
     episodeRuntime: existing.episodeRuntime ?? null
   };
-  setCurrentProgress(progress);
+  await setCurrentProgress(progress);
   console.log('[flushElapsedAndSave] saved', sid, 'S' + p.season, 'E' + p.episode);
 }
 
@@ -260,13 +259,13 @@ function handleIframeSrcChange(src) {
   if (existing) {
     existing.elapsedMinutes = (existing.elapsedMinutes || 0) + minutesWatched;
   }
-  setCurrentProgress(progress);
+  await setCurrentProgress(progress);
   resetWatchSession();
 
   // Update state and title
   setPlayerState({ ...playerState, season: newS, episode: newE });
   updatePlayerTitle(playerState.tmdbData?.title || '', newS, newE);
-  persistProgress(playerState.id, newS, newE, { elapsedMinutes: 0 });
+  await persistProgress(playerState.id, newS, newE, { elapsedMinutes: 0 });
 
   // Update Next button state
   if (playerState.tmdbData && playerNextBtn) {
@@ -283,7 +282,7 @@ function handleIframeSrcChange(src) {
         setCurrentProgress(p);
         setPlayerState({ ...playerState, season: nextS, episode: nextE });
         updatePlayerTitle(playerState.tmdbData.title, nextS, nextE);
-        persistProgress(playerState.id, nextS, nextE, { elapsedMinutes: 0 });
+        await persistProgress(playerState.id, nextS, nextE, { elapsedMinutes: 0 });
         _playerOpenedAt = Date.now();
         initPlayerData();
       };
@@ -421,7 +420,7 @@ export function openPlayer(id, type, season, episode) {
 
   // Save immediately so a reload right after clicking play resumes correctly
   if (type === 'tv') {
-    persistProgress(id, startSeason, startEpisode);
+    await persistProgress(id, startSeason, startEpisode);
   }
 
   _playerOpenedAt = Date.now();
@@ -481,7 +480,7 @@ async function initPlayerData() {
       updatePlayerTitle(data.name, playerState.season, playerState.episode);
 
       // Save progress again now that metadata is confirmed loaded
-      persistProgress(p.id, playerState.season, playerState.episode);
+      await persistProgress(p.id, playerState.season, playerState.episode);
 
       const [nextS, nextE] = getNextEp(playerState.season, playerState.episode, newTmdbData);
       if (nextS !== null && playerNextBtn) {
@@ -496,12 +495,12 @@ async function initPlayerData() {
           if (existing) {
             existing.elapsedMinutes = (existing.elapsedMinutes || 0) + minutesWatched;
           }
-          setCurrentProgress(progress);
+          await setCurrentProgress(progress);
           resetWatchSession();
 
           setPlayerState({ ...playerState, season: nextS, episode: nextE });
           updatePlayerTitle(newTmdbData.title, nextS, nextE);
-          persistProgress(p.id, nextS, nextE, { elapsedMinutes: 0 });
+          await persistProgress(p.id, nextS, nextE, { elapsedMinutes: 0 });
           initPlayerData();
         };
       } else if (playerNextBtn) {
@@ -567,7 +566,7 @@ async function loadEpPopoverData(tmdbData) {
       const progress = getCurrentProgress();
       if (progress[String(p.id)]) {
         progress[String(p.id)].episodeRuntime = currentEp.runtime;
-        setCurrentProgress(progress);
+        await setCurrentProgress(progress);
       }
     }
 
@@ -654,11 +653,11 @@ function showEpisodes(season) {
       if (existing) {
         existing.elapsedMinutes = (existing.elapsedMinutes || 0) + minutesWatched;
       }
-      setCurrentProgress(progress);
+      await setCurrentProgress(progress);
       resetWatchSession();
 
       setPlayerState({ ...playerState, season: newSeason, episode: newEpisode });
-      persistProgress(playerState.id, newSeason, newEpisode, { elapsedMinutes: 0 });
+      await persistProgress(playerState.id, newSeason, newEpisode, { elapsedMinutes: 0 });
       closeEpPopover();
       initPlayerData();
     });
