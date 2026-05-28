@@ -29,31 +29,19 @@ function initSplash() {
   const app = document.getElementById('appContainer');
   if (!splash) return;
   setTimeout(() => {
-    splash.classList.add('hidden');
-    if (app) app.style.opacity = '1';
-    window.scrollTo(0, 0);
-  }, 3200);
+    splash.classList.add('fade-out');
+    setTimeout(() => {
+      splash.style.display = 'none';
+      if (app) app.classList.add('visible');
+    }, 600);
+  }, 2200);
 }
 initSplash();
 
-/* Hero events (breaks circular dependency) */
-window.addEventListener('heroOpenModal', (e) => {
-  const { id, type } = e.detail;
-  if (id && type) openItemModal(id, type);
-});
-window.addEventListener('heroAddToCollection', (e) => {
-  try {
-    addToUserCollection(e.detail);
-  } catch (err) {
-    console.error('[heroAddToCollection] Error:', err);
-  }
-});
-window.addEventListener('watchStarted', (e) => {
-  const { id, type } = e.detail || {};
-  if (!id || !type) return;
-  addToUserHistory({ id, media_type: type }).catch((err) => {
-    console.error('[watchStarted] Failed to save history:', err);
-  });
+/* DOM Ready */
+document.addEventListener('DOMContentLoaded', () => {
+  const container = document.getElementById('appContainer');
+  if (container) container.classList.add('visible');
 });
 
 /* Auth Modal */
@@ -89,22 +77,6 @@ function initAuthModal() {
   if (signupUsername) {
     signupUsername.addEventListener('focus', () => activateField(signupUsername));
     signupUsername.addEventListener('input', () => { activateField(signupUsername); signupUsername.classList.toggle('has-value', !!signupUsername.value); });
-  }
-
-  /* Close auth modal */
-  const authModalClose = document.getElementById('authModalClose');
-  const authOverlay = authModal?.querySelector('.modal-overlay');
-  if (authModalClose) {
-    authModalClose.addEventListener('click', () => {
-      authModal?.classList.add('hidden');
-      unlockScroll();
-    });
-  }
-  if (authOverlay) {
-    authOverlay.addEventListener('click', () => {
-      authModal?.classList.add('hidden');
-      unlockScroll();
-    });
   }
 
   /* Tab switching */
@@ -152,6 +124,7 @@ function initAuthModal() {
       unlockScroll();
       updateAuthUI(user);
       showToast(`Welcome back, ${getUserDisplayName()}!`, 'success');
+      initAppContent();
     }
   });
 
@@ -173,7 +146,176 @@ function initAuthModal() {
       unlockScroll();
       updateAuthUI(user);
       showToast(`Welcome, ${getUserDisplayName()}!`, 'success');
+      initAppContent();
     }
+  });
+}
+
+function initAppContent() {
+  initStorage();
+  initUser();
+  initNav();
+  initSearch();
+  initModals();
+  initPlayer();
+  initHero();
+  initBlocker();
+
+  /* Logo click -> home */
+  const logoHome = document.getElementById('logoHome');
+  if (logoHome) {
+    logoHome.addEventListener('click', () => {
+      const homeBtn = document.querySelector('.nav-btn[data-tab="home"]');
+      if (homeBtn) homeBtn.click();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }
+
+  /* Account dropdown toggle */
+  const accountBtn = document.getElementById('accountBtn');
+  const accountDropdown = document.getElementById('accountDropdown');
+
+  if (accountBtn) {
+    accountBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      accountDropdown?.classList.toggle('hidden');
+      accountBtn.classList.toggle('open');
+    });
+  }
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.account-menu')) {
+      accountDropdown?.classList.add('hidden');
+      accountBtn?.classList.remove('open');
+    }
+  });
+
+  /* Add Account */
+  const addAccountBtn = document.getElementById('addAccountBtn');
+  const addAccountModal = document.getElementById('addAccountModal');
+  const addAccountClose = document.getElementById('addAccountClose');
+  const addAccountCancel = document.getElementById('addAccountCancel');
+  const addAccountForm = document.getElementById('addAccountForm');
+  const newAccountName = document.getElementById('newAccountName');
+
+  if (addAccountBtn) {
+    addAccountBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      accountDropdown?.classList.add('hidden');
+      addAccountModal?.classList.remove('hidden');
+      if (newAccountName) {
+        newAccountName.value = '';
+        newAccountName.focus();
+      }
+    });
+  }
+
+  addAccountClose?.addEventListener('click', () => addAccountModal?.classList.add('hidden'));
+  addAccountCancel?.addEventListener('click', () => addAccountModal?.classList.add('hidden'));
+
+  if (addAccountForm) {
+    addAccountForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const name = newAccountName?.value.trim();
+      if (!name) return;
+      const accounts = getAccounts();
+      if (accounts.includes(name)) {
+        showToast('Account already exists', 'error');
+        return;
+      }
+      accounts.push(name);
+      saveAccounts(accounts);
+      setAccounts(accounts);
+      if (accounts.length === 1) {
+        setCurrentUser(name);
+        initUser();
+      }
+      renderAccountDropdown();
+      addAccountModal?.classList.add('hidden');
+      showToast(`Account "${name}" created`, 'success');
+    });
+  }
+
+  /* Manage Accounts */
+  const manageAccountsBtn = document.getElementById('manageAccountsBtn');
+  const manageAccountsModal = document.getElementById('manageAccountsModal');
+  const manageAccountsClose = document.getElementById('manageAccountsClose');
+
+  if (manageAccountsBtn) {
+    manageAccountsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      accountDropdown?.classList.add('hidden');
+      renderManageAccounts();
+      manageAccountsModal?.classList.remove('hidden');
+    });
+  }
+
+  manageAccountsClose?.addEventListener('click', () => manageAccountsModal?.classList.add('hidden'));
+
+  /* Install Latest Update */
+  const updateBtn = document.getElementById('updateBtn');
+  const versionBadge = document.getElementById('versionBadge');
+  const GITHUB_REPO = 'sebastianmiletic/opencloud';
+  const GITHUB_BRANCH = 'main';
+  const LOCAL_VERSION_KEY = 'openccloud_last_version';
+
+  async function checkForUpdate() {
+    try {
+      const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/commits/${GITHUB_BRANCH}`, { cache: 'no-store' });
+      if (!res.ok) return;
+      const data = await res.json();
+      const remoteSha = data.sha?.slice(0, 7);
+      const localSha = localStorage.getItem(LOCAL_VERSION_KEY);
+      if (remoteSha && remoteSha !== localSha) {
+        if (versionBadge) {
+          versionBadge.textContent = 'New!';
+        }
+      }
+    } catch (err) {
+      console.log('[Update] Check failed:', err);
+    }
+  }
+
+  checkForUpdate();
+  setInterval(checkForUpdate, 5 * 60 * 1000);
+
+  if (updateBtn) {
+    updateBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      accountDropdown?.classList.add('hidden');
+      showToast('Installing latest update...', 'info');
+      try {
+        const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/commits/${GITHUB_BRANCH}`, { cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.sha) localStorage.setItem(LOCAL_VERSION_KEY, data.sha.slice(0, 7));
+        }
+        if ('caches' in window) {
+          const cacheNames = await caches.keys();
+          await Promise.all(cacheNames.map(name => caches.delete(name)));
+        }
+        location.reload(true);
+      } catch (err) {
+        console.error('[App] Update failed:', err);
+        location.reload(true);
+      }
+    });
+  }
+
+  /* Sign Out */
+  const signOutBtn = document.getElementById('signOutBtn');
+  if (signOutBtn) {
+    signOutBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      accountDropdown?.classList.add('hidden');
+      await signOut();
+      location.reload(true);
+    });
+  }
+
+  /* Load home */
+  loadHomeCategories().catch(err => {
+    console.error('Failed to load home categories:', err);
   });
 }
 
@@ -182,13 +324,20 @@ function updateAuthUI(user) {
   const accountName = document.getElementById('accountName');
   const profileAvatar = document.getElementById('profileAvatar');
   const profileUsername = document.getElementById('profileUsername');
+  const dropdownUserAvatar = document.getElementById('dropdownUserAvatar');
+  const dropdownUserName = document.getElementById('dropdownUserName');
+  const dropdownUserEmail = document.getElementById('dropdownUserEmail');
 
   const displayName = getUserDisplayName();
+  const email = user?.email || '';
 
   if (accountAvatar) accountAvatar.textContent = displayName.charAt(0).toUpperCase();
   if (accountName) accountName.textContent = displayName;
   if (profileAvatar) profileAvatar.textContent = displayName.charAt(0).toUpperCase();
   if (profileUsername) profileUsername.value = displayName;
+  if (dropdownUserAvatar) dropdownUserAvatar.textContent = displayName.charAt(0).toUpperCase();
+  if (dropdownUserName) dropdownUserName.textContent = displayName;
+  if (dropdownUserEmail) dropdownUserEmail.textContent = email;
 }
 
 function showAuthModal() {
@@ -246,193 +395,26 @@ async function initApp() {
         checkSession(),
         new Promise(resolve => setTimeout(() => { console.warn('[App] Session check timed out'); resolve(null); }, 4000))
       ]);
-      initAuthModal();
     }
 
-    applyBetaUi();
-    initStorage();
-    initUser();
-    initNav();
-    initSearch();
-    initModals();
-    initPlayer();
-    initHero();
-    initSettings();
-    initBlocker();
+    initAuthModal();
 
-    // If not authenticated and Supabase is configured, show auth modal
+    // Mandatory auth: if not authenticated, show auth modal and block everything
     if (hasSupabase && !user) {
       showAuthModal();
-    } else if (user) {
-      updateAuthUI(user);
+      // Still init minimal UI so the auth modal works, but don't load content
+      applyBetaUi();
+      initSettings(); // needed for auth modal to have settings ready
+      // Mark app as loaded so the splash screen clears
+      window._appLoaded = true;
+      return;
     }
 
-    /* Logo click -> home */
-    const logoHome = document.getElementById('logoHome');
-    if (logoHome) {
-      logoHome.addEventListener('click', () => {
-        const homeBtn = document.querySelector('.nav-btn[data-tab="home"]');
-        if (homeBtn) homeBtn.click();
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      });
-    }
-
-    /* Account dropdown toggle */
-    const accountBtn = document.getElementById('accountBtn');
-    const accountDropdown = document.getElementById('accountDropdown');
-
-    if (accountBtn) {
-      accountBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        accountDropdown?.classList.toggle('hidden');
-        accountBtn.classList.toggle('open');
-      });
-    }
-
-    document.addEventListener('click', (e) => {
-      if (!e.target.closest('.account-menu')) {
-        accountDropdown?.classList.add('hidden');
-        accountBtn?.classList.remove('open');
-      }
-    });
-
-    /* Add Account */
-    const addAccountBtn = document.getElementById('addAccountBtn');
-    const addAccountModal = document.getElementById('addAccountModal');
-    const addAccountClose = document.getElementById('addAccountClose');
-    const addAccountCancel = document.getElementById('addAccountCancel');
-    const addAccountForm = document.getElementById('addAccountForm');
-    const newAccountName = document.getElementById('newAccountName');
-
-    if (addAccountBtn) {
-      addAccountBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        accountDropdown?.classList.add('hidden');
-        addAccountModal?.classList.remove('hidden');
-        if (newAccountName) {
-          newAccountName.value = '';
-          newAccountName.focus();
-        }
-      });
-    }
-
-    addAccountClose?.addEventListener('click', () => addAccountModal?.classList.add('hidden'));
-    addAccountCancel?.addEventListener('click', () => addAccountModal?.classList.add('hidden'));
-
-    if (addAccountForm) {
-      addAccountForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const name = newAccountName?.value.trim();
-        if (!name) return;
-        const accounts = getAccounts();
-        if (accounts.includes(name)) {
-          showToast('Account already exists', 'error');
-          return;
-        }
-        accounts.push(name);
-        saveAccounts(accounts);
-        setAccounts(accounts);
-        if (accounts.length === 1) {
-          setCurrentUser(name);
-          initUser();
-        }
-        renderAccountDropdown();
-        addAccountModal?.classList.add('hidden');
-        showToast(`Account "${name}" created`, 'success');
-      });
-    }
-
-    /* Manage Accounts */
-    const manageAccountsBtn = document.getElementById('manageAccountsBtn');
-    const manageAccountsModal = document.getElementById('manageAccountsModal');
-    const manageAccountsClose = document.getElementById('manageAccountsClose');
-
-    if (manageAccountsBtn) {
-      manageAccountsBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        accountDropdown?.classList.add('hidden');
-        renderManageAccounts();
-        manageAccountsModal?.classList.remove('hidden');
-      });
-    }
-
-    manageAccountsClose?.addEventListener('click', () => manageAccountsModal?.classList.add('hidden'));
-
-    /* Install Latest Update */
-    const updateBtn = document.getElementById('updateBtn');
-    const versionBadge = document.getElementById('versionBadge');
-    const GITHUB_REPO = 'sebastianmiletic/opencloud';
-    const GITHUB_BRANCH = 'main';
-    const LOCAL_VERSION_KEY = 'openccloud_last_version';
-
-    async function checkForUpdate() {
-      try {
-        const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/commits/${GITHUB_BRANCH}`, { cache: 'no-store' });
-        if (!res.ok) return;
-        const data = await res.json();
-        const remoteSha = data.sha?.slice(0, 7);
-        const localSha = localStorage.getItem(LOCAL_VERSION_KEY);
-        if (remoteSha && remoteSha !== localSha) {
-          if (versionBadge) {
-            versionBadge.textContent = 'Update Available!';
-            versionBadge.style.color = '#ef4444';
-            versionBadge.style.fontWeight = '700';
-          }
-          if (updateBtn) {
-            updateBtn.querySelector('span').innerHTML = 'Install Latest Update <span style="color:#ef4444;font-weight:700;">(New!)</span>';
-          }
-        }
-      } catch (err) {
-        console.log('[Update] Check failed:', err);
-      }
-    }
-
-    // Check for updates on load
-    checkForUpdate();
-    // Also check every 5 minutes
-    setInterval(checkForUpdate, 5 * 60 * 1000);
-
-    if (updateBtn) {
-      updateBtn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        accountDropdown?.classList.add('hidden');
-        showToast('Installing latest update...', 'info');
-        try {
-          // Fetch latest commit SHA and store it
-          const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/commits/${GITHUB_BRANCH}`, { cache: 'no-store' });
-          if (res.ok) {
-            const data = await res.json();
-            if (data.sha) localStorage.setItem(LOCAL_VERSION_KEY, data.sha.slice(0, 7));
-          }
-          // Clear all caches
-          if ('caches' in window) {
-            const cacheNames = await caches.keys();
-            await Promise.all(cacheNames.map(name => caches.delete(name)));
-          }
-          // Force reload from server
-          location.reload(true);
-        } catch (err) {
-          console.error('[App] Update failed:', err);
-          location.reload(true);
-        }
-      });
-    }
-
-    /* Sign Out */
-    const signOutBtn = document.getElementById('signOutBtn');
-    if (signOutBtn) {
-      signOutBtn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        accountDropdown?.classList.add('hidden');
-        await signOut();
-        showAuthModal();
-      });
-    }
-
-    /* Load home */
-    loadHomeCategories().catch(err => {
-      console.error('Failed to load home categories:', err);
-    });
+    // User is authenticated — init everything
+    applyBetaUi();
+    initSettings();
+    updateAuthUI(user);
+    initAppContent();
 
     /* Mark app as loaded */
     window._appLoaded = true;
