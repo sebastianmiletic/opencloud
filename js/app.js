@@ -240,7 +240,11 @@ async function initApp() {
     let user = null;
 
     if (hasSupabase) {
-      user = await checkSession();
+      // Timeout checkSession after 4s so the app doesn't hang on slow networks
+      user = await Promise.race([
+        checkSession(),
+        new Promise(resolve => setTimeout(() => { console.warn('[App] Session check timed out'); resolve(null); }, 4000))
+      ]);
       initAuthModal();
     }
 
@@ -397,6 +401,12 @@ async function initApp() {
     window.scrollTo(0, 0);
   } catch (err) {
     console.error('Open Cloud init failed:', err);
+    const splash = document.getElementById('splashScreen');
+    const msgEl = splash?.querySelector('.splash-error-msg');
+    if (msgEl && splash) {
+      msgEl.innerHTML = `<p style="margin-bottom:0.5rem;color:#fff;font-weight:600;">App Error</p><p style="font-size:0.75rem;color:#aaa;font-family:monospace;max-width:300px;word-break:break-word;">${err?.message || err || 'Unknown error'}</p><p style="margin-top:0.75rem;font-size:0.8rem;">Check browser console for details.</p>`;
+      document.getElementById('moduleError').style.display = 'flex';
+    }
   }
 }
 
