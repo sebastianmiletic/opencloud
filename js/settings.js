@@ -1,4 +1,4 @@
-import { getSettings, saveSettings, PROVIDERS, applyDeviceClass, getActiveProvider } from './config.js';
+import { getSettings, saveSettings, PROVIDERS, applyDeviceClass, applyBetaUi, getActiveProvider } from './config.js';
 import { showToast } from './utils.js';
 import { initBlockerUI } from './blocker.js';
 import { getCurrentUser } from './storage.js';
@@ -107,9 +107,11 @@ export function openSettingsModal() {
   const modal = document.getElementById('settingsModal');
   const deviceSelect = document.getElementById('settingsDevice');
   const autoPlay = document.getElementById('settingsAutoPlay');
+  const betaUi = document.getElementById('settingsBetaUi');
 
   if (deviceSelect) deviceSelect.value = settings.device;
   if (autoPlay) autoPlay.checked = settings.autoPlay !== false;
+  if (betaUi) betaUi.checked = settings.beta_ui === true;
 
   // Show/hide admin tab
   const adminTabBtn = document.getElementById('adminTabBtn');
@@ -193,15 +195,25 @@ async function saveSettingsFromForm() {
 
   const device = document.getElementById('settingsDevice')?.value || 'laptop';
   const autoPlay = document.getElementById('settingsAutoPlay')?.checked ?? true;
+  const betaUi = document.getElementById('settingsBetaUi')?.checked ?? false;
+  const betaChanged = settings.beta_ui !== betaUi;
 
   settings.device = device;
   settings.autoPlay = autoPlay;
+  settings.beta_ui = betaUi;
 
   saveSettings(settings);
   scheduleSync();
   applyDeviceClass();
+  applyBetaUi();
+
   document.getElementById('settingsModal')?.classList.add('hidden');
   showToast('Settings saved', 'success');
+
+  if (betaChanged) {
+    showToast(betaUi ? 'Reloading with BETA UI...' : 'Reloading with standard UI...', 'info');
+    setTimeout(() => location.reload(true), 600);
+  }
 }
 
 /* Profile Tab State */

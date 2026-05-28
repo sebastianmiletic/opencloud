@@ -12,6 +12,7 @@ import {
 import { showToast, lockScroll, unlockScroll } from './utils.js';
 import { getAccounts, saveAccounts, setCurrentUser } from './storage.js';
 import { setAccounts } from './state.js';
+import { applyBetaUi } from './config.js';
 import { initSupabase, checkSession, signIn, signUp, signOut, isAuthenticated, getUserDisplayName } from './auth.js';
 
 /* Global error handler */
@@ -248,6 +249,7 @@ async function initApp() {
       initAuthModal();
     }
 
+    applyBetaUi();
     initStorage();
     initUser();
     initNav();

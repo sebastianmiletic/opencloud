@@ -133,6 +133,7 @@ export function getSettings() {
     provider: DEFAULT_PROVIDER,
     device: 'laptop',
     autoPlay: true,
+    beta_ui: false,
     _version: SETTINGS_VERSION
   };
 }
@@ -158,4 +159,13 @@ export function applyDeviceClass() {
   const settings = getSettings();
   document.body.classList.remove('device-laptop', 'device-tv', 'device-phone');
   document.body.classList.add(DEVICES[settings.device]?.class || 'device-laptop');
+}
+
+export function applyBetaUi() {
+  const settings = getSettings();
+  if (settings.beta_ui) {
+    document.documentElement.classList.add('beta-ui');
+  } else {
+    document.documentElement.classList.remove('beta-ui');
+  }
 }
