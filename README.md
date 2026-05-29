@@ -8,16 +8,14 @@ A black-and-white themed streaming tracker web app with TMDB/OMDB integration, i
 
 ### Mac / Linux
 
-1. **Install Python 3** (if you don't have it)
-   ```bash
-   python3 --version
-   # If not installed: brew install python
-   ```
+1. **Download the ZIP**
+   - Go to [github.com/sebastianmiletic/opencloud](https://github.com/sebastianmiletic/opencloud)
+   - Click the green **<> Code** button → **Download ZIP**
 
-2. **Clone the repository**
+2. **Unzip the file**
    ```bash
-   git clone https://github.com/sebastianmiletic/opencloud.git
-   cd opencloud
+   unzip opencloud-main.zip
+   cd opencloud-main
    ```
 
 3. **Configure API keys**
@@ -29,19 +27,28 @@ A black-and-white themed streaming tracker web app with TMDB/OMDB integration, i
 4. **Start the app**
    ```bash
    ./start.sh
-   # Or: python3 server.py
+   # Or manually: python3 server.py
    ```
 
 5. **Open** `http://localhost:8080` in your browser
 
 ### Windows
 
-1. **Install Python 3** from [https://www.python.org/downloads/](https://www.python.org/downloads/) — check "Add Python to PATH"
-2. **Clone** the repo or [download the ZIP](https://github.com/sebastianmiletic/opencloud/archive/refs/heads/main.zip) and extract it
-3. **Open Command Prompt** or PowerShell in the extracted folder
-4. **Copy** `.env.example` to `.env` and fill in your API keys
-5. **Run** `python server.py`
-6. **Open** `http://localhost:8080` in your browser
+1. **Download the ZIP**
+   - Go to [github.com/sebastianmiletic/opencloud](https://github.com/sebastianmiletic/opencloud)
+   - Click the green **<> Code** button → **Download ZIP**
+
+2. **Extract the ZIP** and open the extracted `opencloud-main` folder
+
+3. **Configure API keys**
+   - Copy `.env.example` and rename it to `.env`
+   - Open `.env` in a text editor and fill in your API keys
+
+4. **Start the app**
+   - Open Command Prompt or PowerShell in the folder
+   - Run: `python server.py`
+
+5. **Open** `http://localhost:8080` in your browser
 
 ---
 
