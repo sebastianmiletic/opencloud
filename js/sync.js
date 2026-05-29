@@ -280,9 +280,9 @@ export async function isUserAdmin(userId) {
       .from('profiles')
       .select('is_admin')
       .eq('id', userId)
-      .single();
+      .limit(1);
     if (error) throw error;
-    return !!data?.is_admin;
+    return !!(data && data[0]?.is_admin);
   } catch (err) {
     console.error('[Sync] admin check failed:', err);
     return false;
@@ -482,14 +482,27 @@ export async function createProfile(userId, email, username) {
   const sb = getClient();
   if (!sb || !userId) return false;
   try {
-    const { error } = await sb.from('profiles').upsert({
-      id: userId,
-      email: email,
-      username: username || email.split('@')[0],
-      is_admin: false,
-      created_at: new Date().toISOString()
-    }, { onConflict: 'id' });
-    if (error) throw error;
+    // Check if row already exists (SELECT is allowed for everyone)
+    const { data: existing } = await sb.from('profiles').select('id').eq('id', userId).limit(1);
+    if (existing && existing.length > 0) {
+      // Row exists — update it (RLS allows own update)
+      const { error } = await sb.from('profiles').update({
+        email,
+        username: username || email.split('@')[0],
+        last_seen_at: new Date().toISOString()
+      }).eq('id', userId);
+      if (error) throw error;
+    } else {
+      // No row — insert new (RLS allows own insert)
+      const { error } = await sb.from('profiles').insert({
+        id: userId,
+        email,
+        username: username || email.split('@')[0],
+        is_admin: false,
+        created_at: new Date().toISOString()
+      });
+      if (error) throw error;
+    }
     return true;
   } catch (err) {
     console.error('[Sync] create profile failed:', err);
@@ -501,6 +514,14 @@ export async function activateAdmin(userId) {
   const sb = getClient();
   if (!sb || !userId) return false;
   try {
+    // Check if row exists
+    const { data: existing } = await sb.from('profiles').select('id').eq('id', userId).limit(1);
+    if (!existing || existing.length === 0) {
+      // No row exists — we can't update what doesn't exist. Need to create it first.
+      // But we don't have email/username here, so this function alone can't create it.
+      console.error('[Sync] activateAdmin: no profile row for user', userId);
+      return false;
+    }
     const { error } = await sb.from('profiles').update({ is_admin: true }).eq('id', userId);
     if (error) throw error;
     return true;

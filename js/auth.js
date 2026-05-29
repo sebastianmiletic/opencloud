@@ -9,6 +9,13 @@ let supabaseClient = null;
 let currentUser = null;
 let _isAdmin = false;
 
+function getStoredAdmin() {
+  try { return localStorage.getItem('oc_is_admin') === 'true'; } catch (e) { return false; }
+}
+function setStoredAdmin(v) {
+  try { localStorage.setItem('oc_is_admin', v ? 'true' : 'false'); } catch (e) {}
+}
+
 export function initSupabase() {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     console.warn('[Auth] Supabase credentials not configured');
@@ -25,6 +32,8 @@ export function initSupabase() {
       detectSessionInUrl: false
     }
   });
+  // Restore admin from localStorage immediately
+  _isAdmin = getStoredAdmin();
   return true;
 }
 
@@ -35,7 +44,10 @@ export async function checkSession() {
     if (error) throw error;
     if (session?.user) {
       currentUser = session.user;
-      _isAdmin = await isUserAdmin(currentUser.id);
+      // Try server first, fall back to localStorage
+      const serverAdmin = await isUserAdmin(currentUser.id);
+      _isAdmin = serverAdmin || getStoredAdmin();
+      setStoredAdmin(_isAdmin);
       return session.user;
     }
     return null;
@@ -107,22 +119,29 @@ export async function signIn(email, password) {
     });
     if (error) throw error;
     currentUser = data.user;
-    // Check ban status
+    // Check ban status — use .limit(1) instead of .single() to avoid crash on missing row
     if (data.user) {
-      const { data: profile, error: profileErr } = await supabaseClient
+      const { data: profileRows, error: profileErr } = await supabaseClient
         .from('profiles')
         .select('is_banned, ban_reason')
         .eq('id', data.user.id)
-        .single();
+        .limit(1);
+      const profile = profileRows?.[0];
       if (!profileErr && profile?.is_banned) {
         await supabaseClient.auth.signOut();
         currentUser = null;
         showToast(`Account suspended: ${profile.ban_reason || 'Contact support'}`, 'error');
         return { user: null, error: new Error('Account suspended') };
       }
-      // Ensure profile exists
-      await createProfile(data.user.id, data.user.email, data.user.email.split('@')[0]);
-      _isAdmin = await isUserAdmin(data.user.id);
+      // Ensure profile exists (creates row if missing)
+      try {
+        await createProfile(data.user.id, data.user.email, data.user.email.split('@')[0]);
+      } catch (e) {
+        console.warn('[Auth] createProfile on signIn failed:', e);
+      }
+      const serverAdmin = await isUserAdmin(data.user.id);
+      _isAdmin = serverAdmin || getStoredAdmin();
+      setStoredAdmin(_isAdmin);
       // Update last_seen_at
       await supabaseClient.from('profiles').update({ last_seen_at: new Date().toISOString() }).eq('id', data.user.id);
     }
@@ -141,6 +160,7 @@ export async function signOut() {
     await supabaseClient.auth.signOut();
     currentUser = null;
     _isAdmin = false;
+    setStoredAdmin(false);
     showToast('Signed out', 'info');
   } catch (err) {
     console.error('[Auth] Signout failed:', err);
@@ -174,6 +194,7 @@ export function isAdmin() {
 
 export function setAdmin(value) {
   _isAdmin = !!value;
+  setStoredAdmin(_isAdmin);
 }
 
 export async function updatePassword(newPassword) {
@@ -227,6 +248,7 @@ export async function deleteAccount() {
     await supabaseClient.auth.signOut();
     currentUser = null;
     _isAdmin = false;
+    setStoredAdmin(false);
     showToast('Account deleted', 'info');
     return { error: null };
   } catch (err) {

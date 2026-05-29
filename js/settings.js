@@ -424,6 +424,7 @@ async function renderAdminTab() {
 
   try {
     const [users, sessions] = await Promise.all([fetchAllUsers(), getActiveSessions(15)]);
+    console.log('[Admin] fetched users:', users.length, 'sessions:', sessions.length);
 
     if (totalUsersEl) totalUsersEl.textContent = users.length;
     if (bannedCountEl) bannedCountEl.textContent = users.filter(u => u.is_banned).length;
