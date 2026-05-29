@@ -261,9 +261,23 @@ async function initAppContent() {
         const fileList = _lastUpdateInfo.files.map(f => `• ${f}`).join('\n');
         updateModalDetails.innerHTML = `<pre style="font-family:monospace;font-size:0.75rem;color:var(--text-secondary);white-space:pre-wrap;line-height:1.6;"
 >${fileList}</pre>`;
-      }
-    }
   }
+}
+
+const SESSION_RESTORED_KEY = 'oc_session_restored';
+
+function clearSupabaseSession() {
+  // Wipe all Supabase auth tokens from localStorage
+  const keys = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('sb-')) keys.push(key);
+  }
+  keys.forEach(k => {
+    try { localStorage.removeItem(k); } catch (e) {}
+  });
+  console.log('[App] Cleared', keys.length, 'Supabase localStorage keys (fresh install)');
+}
 
   if (updateCheckBtn) {
     updateCheckBtn.addEventListener('click', async (e) => {
@@ -453,17 +467,6 @@ function clearSupabaseSession() {
   console.log('[App] Cleared', keys.length, 'Supabase localStorage keys (fresh install)');
 }
 
-/* Check before init: if .env is missing, show a blocker so user knows to configure it */
-function checkEnvConfigured() {
-  const env = (typeof window !== 'undefined' && window.ENV) ? window.ENV : {};
-  const missing = [];
-  if (!env.TMDB_BEARER_TOKEN || env.TMDB_BEARER_TOKEN === 'your_tmdb_bearer_token_here') missing.push('TMDB_BEARER_TOKEN');
-  if (!env.OMDB_API_KEY || env.OMDB_API_KEY === 'your_omdb_api_key_here') missing.push('OMDB_API_KEY');
-  if (!env.SUPABASE_URL || env.SUPABASE_URL === 'your_supabase_project_url_here') missing.push('SUPABASE_URL');
-  if (!env.SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY === 'your_supabase_anon_key_here') missing.push('SUPABASE_ANON_KEY');
-  return missing;
-}
-
 /* Initialize everything with error boundaries */
 async function initApp() {
   try {
@@ -474,14 +477,6 @@ async function initApp() {
     if (isFirstEverOpen) {
       clearSupabaseSession();
       localStorage.setItem(SESSION_RESTORED_KEY, 'true');
-    }
-
-    // Check if env is configured
-    const missingEnv = checkEnvConfigured();
-    if (missingEnv.length > 0) {
-      showEnvErrorModal(missingEnv);
-      window._appLoaded = true;
-      return;
     }
 
     // Initialize Supabase auth
