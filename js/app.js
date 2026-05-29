@@ -405,6 +405,28 @@ function showAuthModal() {
 /* Initialize everything with error boundaries */
 async function initApp() {
   try {
+    // Version gate: if the app code version changed, clear stale Supabase session
+    // so a fresh ZIP download always requires sign-in
+    const LAST_APP_VERSION_KEY = 'oc_last_app_version';
+    const currentVersion = (typeof fetch !== 'undefined')
+      ? await fetch('version.json', { cache: 'no-store' })
+          .then(r => r.ok ? r.json() : null)
+          .then(j => j?.version || 'unknown')
+          .catch(() => 'unknown')
+      : 'unknown';
+    const lastVersion = localStorage.getItem(LAST_APP_VERSION_KEY);
+    if (lastVersion && lastVersion !== currentVersion) {
+      console.log('[App] Version changed', lastVersion, '->', currentVersion, '- clearing stale session');
+      try {
+        const { createClient } = window.supabase || {};
+        const tempClient = createClient?.(window.ENV?.SUPABASE_URL || '', window.ENV?.SUPABASE_ANON_KEY || '');
+        tempClient?.auth?.signOut?.({ scope: 'local' });
+      } catch (e) { /* ignore */ }
+      localStorage.setItem(LAST_APP_VERSION_KEY, currentVersion);
+    } else if (!lastVersion) {
+      localStorage.setItem(LAST_APP_VERSION_KEY, currentVersion);
+    }
+
     // Initialize Supabase auth
     const hasSupabase = initSupabase();
     let user = null;
@@ -412,7 +434,6 @@ async function initApp() {
     initAuthModal();
 
     if (hasSupabase) {
-      // Timeout checkSession after 4s so the app doesn't hang on slow networks
       user = await Promise.race([
         checkSession(),
         new Promise(resolve => setTimeout(() => { console.warn('[App] Session check timed out'); resolve(null); }, 4000))
@@ -422,9 +443,7 @@ async function initApp() {
     // Mandatory auth: if not authenticated, show auth modal and block everything
     if (hasSupabase && !user) {
       showAuthModal();
-      // Still init minimal UI so the auth modal works, but don't load content
       initSettings();
-      // Mark app as loaded so the splash screen clears
       window._appLoaded = true;
       return;
     }
@@ -435,7 +454,6 @@ async function initApp() {
     updateAuthUI(user);
     await initAppContent();
 
-    /* Mark app as loaded */
     window._appLoaded = true;
     window.scrollTo(0, 0);
   } catch (err) {
