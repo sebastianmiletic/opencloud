@@ -8,7 +8,7 @@ STALE_PID=$(lsof -ti :8080 2>/dev/null)
 if [ -n "$STALE_PID" ]; then
     echo "Killing stale server on port 8080 (PID: $STALE_PID)..."
     kill -9 "$STALE_PID" 2>/dev/null
-    sleep 0.5
+    sleep 1
 fi
 
 # Start the server
@@ -28,12 +28,20 @@ else
     exit 1
 fi
 
+SERVER_PID=$!
+
 # Wait for server to be ready
 echo -n "Waiting for server"
 for i in {1..30}; do
     if curl -s -o /dev/null --max-time 1 http://localhost:8080/; then
         echo ""
         break
+    fi
+    # Check if the process died
+    if ! ps -p $SERVER_PID > /dev/null 2>&1; then
+        echo ""
+        echo "ERROR: Server process exited unexpectedly"
+        exit 1
     fi
     echo -n "."
     sleep 0.3

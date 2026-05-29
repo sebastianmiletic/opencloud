@@ -47,6 +47,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
+# Allow port reuse to prevent "Address already in use" after restart
+socketserver.TCPServer.allow_reuse_address = True
+
 with socketserver.TCPServer(("", PORT), Handler) as httpd:
     print(f"\n🚀 Open Cloud running at http://localhost:{PORT}/")
     print("Press Ctrl+C to stop\n")
