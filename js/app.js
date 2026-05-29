@@ -11,7 +11,7 @@ import {
 } from './ui.js';
 import { showToast, lockScroll, unlockScroll } from './utils.js';
 import { hydrateSettingsFromCloud } from './config.js';
-import { initSupabase, checkSession, signIn, signUp, signOut, getUserDisplayName } from './auth.js';
+import { initSupabase, checkSession, signIn, signUp, getUserDisplayName } from './auth.js';
 
 /* Global error handler */
 window.onerror = (msg, url, line) => {
@@ -405,35 +405,35 @@ function showAuthModal() {
 /* Initialize everything with error boundaries */
 async function initApp() {
   try {
-    // Initialize Supabase auth
+    // Initialize Supabase auth (restores session in background for API calls)
     const hasSupabase = initSupabase();
-    let user = null;
 
-    if (hasSupabase) {
-      // Timeout checkSession after 4s so the app doesn't hang on slow networks
-      user = await Promise.race([
-        checkSession(),
-        new Promise(resolve => setTimeout(() => { console.warn('[App] Session check timed out'); resolve(null); }, 4000))
-      ]);
-    }
-
+    // ALWAYS show auth modal on page load — mandatory login every time
     initAuthModal();
-
-    // Mandatory auth: if not authenticated, show auth modal and block everything
-    if (hasSupabase && !user) {
-      showAuthModal();
-      // Still init minimal UI so the auth modal works, but don't load content
-      initSettings(); // needed for auth modal to have settings ready
-      // Mark app as loaded so the splash screen clears
-      window._appLoaded = true;
-      return;
-    }
-
-    // User is authenticated — init everything
-    await hydrateSettingsFromCloud();
+    showAuthModal();
     initSettings();
-    updateAuthUI(user);
-    await initAppContent();
+
+    // Validate session in background (for auto-fill convenience) but don't auto-login
+    if (hasSupabase) {
+      try {
+        const user = await Promise.race([
+          checkSession(),
+          new Promise(resolve => setTimeout(() => resolve(null), 4000))
+        ]);
+        if (user) {
+          // Pre-fill sign-in email so user doesn't have to re-type
+          const siEmail = document.getElementById('signinEmail');
+          if (siEmail && user.email) {
+            siEmail.value = user.email;
+            siEmail.readOnly = false;
+            siEmail.classList.add('has-value');
+          }
+          // If admin is already active, keep the local flag so activation works
+        }
+      } catch (e) {
+        console.warn('[App] Session check failed:', e);
+      }
+    }
 
     /* Mark app as loaded */
     window._appLoaded = true;
