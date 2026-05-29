@@ -405,35 +405,35 @@ function showAuthModal() {
 /* Initialize everything with error boundaries */
 async function initApp() {
   try {
-    // Initialize Supabase auth (restores session in background for API calls)
+    // Initialize Supabase auth
     const hasSupabase = initSupabase();
+    let user = null;
 
-    // ALWAYS show auth modal on page load — mandatory login every time
     initAuthModal();
-    showAuthModal();
-    initSettings();
 
-    // Validate session in background (for auto-fill convenience) but don't auto-login
     if (hasSupabase) {
-      try {
-        const user = await Promise.race([
-          checkSession(),
-          new Promise(resolve => setTimeout(() => resolve(null), 4000))
-        ]);
-        if (user) {
-          // Pre-fill sign-in email so user doesn't have to re-type
-          const siEmail = document.getElementById('signinEmail');
-          if (siEmail && user.email) {
-            siEmail.value = user.email;
-            siEmail.readOnly = false;
-            siEmail.classList.add('has-value');
-          }
-          // If admin is already active, keep the local flag so activation works
-        }
-      } catch (e) {
-        console.warn('[App] Session check failed:', e);
-      }
+      // Timeout checkSession after 4s so the app doesn't hang on slow networks
+      user = await Promise.race([
+        checkSession(),
+        new Promise(resolve => setTimeout(() => { console.warn('[App] Session check timed out'); resolve(null); }, 4000))
+      ]);
     }
+
+    // Mandatory auth: if not authenticated, show auth modal and block everything
+    if (hasSupabase && !user) {
+      showAuthModal();
+      // Still init minimal UI so the auth modal works, but don't load content
+      initSettings();
+      // Mark app as loaded so the splash screen clears
+      window._appLoaded = true;
+      return;
+    }
+
+    // User is authenticated — init everything
+    await hydrateSettingsFromCloud();
+    initSettings();
+    updateAuthUI(user);
+    await initAppContent();
 
     /* Mark app as loaded */
     window._appLoaded = true;
