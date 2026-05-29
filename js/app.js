@@ -402,29 +402,86 @@ function showAuthModal() {
   }
 }
 
+function showEnvErrorModal(missing) {
+  const appContainer = document.getElementById('appContainer');
+  const splash = document.getElementById('splashScreen');
+  if (splash) splash.style.display = 'none';
+  if (appContainer) {
+    appContainer.classList.add('visible');
+    appContainer.innerHTML = `
+      <div style="max-width:600px;margin:10vh auto;padding:2rem;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:12px;text-align:center;">
+        <i class="fas fa-triangle-exclamation" style="font-size:3rem;color:#ef4444;margin-bottom:1rem;"></i>
+        <h1 style="font-size:1.5rem;margin-bottom:1rem;">Configuration Required</h1>
+        <p style="color:var(--text-secondary);margin-bottom:1.5rem;">
+          Before running Open Cloud, you need to copy the included <code>.env.example</code> file to
+          <code>.env</code> and fill in your API keys.
+        </p>
+        <div style="text-align:left;background:var(--bg-primary);padding:1rem;border-radius:8px;font-family:monospace;font-size:0.875rem;margin-bottom:1.5rem;">
+          <div style="color:var(--text-muted);margin-bottom:0.5rem;"># Commands to set up</div>
+          cp .env.example .env
+          <br>nano .env
+        </div>
+        <p style="color:var(--text-secondary);font-size:0.875rem;margin-bottom:0.5rem;">
+          <strong>Missing keys:</strong>
+        </p>
+        <ul style="text-align:left;color:#ef4444;font-family:monospace;font-size:0.875rem;">
+          ${missing.map(k => `<li><code>${k}</code></li>`).join('')}
+        </ul>
+        <p style="color:var(--text-muted);font-size:0.8125rem;margin-top:1.5rem;">
+          Get your free API keys at
+          <a href="https://www.themoviedb.org/settings/api" target="_blank">TMDB</a>,
+          <a href="https://www.omdbapi.com/apikey.aspx" target="_blank">OMDB</a>, and
+          <a href="https://supabase.com" target="_blank">Supabase</a>.
+        </p>
+      </div>
+    `;
+  }
+}
+
+const SESSION_RESTORED_KEY = 'oc_session_restored';
+
+function clearSupabaseSession() {
+  // Wipe all Supabase auth tokens from localStorage
+  const keys = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('sb-')) keys.push(key);
+  }
+  keys.forEach(k => {
+    try { localStorage.removeItem(k); } catch (e) {}
+  });
+  console.log('[App] Cleared', keys.length, 'Supabase localStorage keys (fresh install)');
+}
+
+/* Check before init: if .env is missing, show a blocker so user knows to configure it */
+function checkEnvConfigured() {
+  const env = (typeof window !== 'undefined' && window.ENV) ? window.ENV : {};
+  const missing = [];
+  if (!env.TMDB_BEARER_TOKEN || env.TMDB_BEARER_TOKEN === 'your_tmdb_bearer_token_here') missing.push('TMDB_BEARER_TOKEN');
+  if (!env.OMDB_API_KEY || env.OMDB_API_KEY === 'your_omdb_api_key_here') missing.push('OMDB_API_KEY');
+  if (!env.SUPABASE_URL || env.SUPABASE_URL === 'your_supabase_project_url_here') missing.push('SUPABASE_URL');
+  if (!env.SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY === 'your_supabase_anon_key_here') missing.push('SUPABASE_ANON_KEY');
+  return missing;
+}
+
 /* Initialize everything with error boundaries */
 async function initApp() {
   try {
-    // Version gate: if the app code version changed, clear stale Supabase session
-    // so a fresh ZIP download always requires sign-in
-    const LAST_APP_VERSION_KEY = 'oc_last_app_version';
-    const currentVersion = (typeof fetch !== 'undefined')
-      ? await fetch('version.json', { cache: 'no-store' })
-          .then(r => r.ok ? r.json() : null)
-          .then(j => j?.version || 'unknown')
-          .catch(() => 'unknown')
-      : 'unknown';
-    const lastVersion = localStorage.getItem(LAST_APP_VERSION_KEY);
-    if (lastVersion && lastVersion !== currentVersion) {
-      console.log('[App] Version changed', lastVersion, '->', currentVersion, '- clearing stale session');
-      try {
-        const { createClient } = window.supabase || {};
-        const tempClient = createClient?.(window.ENV?.SUPABASE_URL || '', window.ENV?.SUPABASE_ANON_KEY || '');
-        tempClient?.auth?.signOut?.({ scope: 'local' });
-      } catch (e) { /* ignore */ }
-      localStorage.setItem(LAST_APP_VERSION_KEY, currentVersion);
-    } else if (!lastVersion) {
-      localStorage.setItem(LAST_APP_VERSION_KEY, currentVersion);
+    // On a fresh ZIP download (first ever open), localStorage is completely
+    // empty. We use that as the signal to wipe any stale Supabase tokens left
+    // behind by a previous install on the same localhost:8080 origin.
+    const isFirstEverOpen = !localStorage.getItem(SESSION_RESTORED_KEY);
+    if (isFirstEverOpen) {
+      clearSupabaseSession();
+      localStorage.setItem(SESSION_RESTORED_KEY, 'true');
+    }
+
+    // Check if env is configured
+    const missingEnv = checkEnvConfigured();
+    if (missingEnv.length > 0) {
+      showEnvErrorModal(missingEnv);
+      window._appLoaded = true;
+      return;
     }
 
     // Initialize Supabase auth
