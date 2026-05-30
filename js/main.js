@@ -285,13 +285,61 @@ async function initAppContent() {
   /* Update modal close */
   document.getElementById('updateModalClose')?.addEventListener('click', () => document.getElementById('updateModal')?.classList.add('hidden'));
 
-  /* Download latest ZIP (honest behaviour for ZIP-based app) */
+  /* Install Update — tell Service Worker to fetch new files from GitHub raw */
   document.getElementById('updateModalInstallBtn')?.addEventListener('click', async () => {
-    showToast('Opening download...', 'info');
-    try { const latest = await fetchLatestCommit(); if (latest?.sha) localStorage.setItem(LOCAL_VERSION_KEY, latest.sha); } catch (e) {}
-    // Open the ZIP download in a new tab
-    window.open(GITHUB_ZIP_URL, '_blank');
-    document.getElementById('updateModal')?.classList.add('hidden');
+    showToast('Downloading update...', 'info');
+    const installBtn = document.getElementById('updateModalInstallBtn');
+    if (installBtn) { installBtn.disabled = true; installBtn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:0.4rem;"></i>Updating...'; }
+
+    // Re-fetch latest commit to get changed files
+    let files = [];
+    let sha   = '';
+    try {
+      const latest = await fetchLatestCommit();
+      if (latest?.sha && latest?.files) {
+        sha   = latest.sha;
+        files = (latest.files || []).map(f => f.filename).filter(f => {
+          const name = f.toLowerCase();
+          return !name.startsWith('readme') && !name.startsWith('license') &&
+                 !name.startsWith('docs/') && !name.startsWith('.github/') &&
+                 !name.endsWith('.md') && !name.endsWith('.txt') &&
+                 !name.endsWith('.log') && !name.endsWith('.png') &&
+                 !name.endsWith('.jpg') && !name.endsWith('.svg');
+        });
+      }
+    } catch (e) {}
+
+    if (!files.length || !sha) {
+      showToast('Could not get update files. Try again.', 'error');
+      if (installBtn) { installBtn.disabled = false; installBtn.innerHTML = '<i class="fas fa-rotate-right" style="margin-right:0.4rem;"></i>Install Update Now'; }
+      return;
+    }
+
+    // Send message to Service Worker to update cache
+    const reg = await navigator.serviceWorker?.ready;
+    if (!reg || !reg.active) {
+      showToast('Service Worker not ready. Please reload and try again.', 'error');
+      return;
+    }
+
+    const channel = new MessageChannel();
+    const done = new Promise((resolve) => {
+      channel.port1.onmessage = (event) => {
+        resolve(event.data);
+      };
+    });
+
+    reg.active.postMessage({ type: 'UPDATE_CACHE', files, sha }, [channel.port2]);
+    const result = await done;
+
+    if (result?.ok) {
+      localStorage.setItem(LOCAL_VERSION_KEY, sha);
+      showToast(`Update applied (${result.updated} files). Reloading...`, 'success');
+      setTimeout(() => location.reload(true), 1500);
+    } else {
+      showToast(result?.error || 'Update failed. Try again.', 'error');
+      if (installBtn) { installBtn.disabled = false; installBtn.innerHTML = '<i class="fas fa-rotate-right" style="margin-right:0.4rem;"></i>Install Update Now'; }
+    }
   });
 
   /* Sign Out */
