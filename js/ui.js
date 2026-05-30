@@ -385,7 +385,7 @@ function renderSearchResults(results) {
     const title = item.media_type === 'movie' ? item.title : item.name;
     const year = item.media_type === 'movie' ? item.release_date?.slice(0, 4) : item.first_air_date?.slice(0, 4);
     const poster = item.poster_path ? `${IMG_BASE}w92${item.poster_path}` : '';
-    const rating = item.omdbRating ? item.omdbRating.toFixed(1) : (item.vote_average ? item.vote_average.toFixed(1) : 'N/A');
+    const rating = item.omdbRating != null ? item.omdbRating.toFixed(1) : (item.vote_average != null ? item.vote_average.toFixed(1) : 'N/A');
     const isInCollection = userCollection.some(c => c.id === item.id && c.media_type === item.media_type);
 
     return `
@@ -1040,7 +1040,7 @@ function renderSearchGallery(results, query, customTitle = null) {
     const poster = item.poster_path ? `${IMG_BASE}w300${item.poster_path}` : '';
     const title = item.media_type === 'movie' ? item.title : item.name;
     const year = item.media_type === 'movie' ? item.release_date?.slice(0, 4) : item.first_air_date?.slice(0, 4);
-    const rating = item.omdbRating ? item.omdbRating.toFixed(1) : (item.vote_average ? item.vote_average.toFixed(1) : 'N/A');
+    const rating = item.omdbRating != null ? item.omdbRating.toFixed(1) : (item.vote_average != null ? item.vote_average.toFixed(1) : 'N/A');
     const isInCollection = userCollection.some(c => c.id === item.id && c.media_type === item.media_type);
 
     return `
@@ -1312,7 +1312,7 @@ export function renderCategoryRow(containerId, items, type, showProgress = false
     const poster = item.poster_path ? `${IMG_BASE}w300${item.poster_path}` : '';
     const title = item.title || item.name;
     const year = (item.release_date || item.first_air_date || '').slice(0, 4);
-    const rating = item.omdbRating ? item.omdbRating.toFixed(1) : (item.vote_average ? item.vote_average.toFixed(1) : 'N/A');
+    const rating = item.omdbRating != null ? item.omdbRating.toFixed(1) : (item.vote_average != null ? item.vote_average.toFixed(1) : 'N/A');
     const progressBadge = (showProgress && item._savedProgress)
       ? `<span class="card-progress">S${item._savedProgress.season} E${item._savedProgress.episode}</span>`
       : '';
@@ -1364,7 +1364,7 @@ export async function openItemModal(id, type) {
     const backdrop = data.backdrop_path ? `${IMG_BASE}original${data.backdrop_path}` : '';
     const genres = data.genres?.map(g => `<span class="genre-tag">${g.name}</span>`).join('') || '';
     const omdbRating = await getOMDBRating(title, year);
-    const rating = omdbRating ? omdbRating.toFixed(1) : (data.vote_average ? data.vote_average.toFixed(1) : 'N/A');
+    const rating = omdbRating != null ? omdbRating.toFixed(1) : (data.vote_average != null ? data.vote_average.toFixed(1) : 'N/A');
 
     const modalTitle = document.getElementById('modalTitle');
     const modalYear = document.getElementById('modalYear');
@@ -1772,7 +1772,7 @@ export function renderUserCollection() {
 
   collectionGrid.innerHTML = filtered.map(item => {
     const poster = item.poster_path ? `${IMG_BASE}w300${item.poster_path}` : '';
-    const rating = item.vote_average ? item.vote_average.toFixed(1) : 'N/A';
+    const rating = item.vote_average != null ? item.vote_average.toFixed(1) : 'N/A';
     const prog = item.media_type === 'tv' ? watchProgress[String(item.id)] : null;
     const progressBadge = prog ? `<span class="grid-progress">S${prog.season} E${prog.episode}</span>` : '';
 
@@ -2018,7 +2018,7 @@ export function renderUserHistory() {
 
   historyGrid.innerHTML = sorted.map(item => {
     const poster = item.poster_path ? `${IMG_BASE}w300${item.poster_path}` : '';
-    const rating = item.vote_average ? item.vote_average.toFixed(1) : 'N/A';
+    const rating = item.vote_average != null ? item.vote_average.toFixed(1) : 'N/A';
     const isInCollection = userCollection.some(c => c.id === item.id && c.media_type === item.media_type);
     const prog = item.media_type === 'tv' ? watchProgress[String(item.id)] : null;
     const progressBadge = prog ? `<span class="grid-progress">S${prog.season} E${prog.episode}</span>` : '';

@@ -115,7 +115,7 @@ function buildSlideHtml(item, index, isClone = false) {
   const title = item.title || item.name;
   const overview = item.overview || '';
   const year = (item.release_date || item.first_air_date || '').slice(0, 4);
-  const rating = item.omdbRating ? item.omdbRating.toFixed(1) : (item.vote_average ? item.vote_average.toFixed(1) : 'N/A');
+  const rating = item.omdbRating != null ? item.omdbRating.toFixed(1) : (item.vote_average != null ? item.vote_average.toFixed(1) : 'N/A');
   const typeLabel = item.media_type === 'tv' ? 'TV Series' : 'Movie';
   const cloneAttr = isClone ? ' data-clone="true"' : '';
   const isInCollection = userCollection.some(c => c.id === item.id && c.media_type === item.media_type);

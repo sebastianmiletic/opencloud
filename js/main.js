@@ -115,11 +115,32 @@ let _lastUpdateInfo  = null;
 const LOCAL_VERSION_KEY  = 'openccloud_last_version';
 const GITHUB_REPO        = 'sebastianmiletic/opencloud';
 const GITHUB_BRANCH      = 'main';
-const IGNORE_PATTERNS    = [/^README/i, /^LICENSE/i, /^CHANGELOG/i, /^CONTRIBUTING/i, /^\.gitignore$/, /^\.env/, /^\.prettier/i, /^\.eslint/i, /^docs\//i, /^\.github\//i, /^screenshots\//i, /^assets\//i, /\.md$/i, /\.txt$/i, /\.log$/i, /\.png$/i, /\.jpg$/i, /\.svg$/i];
 
-function isIgnoredFile(filename) { return !filename || IGNORE_PATTERNS.some(pat => pat.test(filename)); }
-async function fetchLatestCommit() { const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/commits/${GITHUB_BRANCH}?per_page=1`, { cache: 'no-store' }); if (!res.ok) return null; return await res.json(); }
-async function fetchCommitDetails(sha) { const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/commits/${sha}`, { cache: 'no-store' }); if (!res.ok) return null; return await res.json(); }
+function cleanCommitMessage(raw) {
+  if (!raw) return 'General improvements and bug fixes.';
+  // Take only the first line (subject)
+  const firstLine = raw.split('\n')[0].trim();
+  if (!firstLine) return 'General improvements and bug fixes.';
+  // Remove conventional commit prefix (feat:, fix:, chore:, etc.)
+  const clean = firstLine.replace(/^[a-z]+(\([^)]+\))?!?:\s*/i, '').trim();
+  // Capitalize first letter
+  return clean.charAt(0).toUpperCase() + clean.slice(1);
+}
+
+async function fetchLatestCommit() {
+  try {
+    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/commits/${GITHUB_BRANCH}`, { cache: 'no-store' });
+    if (!res.ok) {
+      if (res.status === 403 || res.status === 429) {
+        return { error: 'rate_limit', message: 'GitHub API rate limit reached. Try again in a few minutes.' };
+      }
+      return { error: 'network', message: `Server error (${res.status}). Please try again later.` };
+    }
+    return await res.json();
+  } catch (err) {
+    return { error: 'network', message: 'Network error. Check your internet connection.' };
+  }
+}
 
 function openUpdateModal() {
   const updateModal          = document.getElementById('updateModal');
@@ -139,9 +160,11 @@ function openUpdateModal() {
     if (updateModalInstall) updateModalInstall.style.display = 'block';
     if (updateModalMsg) {
       const dateStr = _lastUpdateInfo.date ? new Date(_lastUpdateInfo.date).toLocaleString() : 'Just now';
-      updateModalMsg.innerHTML = `<strong style="color:var(--text-primary);display:block;margin-bottom:0.4rem;">${escapeHtml(_lastUpdateInfo.message)}</strong><span style="font-size:0.75rem;color:var(--text-muted);">by ${_lastUpdateInfo.author} · ${dateStr}</span>`;
+      updateModalMsg.innerHTML = `<div style="color:var(--text-primary);font-weight:600;margin-bottom:0.4rem;font-size:0.9375rem;">${escapeHtml(_lastUpdateInfo.message)}</div><div style="font-size:0.75rem;color:var(--text-muted);">by ${_lastUpdateInfo.author} · ${dateStr}</div>`;
     }
-    if (updateModalDetails) updateModalDetails.innerHTML = `<pre style="font-family:monospace;font-size:0.75rem;color:var(--text-secondary);white-space:pre-wrap;line-height:1.6;">${_lastUpdateInfo.files.map(f => `• ${f}`).join('\n')}</pre>`;
+    if (updateModalDetails) {
+      updateModalDetails.innerHTML = `<div style="font-size:0.8125rem;color:var(--text-secondary);line-height:1.5;">${escapeHtml(_lastUpdateInfo.description)}</div>`;
+    }
   }
 }
 
@@ -188,23 +211,75 @@ async function initAppContent() {
     updateCheckBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       accountDropdown?.classList.add('hidden');
-      _updateAvailable = false; _lastUpdateInfo = null;
+      _updateAvailable = false;
+      _lastUpdateInfo = null;
+
       const latest = await fetchLatestCommit();
-      if (latest?.sha) {
-        const localSha = localStorage.getItem(LOCAL_VERSION_KEY);
-        if (latest.sha !== localSha) {
-          const details = await fetchCommitDetails(latest.sha);
-          const meaningful = (details?.files || []).filter(f => !isIgnoredFile(f.filename));
-          if (meaningful.length > 0) {
-            _updateAvailable = true;
-            _lastUpdateInfo = { sha: latest.sha.slice(0, 7), message: latest.commit?.message || 'Update', author: latest.commit?.author?.name || 'Open Cloud', date: latest.commit?.committer?.date || '', files: meaningful.map(f => f.filename) };
-            if (updateBadge) updateBadge.textContent = 'New!';
-          } else {
-            localStorage.setItem(LOCAL_VERSION_KEY, latest.sha);
-            if (updateBadge) updateBadge.textContent = '';
-          }
-        }
+
+      // Handle API errors gracefully
+      if (latest?.error) {
+        _lastUpdateInfo = null;
+        _updateAvailable = false;
+        openUpdateModal();
+        showToast(latest.message, 'error');
+        return;
       }
+
+      if (!latest?.sha) {
+        _lastUpdateInfo = null;
+        _updateAvailable = false;
+        openUpdateModal();
+        showToast('Could not check for updates. Try again later.', 'error');
+        return;
+      }
+
+      const localSha = localStorage.getItem(LOCAL_VERSION_KEY);
+      if (latest.sha === localSha) {
+        // Already up to date
+        _updateAvailable = false;
+        _lastUpdateInfo = null;
+        if (updateBadge) updateBadge.textContent = '';
+        openUpdateModal();
+        return;
+      }
+
+      // Build a human-readable feature description from the commit
+      const rawMessage   = latest.commit?.message || '';
+      const featureDesc  = cleanCommitMessage(rawMessage);
+      const author       = latest.commit?.author?.name || 'Open Cloud';
+      const date         = latest.commit?.committer?.date || '';
+      const files        = (latest.files || []).map(f => f.filename).filter(Boolean);
+
+      // Only show update if there are actual code changes (not just docs/README)
+      const codeFiles    = files.filter(f => {
+        const name = f.toLowerCase();
+        return !name.startsWith('readme') && !name.startsWith('license') &&
+               !name.startsWith('docs/') && !name.startsWith('.github/') &&
+               !name.endsWith('.md') && !name.endsWith('.txt') &&
+               !name.endsWith('.log') && !name.endsWith('.png') &&
+               !name.endsWith('.jpg') && !name.endsWith('.svg');
+      });
+
+      if (codeFiles.length === 0) {
+        // No meaningful code changes — mark as up to date
+        localStorage.setItem(LOCAL_VERSION_KEY, latest.sha);
+        if (updateBadge) updateBadge.textContent = '';
+        _updateAvailable = false;
+        _lastUpdateInfo = null;
+        openUpdateModal();
+        return;
+      }
+
+      _updateAvailable = true;
+      _lastUpdateInfo = {
+        sha: latest.sha.slice(0, 7),
+        message: featureDesc,
+        description: rawMessage.split('\n').slice(1).join('\n').trim() || featureDesc,
+        author,
+        date,
+        files: codeFiles
+      };
+      if (updateBadge) updateBadge.textContent = 'New!';
       openUpdateModal();
     });
   }

@@ -81,33 +81,38 @@ export async function initStorage() {
     _cache.collection = (collection || []).filter(item => item && item.id && item.title && item.title !== 'Unknown');
   }
 
-  // Merge Supabase history with local backup metadata
-  let backup = [];
-  try {
-    const raw = localStorage.getItem('oc_history_backup');
-    if (raw) backup = JSON.parse(raw);
-  } catch (e) { /* ignore */ }
-  const backupMap = new Map();
-  (Array.isArray(backup) ? backup : []).forEach(b => {
-    if (b?.id) backupMap.set(`${b.id}::${b.media_type}`, b);
+  // Merge Supabase history with local cache, preserving rich metadata.
+  // Local cache has full poster/rating/year from TMDB; Supabase may strip these.
+  const localHistoryMap = new Map();
+  (_cache.history || []).forEach(h => {
+    if (h?.id) localHistoryMap.set(`${h.id}::${h.media_type}`, h);
   });
 
   if (history?.length > 0) {
+    const merged = [];
     const seen = new Set();
-    _cache.history = (history || []).map(h => {
+    (history || []).forEach(h => {
       const key = `${h.id}::${h.media_type}`;
+      if (seen.has(key)) return;
       seen.add(key);
-      const b = backupMap.get(key);
-      if (b) {
-        return {
-          ...h,
-          poster_path: h.poster_path || b.poster_path || null,
-          vote_average: h.vote_average != null ? h.vote_average : (b.vote_average || 0),
-          year: h.year || b.year || null
-        };
+      const local = localHistoryMap.get(key);
+      if (local) {
+        // Keep the richer metadata from local cache, but use the latest watched_at
+        const localDate = new Date(local.watched_at || 0);
+        const remoteDate = new Date(h.watched_at || 0);
+        merged.push({
+          ...local,
+          watched_at: remoteDate > localDate ? h.watched_at : local.watched_at,
+          season: h.season ?? local.season ?? null,
+          episode: h.episode ?? local.episode ?? null,
+          duration_watched: h.duration_watched || local.duration_watched || 0
+        });
+      } else {
+        // Item from another device — add it even if metadata is thin
+        merged.push(h);
       }
-      return h;
-    }).filter(h => !!h.id);
+    });
+    _cache.history = merged.filter(h => !!h.id);
   }
 
   if (progress && Object.keys(progress).length > 0) {
@@ -146,7 +151,7 @@ export async function addToUserCollection(item) {
     title: item.title || item.name || 'Unknown',
     year: item.year || (item.release_date || item.first_air_date || '').slice(0, 4) || null,
     poster_path: item.poster_path || null,
-    vote_average: item.vote_average || 0,
+    vote_average: item.vote_average != null ? item.vote_average : null,
     added_at: item.added_at || new Date().toISOString(),
     folder: item.folder || null
   };
@@ -208,7 +213,7 @@ export async function saveUserHistory(items) {
       episode: item.episode || null,
       duration_watched: item.duration_watched || 0,
       poster_path: item.poster_path || null,
-      vote_average: item.vote_average || 0,
+      vote_average: item.vote_average != null ? item.vote_average : null,
       year: item.year || null,
       watched_at: item.watched_at || new Date().toISOString()
     }));
@@ -248,7 +253,7 @@ export async function addToUserHistory(item) {
     episode: item.episode || null,
     duration_watched: item.duration_watched || 0,
     poster_path: item.poster_path || null,
-    vote_average: item.vote_average || 0,
+    vote_average: item.vote_average != null ? item.vote_average : null,
     year: item.year || (item.release_date || item.first_air_date || '').slice(0, 4) || null,
     watched_at: new Date().toISOString()
   };
