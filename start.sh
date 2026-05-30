@@ -102,6 +102,7 @@ EXT_DIR="$(cd "$(dirname "$0")" && pwd)/extension"
 launch_macos_chrome() {
     local app_name="$1"
     local profile_dir="$TMPDIR/opencloud-chrome"
+    rm -rf "$profile_dir"
     mkdir -p "$profile_dir"
     echo "🛡️  Auto-loading ad blocker via $app_name..."
     open -n -a "$app_name" --args \
