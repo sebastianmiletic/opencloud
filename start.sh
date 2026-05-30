@@ -94,65 +94,78 @@ fi
 echo "✅ Open Cloud is ready: $URL"
 
 # ── Auto-load AdTab Killer extension ──
-# Find Chrome / Chromium / Edge / Brave
-CHROME_BIN=""
-find_chrome() {
-    local candidates=(
-        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-        "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary"
-        "/Applications/Chromium.app/Contents/MacOS/Chromium"
-        "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
-        "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"
-        "/usr/bin/google-chrome"
-        "/usr/bin/chromium"
-        "/usr/bin/chromium-browser"
-        "/usr/bin/microsoft-edge"
-        "/usr/bin/brave"
-        "/usr/bin/brave-browser"
-        "google-chrome"
-        "chromium"
-        "chromium-browser"
-        "microsoft-edge"
-        "brave"
-        "brave-browser"
-    )
-    for c in "${candidates[@]}"; do
-        if [ -x "$c" ]; then
-            CHROME_BIN="$c"
-            return 0
-        elif command -v "$c" &> /dev/null; then
-            CHROME_BIN="$(command -v "$c")"
-            return 0
-        fi
-    done
-    return 1
-}
-
 EXT_DIR="$(cd "$(dirname "$0")" && pwd)/extension"
 
-if find_chrome && [ -d "$EXT_DIR" ] && [ -f "$EXT_DIR/manifest.json" ]; then
-    echo "🛡️  Auto-loading ad blocker extension..."
-    # --app opens a minimal Chrome window with no toolbar (looks like a native app)
-    # --load-extension silently installs the extension
-    # --disable-extensions-except ensures it stays loaded
-    nohup "$CHROME_BIN" \
+# Helper: launch Chrome on macOS via `open -n -a` (forces new instance, args actually work)
+launch_macos_chrome() {
+    local app_name="$1"
+    echo "🛡️  Auto-loading ad blocker via $app_name..."
+    # -n = new instance even if already running
+    # --args = everything after this goes to Chrome
+    open -n -a "$app_name" --args \
         --app="$URL" \
         --load-extension="$EXT_DIR" \
-        --disable-extensions-except="$EXT_DIR" \
+        --no-first-run \
+        --no-default-browser-check \
+        --disable-background-timer-throttling \
+        --disable-renderer-backgrounding &
+    echo "✅ Open Cloud launched with ad blocker enabled"
+    echo "   (The extension is auto-loaded — no manual install needed)"
+}
+
+# Helper: launch Chrome binary directly (Linux / manual path)
+launch_linux_chrome() {
+    local bin="$1"
+    echo "🛡️  Auto-loading ad blocker via $(basename "$bin")..."
+    nohup "$bin" \
+        --app="$URL" \
+        --load-extension="$EXT_DIR" \
         --no-first-run \
         --no-default-browser-check \
         > /dev/null 2>&1 &
     echo "✅ Open Cloud launched with ad blocker enabled"
     echo "   (The extension is auto-loaded — no manual install needed)"
-elif command -v open &> /dev/null; then
-    echo "⚠️  Could not find Chrome — opening with default browser"
-    echo "   (Ad blocker extension will NOT auto-load. Install it manually from chrome://extensions/)"
-    open "$URL"
-elif command -v xdg-open &> /dev/null; then
-    echo "⚠️  Could not find Chrome — opening with default browser"
-    echo "   (Ad blocker extension will NOT auto-load. Install it manually from chrome://extensions/)"
-    xdg-open "$URL"
+}
+
+# Try macOS app bundles first (most reliable)
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    if [ -d "/Applications/Google Chrome.app" ]; then
+        launch_macos_chrome "Google Chrome"
+    elif [ -d "/Applications/Google Chrome Canary.app" ]; then
+        launch_macos_chrome "Google Chrome Canary"
+    elif [ -d "/Applications/Chromium.app" ]; then
+        launch_macos_chrome "Chromium"
+    elif [ -d "/Applications/Microsoft Edge.app" ]; then
+        launch_macos_chrome "Microsoft Edge"
+    elif [ -d "/Applications/Brave Browser.app" ]; then
+        launch_macos_chrome "Brave Browser"
+    elif command -v open &> /dev/null; then
+        echo "⚠️  Chrome not found in /Applications — opening default browser"
+        echo "   (Ad blocker extension will NOT auto-load. Install it manually from chrome://extensions/)"
+        open "$URL"
+    else
+        echo "Open your browser and go to: $URL"
+        echo "   Tip: Install the extension/ folder as an unpacked Chrome extension for ad blocking"
+    fi
+
+# Linux / Windows WSL: find binary in PATH
 else
-    echo "Open your browser and go to: $URL"
-    echo "   Tip: Install the extension/ folder as an unpacked Chrome extension for ad blocking"
+    CHROME_BIN=""
+    for c in google-chrome chromium chromium-browser microsoft-edge brave brave-browser; do
+        if command -v "$c" &> /dev/null; then
+            CHROME_BIN="$(command -v "$c")"
+            break
+        fi
+    done
+
+    if [ -n "$CHROME_BIN" ] && [ -d "$EXT_DIR" ] && [ -f "$EXT_DIR/manifest.json" ]; then
+        launch_linux_chrome "$CHROME_BIN"
+    elif command -v xdg-open &> /dev/null; then
+        echo "⚠️  Chrome not found in PATH — opening default browser"
+        echo "   (Ad blocker extension will NOT auto-load. Install it manually from chrome://extensions/)"
+        xdg-open "$URL"
+    else
+        echo "Open your browser and go to: $URL"
+        echo "   Tip: Install the extension/ folder as an unpacked Chrome extension for ad blocking"
+    fi
 fi
