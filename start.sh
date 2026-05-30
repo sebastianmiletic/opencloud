@@ -96,13 +96,16 @@ echo "✅ Open Cloud is ready: $URL"
 # ── Auto-load AdTab Killer extension ──
 EXT_DIR="$(cd "$(dirname "$0")" && pwd)/extension"
 
-# Helper: launch Chrome on macOS via `open -n -a` (forces new instance, args actually work)
+# Helper: launch Chrome on macOS via `open -n -a` + separate user-data-dir
+# The --user-data-dir is the ONLY way to bypass Chrome's singleton lock on macOS.
+# Without it, Chrome hands off the URL to the existing instance and opens a tab.
 launch_macos_chrome() {
     local app_name="$1"
+    local profile_dir="$TMPDIR/opencloud-chrome"
+    mkdir -p "$profile_dir"
     echo "🛡️  Auto-loading ad blocker via $app_name..."
-    # -n = new instance even if already running
-    # --args = everything after this goes to Chrome
     open -n -a "$app_name" --args \
+        --user-data-dir="$profile_dir" \
         --app="$URL" \
         --load-extension="$EXT_DIR" \
         --no-first-run \
@@ -116,8 +119,11 @@ launch_macos_chrome() {
 # Helper: launch Chrome binary directly (Linux / manual path)
 launch_linux_chrome() {
     local bin="$1"
+    local profile_dir="/tmp/opencloud-chrome"
+    mkdir -p "$profile_dir"
     echo "🛡️  Auto-loading ad blocker via $(basename "$bin")..."
     nohup "$bin" \
+        --user-data-dir="$profile_dir" \
         --app="$URL" \
         --load-extension="$EXT_DIR" \
         --no-first-run \
