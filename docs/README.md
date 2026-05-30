@@ -30,7 +30,7 @@ cp .env.example .env
 ./start.sh
 ```
 
-The app runs at `http://localhost:8080`.
+The app runs at `http://localhost:8765`.
 
 ## API Keys
 

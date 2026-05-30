@@ -24,7 +24,7 @@ A black-and-white themed streaming tracker web app with TMDB/OMDB integration, i
    # Or manually: python3 server.py
    ```
 
-4. **Open** the printed URL in your browser (usually `http://localhost:8080`)
+4. **Open** the printed URL in your browser (usually `http://localhost:8765`)
 
 ### Windows
 
@@ -38,7 +38,7 @@ A black-and-white themed streaming tracker web app with TMDB/OMDB integration, i
    - Open Command Prompt or PowerShell in the folder
    - Run: `python server.py`
 
-4. **Open** `http://localhost:8080` in your browser
+4. **Open** `http://localhost:8765` in your browser
 
 > **Note:** API keys are bundled with the ZIP — no configuration required.
 

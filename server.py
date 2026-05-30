@@ -6,7 +6,7 @@ import socket
 import socketserver
 import time
 
-PORT        = 8080
+PORT        = 8765
 
 # Load environment variables from .env file
 def load_env():
@@ -58,7 +58,7 @@ class ReuseServer(socketserver.TCPServer):
         self.server_address = self.socket.getsockname()
         self.socket.listen(self.request_queue_size)
 
-# Pin to port 8080 for stable localStorage. Retry a few times in case of stale bind.
+# Pin to port 8765 for stable localStorage. Retry a few times in case of stale bind.
 # If still busy, fall back to a free port so the app always starts.
 httpd = None
 chosen_port = None

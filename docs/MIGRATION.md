@@ -22,4 +22,4 @@ begin
 end $$;
 ```
 
-After running this, reload `http://localhost:8080` and history items will persist with posters, ratings, and years.
+After running this, reload `http://localhost:8765` and history items will persist with posters, ratings, and years.

@@ -3,7 +3,7 @@
 
 cd "$(dirname "$0")"
 
-# ── Free port 8080 aggressively ──
+# ── Free port 8765 aggressively ──
 echo "Preparing Open Cloud..."
 
 # 1. Try to kill any python process that looks like our server
@@ -13,14 +13,14 @@ if [ -n "$STALE_PIDS" ]; then
     sleep 1
 fi
 
-# 2. Use lsof to kill whatever is sitting on port 8080 (even root-owned)
+# 2. Use lsof to kill whatever is sitting on port 8765 (even root-owned)
 if command -v lsof &> /dev/null; then
-    PID_ON_PORT=$(lsof -t -i :8080 2>/dev/null)
+    PID_ON_PORT=$(lsof -t -i :8765 2>/dev/null)
     if [ -n "$PID_ON_PORT" ]; then
         kill -9 $PID_ON_PORT 2>/dev/null
         sleep 1
         # If still there, try sudo (may prompt once)
-        PID_ON_PORT=$(lsof -t -i :8080 2>/dev/null)
+        PID_ON_PORT=$(lsof -t -i :8765 2>/dev/null)
         if [ -n "$PID_ON_PORT" ]; then
             sudo kill -9 $PID_ON_PORT 2>/dev/null
             sleep 1
@@ -87,8 +87,8 @@ if [ "$READY" -ne 1 ]; then
 fi
 
 URL="http://localhost:$PORT"
-if [ "$PORT" != "8080" ]; then
-    echo "⚠️  Port 8080 was busy. Using fallback port $PORT."
+if [ "$PORT" != "8765" ]; then
+    echo "⚠️  Port 8765 was busy. Using fallback port $PORT."
     echo "   Your data is still safe, but bookmarks should point to $URL"
 fi
 echo "✅ Open Cloud is ready: $URL"

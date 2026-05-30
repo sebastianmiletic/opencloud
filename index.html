@@ -31,7 +31,7 @@
     </div>
     <div id="moduleErrorActions" style="display:flex;gap:0.75rem;flex-wrap:wrap;justify-content:center;">
       <button id="moduleErrorRetry" class="btn btn-primary" onclick="location.reload()" style="display:none;">Reload Page</button>
-      <a id="moduleErrorLocalhost" class="btn btn-primary" href="http://localhost:8080" style="display:none;text-decoration:none;">Open localhost:8080</a>
+      <a id="moduleErrorLocalhost" class="btn btn-primary" href="http://localhost:8765" style="display:none;text-decoration:none;">Open localhost:8765</a>
     </div>
   </div>
   <script>
@@ -45,11 +45,11 @@
 
       if (isFile) {
         var xhr = new XMLHttpRequest();
-        xhr.open('GET', 'http://localhost:8080/', true);
+        xhr.open('GET', 'http://localhost:8765/', true);
         xhr.timeout = 1500;
         xhr.onreadystatechange = function() {
           if (xhr.readyState === 4 && xhr.status === 200) {
-            location.replace('http://localhost:8080/');
+            location.replace('http://localhost:8765/');
           }
         };
         xhr.ontimeout = xhr.onerror = function() {

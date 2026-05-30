@@ -63,8 +63,8 @@ if "%READY%"=="0" (
 )
 
 :server_ready
-if not "%PORT%"=="8080" (
-    echo Port 8080 was busy. Using fallback port %PORT%.
+if not "%PORT%"=="8765" (
+    echo Port 8765 was busy. Using fallback port %PORT%.
     echo Your data is still safe, but bookmarks should point to http://localhost:%PORT%/
 )
 echo Open Cloud is ready: http://localhost:%PORT%/

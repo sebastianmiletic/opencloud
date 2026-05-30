@@ -41,14 +41,14 @@ The `.env` file is `.gitignore`'d and will never be committed.
 ```
 
 This will:
-1. Start a Python HTTP server on port 8080
-2. Open your default browser at `http://localhost:8080`
+1. Start a Python HTTP server on port 8765
+2. Open your default browser at `http://localhost:8765`
 
 **Or manually:**
 
 ```bash
 python3 server.py
-# Then open http://localhost:8080 in your browser
+# Then open http://localhost:8765 in your browser
 ```
 
 ## 4. GitHub Setup
@@ -69,14 +69,14 @@ The `.gitignore` file ensures:
 ## Important Notes
 
 - **Never commit `.env`** — it contains your private API keys
-- **Always use `http://localhost:8080`** — opening `index.html` directly via `file://` will not work because browsers block ES6 modules on local files
-- The app includes an auto-redirect: if you accidentally open via `file://`, it will try to redirect to `localhost:8080`
+- **Always use `http://localhost:8765`** — opening `index.html` directly via `file://` will not work because browsers block ES6 modules on local files
+- The app includes an auto-redirect: if you accidentally open via `file://`, it will try to redirect to `localhost:8765`
 
 ## Stopping the Server
 
 ```bash
-# Find and kill the process on port 8080
-lsof -ti :8080 | xargs kill -9
+# Find and kill the process on port 8765
+lsof -ti :8765 | xargs kill -9
 ```
 
 Or press `Ctrl+C` if running in foreground.
@@ -85,8 +85,8 @@ Or press `Ctrl+C` if running in foreground.
 
 | Issue | Solution |
 |-------|----------|
-| "Cannot load app from file://" | Use `http://localhost:8080`, not the file directly |
+| "Cannot load app from file://" | Use `http://localhost:8765`, not the file directly |
 | "App failed to load" | Check browser console for JS errors; hard-refresh with `Cmd+Shift+R` |
-| Server won't start (port in use) | Kill old process: `lsof -ti :8080 \| xargs kill -9` |
+| Server won't start (port in use) | Kill old process: `lsof -ti :8765 \| xargs kill -9` |
 | No movies loading | Check `.env` has valid API keys; check browser console for fetch errors |
 | Collection button not working | Hard-refresh the page to clear cached JS |
