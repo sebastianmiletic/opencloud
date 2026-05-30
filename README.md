@@ -1,6 +1,6 @@
 # Open Cloud
 
-A black-and-white themed streaming tracker web app with TMDB/OMDB integration, inline video player, Supabase authentication, Netflix-style animations, and a built-in ad/popup blocker. Track what you watch, save your favorites, and resume where you left off.
+A black-and-white themed streaming tracker web app with TMDB/OMDB integration, inline video player, Supabase authentication, Netflix-style animations, and an auto-loaded Chrome extension for bulletproof ad/popup blocking. Track what you watch, save your favorites, and resume where you left off.
 
 ---
 
@@ -41,6 +41,7 @@ A black-and-white themed streaming tracker web app with TMDB/OMDB integration, i
 4. **Open** `http://localhost:8765` in your browser
 
 > **Note:** API keys are bundled with the ZIP — no configuration required.
+> **Note for Chrome users:** If Chrome is installed, `start.sh` auto-loads the included ad-blocker extension silently. No manual install needed.
 
 ---
 
@@ -107,6 +108,10 @@ Open Cloud/
 │   ├── utils.js        # Toast, scroll lock, confirm dialog
 │   ├── accounts.js     # User avatar/name initializer
 │   └── supabase.js     # Watch sessions and stats aggregation
+├── extension/          # Chrome extension — auto-loaded by start.sh on launch
+│   ├── manifest.json
+│   ├── js/
+│   └── ...
 ├── docs/
 │   ├── supabase_schema.sql   # SQL for creating Supabase tables
 │   ├── SUPABASE_SETUP.md     # Step-by-step Supabase setup guide
@@ -122,7 +127,7 @@ Open Cloud/
 - **Search** — Movies and TV shows via TMDB API
 - **Inline Player** — Watch content with 7 different providers
 - **Netflix UI** — Splash screen, hero carousel, smooth animations
-- **Ad/Popup Blocker** — Built-in blocker intercepts popups, new tabs, and malicious links before they open
+- **Ad/Popup Blocker** — Chrome extension auto-loaded by `start.sh` kills popups at the browser level before they appear
 - **Continue Watching** — Auto-saves TV progress by season/episode
 - **History** — Auto-tracks every movie and show you open in the player, with poster, rating, and year
 - **Collections** — Save items and organize with folders

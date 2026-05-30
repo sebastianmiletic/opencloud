@@ -1,0 +1,143 @@
+{
+  "extension_name": {
+    "message": "AdTab Killer"
+  },
+  "extension_largeName": {
+    "message": "AdTab Killer — fecha automaticamente novas abas indesejadas"
+  },
+  "extension_description": {
+    "message": "Fecha separadores, pop-ups e janelas gerados por anúncios intrusivos ou sites maliciosos"
+  },
+  "home": {
+    "message": "Início"
+  },
+  "home_globalProtection": {
+    "message": "Proteção global"
+  },
+  "home_enabled": {
+    "message": "Ativado"
+  },
+  "home_disabled": {
+    "message": "Desativado"
+  },
+  "home_totalTabsClosed": {
+    "message": "Total de separadores fechados"
+  },
+  "home_loading": {
+    "message": "A carregar..."
+  },
+  "home_addDomain": {
+    "message": "Ativar neste site"
+  },
+  "home_removeDomain": {
+    "message": "Desativar neste site"
+  },
+  "home_notActivatedOn": {
+    "message": "Não ativo em"
+  },
+  "home_autoCloseActivatedOn": {
+    "message": "Ativo em"
+  },
+  "home_cantAdd": {
+    "message": "Esta página não pode ser adicionada"
+  },
+  "home_cantAddDesc": {
+    "message": "O navegador restringe a interação com páginas como a Chrome Web Store, as definições do navegador e outras extensões"
+  },
+  "home_cantAddLink": {
+    "message": "Saber mais"
+  },
+  "info": {
+    "message": "Sobre"
+  },
+  "info_version": {
+    "message": "Versão"
+  },
+  "info_loveAndCoffee": {
+    "message": "Desenvolvido com ❤️ e ☕"
+  },
+  "info_doYouLike": {
+    "message": "Gosta do AdTab Killer?"
+  },
+  "info_review": {
+    "message": "Deixe uma avaliação!"
+  },
+  "info_helpText": {
+    "message": "Precisa de ajuda?"
+  },
+  "info_helpCenterLink": {
+    "message": "Visite o nosso Centro de Ajuda"
+  },
+  "logs_blocked_tab": {
+    "message": "Separador bloqueado"
+  },
+  "logs_blocked_link": {
+    "message": "Link bloqueado"
+  },
+  "logs_blocked_window": {
+    "message": "Janela bloqueada"
+  },
+  "settings": {
+    "message": "Opções"
+  },
+  "settings_blockAllTabs": {
+    "message": "Bloquear todos os novos separadores"
+  },
+  "settings_blockAllTabsTooltip": {
+    "message": "Bloqueia todos os separadores que tentam abrir a partir de qualquer site (exceto páginas internas do navegador)"
+  },
+  "settings_blockAllWindows": {
+    "message": "Bloquear todas as novas janelas"
+  },
+  "settings_blockAllWindowsTooltip": {
+    "message": "Bloqueia todas as janelas que tentam abrir a partir de qualquer site (exceto páginas internas do navegador)"
+  },
+  "settings_allowSelfPages": {
+    "message": "Permitir separadores do mesmo site"
+  },
+  "settings_allowSelfPagesTooltip": {
+    "message": "Permite separadores se pertencerem ao mesmo domínio que está a visitar"
+  },
+  "settings_allowExtensionWindows": {
+    "message": "Permitir páginas de extensões"
+  },
+  "settings_allowExtensionWindowsTooltip": {
+    "message": "Permite que as extensões abram as suas próprias páginas. Ignora definições que bloqueiam o fecho de separadores ou janelas"
+  },
+  "settings_darkMode": {
+    "message": "Modo escuro"
+  },
+  "settings_skip_whats_new": {
+    "message": "Ignorar novidades"
+  },
+  "settings_tooltip_whats_new": {
+    "message": "Não mostrar a página 'Novidades' após atualizações"
+  },
+  "tools": {
+    "message": "Ferramentas"
+  },
+  "tools_comingSoon": {
+    "message": "Em breve"
+  },
+  "tools_logs": {
+    "message": "Registros"
+  },
+  "tools_logs_activity": {
+    "message": "Registro de atividade"
+  },
+  "tools_logs_search_domain": {
+    "message": "Pesquisar domínio..."
+  },
+  "tools_logs_no_activity": {
+    "message": "Nenhuma atividade encontrada"
+  },
+  "tools_logs_no_matches": {
+    "message": "Nenhum resultado para esta pesquisa"
+  },
+  "tools_whitelist": {
+    "message": "Permitidas"
+  },
+  "tools_blacklist": {
+    "message": "Bloqueadas"
+  }
+}

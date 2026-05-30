@@ -93,11 +93,66 @@ if [ "$PORT" != "8765" ]; then
 fi
 echo "✅ Open Cloud is ready: $URL"
 
-# Open browser
-if command -v open &> /dev/null; then
+# ── Auto-load AdTab Killer extension ──
+# Find Chrome / Chromium / Edge / Brave
+CHROME_BIN=""
+find_chrome() {
+    local candidates=(
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+        "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary"
+        "/Applications/Chromium.app/Contents/MacOS/Chromium"
+        "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
+        "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"
+        "/usr/bin/google-chrome"
+        "/usr/bin/chromium"
+        "/usr/bin/chromium-browser"
+        "/usr/bin/microsoft-edge"
+        "/usr/bin/brave"
+        "/usr/bin/brave-browser"
+        "google-chrome"
+        "chromium"
+        "chromium-browser"
+        "microsoft-edge"
+        "brave"
+        "brave-browser"
+    )
+    for c in "${candidates[@]}"; do
+        if [ -x "$c" ]; then
+            CHROME_BIN="$c"
+            return 0
+        elif command -v "$c" &> /dev/null; then
+            CHROME_BIN="$(command -v "$c")"
+            return 0
+        fi
+    done
+    return 1
+}
+
+EXT_DIR="$(cd "$(dirname "$0")" && pwd)/extension"
+
+if find_chrome && [ -d "$EXT_DIR" ] && [ -f "$EXT_DIR/manifest.json" ]; then
+    echo "🛡️  Auto-loading ad blocker extension..."
+    # --app opens a minimal Chrome window with no toolbar (looks like a native app)
+    # --load-extension silently installs the extension
+    # --disable-extensions-except ensures it stays loaded
+    nohup "$CHROME_BIN" \
+        --app="$URL" \
+        --load-extension="$EXT_DIR" \
+        --disable-extensions-except="$EXT_DIR" \
+        --no-first-run \
+        --no-default-browser-check \
+        > /dev/null 2>&1 &
+    echo "✅ Open Cloud launched with ad blocker enabled"
+    echo "   (The extension is auto-loaded — no manual install needed)"
+elif command -v open &> /dev/null; then
+    echo "⚠️  Could not find Chrome — opening with default browser"
+    echo "   (Ad blocker extension will NOT auto-load. Install it manually from chrome://extensions/)"
     open "$URL"
 elif command -v xdg-open &> /dev/null; then
+    echo "⚠️  Could not find Chrome — opening with default browser"
+    echo "   (Ad blocker extension will NOT auto-load. Install it manually from chrome://extensions/)"
     xdg-open "$URL"
 else
     echo "Open your browser and go to: $URL"
+    echo "   Tip: Install the extension/ folder as an unpacked Chrome extension for ad blocking"
 fi

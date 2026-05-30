@@ -1,0 +1,143 @@
+{
+  "extension_name": {
+    "message": "AdTab Killer"
+  },
+  "extension_largeName": {
+    "message": "AdTab Killer — unerwünschte neue Tabs automatisch schließen"
+  },
+  "extension_description": {
+    "message": "Schließt Tabs, Pop-ups und Fenster, die von aufdringlicher Werbung oder schädlichen Seiten erzeugt werden"
+  },
+  "home": {
+    "message": "Start"
+  },
+  "home_globalProtection": {
+    "message": "Globaler Schutz"
+  },
+  "home_enabled": {
+    "message": "Aktiviert"
+  },
+  "home_disabled": {
+    "message": "Deaktiviert"
+  },
+  "home_totalTabsClosed": {
+    "message": "Insgesamt geschlossene Tabs"
+  },
+  "home_loading": {
+    "message": "Laden..."
+  },
+  "home_addDomain": {
+    "message": "Auf dieser Seite aktivieren"
+  },
+  "home_removeDomain": {
+    "message": "Auf dieser Seite deaktivieren"
+  },
+  "home_notActivatedOn": {
+    "message": "Nicht aktiv auf"
+  },
+  "home_autoCloseActivatedOn": {
+    "message": "Aktiv auf"
+  },
+  "home_cantAdd": {
+    "message": "Diese Seite kann nicht hinzugefügt werden"
+  },
+  "home_cantAddDesc": {
+    "message": "Der Browser schränkt die Interaktion mit Seiten wie dem Chrome Web Store, den Browsereinstellungen und anderen Erweiterungen ein"
+  },
+  "home_cantAddLink": {
+    "message": "Mehr erfahren"
+  },
+  "info": {
+    "message": "Über"
+  },
+  "info_version": {
+    "message": "Version"
+  },
+  "info_loveAndCoffee": {
+    "message": "Entwickelt mit ❤️ und ☕"
+  },
+  "info_doYouLike": {
+    "message": "Gefällt Ihnen AdTab Killer?"
+  },
+  "info_review": {
+    "message": "Hinterlassen Sie eine Bewertung!"
+  },
+  "info_helpText": {
+    "message": "Brauchen Sie Hilfe?"
+  },
+  "info_helpCenterLink": {
+    "message": "Besuchen Sie unser Hilfezentrum"
+  },
+  "logs_blocked_tab": {
+    "message": "Blockierter Tab"
+  },
+  "logs_blocked_link": {
+    "message": "Blockierter Link"
+  },
+  "logs_blocked_window": {
+    "message": "Blockiertes Fenster"
+  },
+  "settings": {
+    "message": "Optionen"
+  },
+  "settings_blockAllTabs": {
+    "message": "Alle neuen Tabs blockieren"
+  },
+  "settings_blockAllTabsTooltip": {
+    "message": "Blockiert alle Tabs, die von jeder Website geöffnet werden (außer internen Browserseiten)"
+  },
+  "settings_blockAllWindows": {
+    "message": "Alle neuen Fenster blockieren"
+  },
+  "settings_blockAllWindowsTooltip": {
+    "message": "Blockiert alle Fenster, die von jeder Website geöffnet werden (außer internen Browserseiten)"
+  },
+  "settings_allowSelfPages": {
+    "message": "Tabs derselben Website erlauben"
+  },
+  "settings_allowSelfPagesTooltip": {
+    "message": "Erlaubt Tabs, wenn sie zur gleichen Domain gehören, die Sie gerade besuchen"
+  },
+  "settings_allowExtensionWindows": {
+    "message": "Erweiterungsseiten erlauben"
+  },
+  "settings_allowExtensionWindowsTooltip": {
+    "message": "Erlaubt Erweiterungen, ihre eigenen Seiten zu öffnen. Ignoriert Einstellungen, die das Schließen von Tabs oder Fenstern blockieren"
+  },
+  "settings_darkMode": {
+    "message": "Dunkelmodus"
+  },
+  "settings_skip_whats_new": {
+    "message": "Neuigkeiten überspringen"
+  },
+  "settings_tooltip_whats_new": {
+    "message": "Nach Updates die 'Neuigkeiten'-Seite nicht anzeigen"
+  },
+  "tools": {
+    "message": "Werkzeuge"
+  },
+  "tools_comingSoon": {
+    "message": "Demnächst verfügbar"
+  },
+  "tools_logs": {
+    "message": "Protokolle"
+  },
+  "tools_logs_activity": {
+    "message": "Aktivitätsprotokoll"
+  },
+  "tools_logs_search_domain": {
+    "message": "Domain suchen..."
+  },
+  "tools_logs_no_activity": {
+    "message": "Keine Aktivität gefunden"
+  },
+  "tools_logs_no_matches": {
+    "message": "Keine Treffer für diese Suche"
+  },
+  "tools_whitelist": {
+    "message": "Erlaubt"
+  },
+  "tools_blacklist": {
+    "message": "Blockiert"
+  }
+}
