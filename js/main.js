@@ -119,12 +119,18 @@ const GITHUB_BRANCH      = 'main';
 function cleanCommitMessage(raw) {
   if (!raw) return 'General improvements and bug fixes.';
   // Take only the first line (subject)
-  const firstLine = raw.split('\n')[0].trim();
+  let firstLine = raw.split('\n')[0].trim();
   if (!firstLine) return 'General improvements and bug fixes.';
   // Remove conventional commit prefix (feat:, fix:, chore:, etc.)
-  const clean = firstLine.replace(/^[a-z]+(\([^)]+\))?!?:\s*/i, '').trim();
+  firstLine = firstLine.replace(/^[a-z]+(\([^)]+\))?!?:\s*/i, '').trim();
   // Capitalize first letter
-  return clean.charAt(0).toUpperCase() + clean.slice(1);
+  firstLine = firstLine.charAt(0).toUpperCase() + firstLine.slice(1);
+  // Trim to ~12 words for a clean one-liner
+  const words = firstLine.split(/\s+/);
+  if (words.length > 12) {
+    return words.slice(0, 12).join(' ') + '...';
+  }
+  return firstLine;
 }
 
 async function fetchLatestCommit() {
@@ -159,12 +165,9 @@ function openUpdateModal() {
     if (updateModalUpToDate) updateModalUpToDate.style.display = 'none';
     if (updateModalInstall) updateModalInstall.style.display = 'block';
     if (updateModalMsg) {
-      const dateStr = _lastUpdateInfo.date ? new Date(_lastUpdateInfo.date).toLocaleString() : 'Just now';
-      updateModalMsg.innerHTML = `<div style="color:var(--text-primary);font-weight:600;margin-bottom:0.4rem;font-size:0.9375rem;">${escapeHtml(_lastUpdateInfo.message)}</div><div style="font-size:0.75rem;color:var(--text-muted);">by ${_lastUpdateInfo.author} · ${dateStr}</div>`;
+      updateModalMsg.innerHTML = `<div style="color:var(--text-primary);font-weight:600;font-size:0.9375rem;">${escapeHtml(_lastUpdateInfo.message)}</div>`;
     }
-    if (updateModalDetails) {
-      updateModalDetails.innerHTML = `<div style="font-size:0.8125rem;color:var(--text-secondary);line-height:1.5;">${escapeHtml(_lastUpdateInfo.description)}</div>`;
-    }
+    if (updateModalDetails) updateModalDetails.innerHTML = '';
   }
 }
 
@@ -246,8 +249,6 @@ async function initAppContent() {
       // Build a human-readable feature description from the commit
       const rawMessage   = latest.commit?.message || '';
       const featureDesc  = cleanCommitMessage(rawMessage);
-      const author       = latest.commit?.author?.name || 'Open Cloud';
-      const date         = latest.commit?.committer?.date || '';
       const files        = (latest.files || []).map(f => f.filename).filter(Boolean);
 
       // Only show update if there are actual code changes (not just docs/README)
@@ -271,14 +272,7 @@ async function initAppContent() {
       }
 
       _updateAvailable = true;
-      _lastUpdateInfo = {
-        sha: latest.sha.slice(0, 7),
-        message: featureDesc,
-        description: rawMessage.split('\n').slice(1).join('\n').trim() || featureDesc,
-        author,
-        date,
-        files: codeFiles
-      };
+      _lastUpdateInfo = { message: featureDesc };
       if (updateBadge) updateBadge.textContent = 'New!';
       openUpdateModal();
     });
