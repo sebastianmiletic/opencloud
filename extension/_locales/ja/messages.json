@@ -1,0 +1,143 @@
+{
+  "extension_name": {
+    "message": "AdTab Killer"
+  },
+  "extension_largeName": {
+    "message": "AdTab Killer — 不要な新しいタブを自動で閉じます"
+  },
+  "extension_description": {
+    "message": "迷惑な広告や悪意のあるサイトによって生成されたタブ、ポップアップ、ウィンドウを閉じます"
+  },
+  "home": {
+    "message": "ホーム"
+  },
+  "home_globalProtection": {
+    "message": "グローバル保護"
+  },
+  "home_enabled": {
+    "message": "有効"
+  },
+  "home_disabled": {
+    "message": "無効"
+  },
+  "home_totalTabsClosed": {
+    "message": "閉じたタブの合計"
+  },
+  "home_loading": {
+    "message": "読み込み中..."
+  },
+  "home_addDomain": {
+    "message": "このサイトで有効にする"
+  },
+  "home_removeDomain": {
+    "message": "このサイトで無効にする"
+  },
+  "home_notActivatedOn": {
+    "message": "無効"
+  },
+  "home_autoCloseActivatedOn": {
+    "message": "有効"
+  },
+  "home_cantAdd": {
+    "message": "このページは追加できません"
+  },
+  "home_cantAddDesc": {
+    "message": "ブラウザは、Chrome Web Store、ブラウザ設定、他の拡張機能などのページとの操作を制限しています"
+  },
+  "home_cantAddLink": {
+    "message": "詳細を見る"
+  },
+  "info": {
+    "message": "について"
+  },
+  "info_version": {
+    "message": "バージョン"
+  },
+  "info_loveAndCoffee": {
+    "message": "❤️ と ☕ で開発"
+  },
+  "info_doYouLike": {
+    "message": "AdTab Killer は気に入りましたか？"
+  },
+  "info_review": {
+    "message": "レビューを残してください！"
+  },
+  "info_helpText": {
+    "message": "サポートが必要ですか？"
+  },
+  "info_helpCenterLink": {
+    "message": "ヘルプセンターを見る"
+  },
+  "logs_blocked_tab": {
+    "message": "タブがブロックされました"
+  },
+  "logs_blocked_link": {
+    "message": "リンクがブロックされました"
+  },
+  "logs_blocked_window": {
+    "message": "ウィンドウがブロックされました"
+  },
+  "settings": {
+    "message": "設定"
+  },
+  "settings_blockAllTabs": {
+    "message": "すべての新しいタブをブロック"
+  },
+  "settings_blockAllTabsTooltip": {
+    "message": "すべてのウェブサイトから開こうとするタブをブロックします（内部ページを除く）"
+  },
+  "settings_blockAllWindows": {
+    "message": "すべての新しいウィンドウをブロック"
+  },
+  "settings_blockAllWindowsTooltip": {
+    "message": "すべてのウェブサイトから開こうとするウィンドウをブロックします（内部ページを除く）"
+  },
+  "settings_allowSelfPages": {
+    "message": "同じサイトのタブを許可"
+  },
+  "settings_allowSelfPagesTooltip": {
+    "message": "閲覧中のドメインと同じ場合にタブを許可します"
+  },
+  "settings_allowExtensionWindows": {
+    "message": "拡張機能ページを許可"
+  },
+  "settings_allowExtensionWindowsTooltip": {
+    "message": "拡張機能が独自のページを開くことを許可します。タブやウィンドウの閉鎖をブロックする設定を無視します"
+  },
+  "settings_darkMode": {
+    "message": "ダークモード"
+  },
+  "settings_skip_whats_new": {
+    "message": "新着情報をスキップ"
+  },
+  "settings_tooltip_whats_new": {
+    "message": "更新後に「新着情報」ページを表示しない"
+  },
+  "tools": {
+    "message": "ツール"
+  },
+  "tools_comingSoon": {
+    "message": "近日公開"
+  },
+  "tools_logs": {
+    "message": "ログ"
+  },
+  "tools_logs_activity": {
+    "message": "アクティビティログ"
+  },
+  "tools_logs_search_domain": {
+    "message": "ドメインを検索..."
+  },
+  "tools_logs_no_activity": {
+    "message": "アクティビティが見つかりません"
+  },
+  "tools_logs_no_matches": {
+    "message": "この検索に一致する結果はありません"
+  },
+  "tools_whitelist": {
+    "message": "許可"
+  },
+  "tools_blacklist": {
+    "message": "ブロック"
+  }
+}

@@ -1,0 +1,143 @@
+{
+  "extension_name": {
+    "message": "AdTab Killer"
+  },
+  "extension_largeName": {
+    "message": "AdTab Killer — ferme automatiquement les nouveaux onglets indésirables"
+  },
+  "extension_description": {
+    "message": "Ferme les onglets, pop-ups et fenêtres générés par des publicités intrusives ou des sites malveillants"
+  },
+  "home": {
+    "message": "Accueil"
+  },
+  "home_globalProtection": {
+    "message": "Protection globale"
+  },
+  "home_enabled": {
+    "message": "Activé"
+  },
+  "home_disabled": {
+    "message": "Désactivé"
+  },
+  "home_totalTabsClosed": {
+    "message": "Total des onglets fermés"
+  },
+  "home_loading": {
+    "message": "Chargement..."
+  },
+  "home_addDomain": {
+    "message": "Activer sur ce site"
+  },
+  "home_removeDomain": {
+    "message": "Désactiver sur ce site"
+  },
+  "home_notActivatedOn": {
+    "message": "Non actif sur"
+  },
+  "home_autoCloseActivatedOn": {
+    "message": "Actif sur"
+  },
+  "home_cantAdd": {
+    "message": "Cette page ne peut pas être ajoutée"
+  },
+  "home_cantAddDesc": {
+    "message": "Le navigateur limite l’interaction avec des pages comme le Chrome Web Store, les paramètres du navigateur et d’autres extensions"
+  },
+  "home_cantAddLink": {
+    "message": "En savoir plus"
+  },
+  "info": {
+    "message": "À propos"
+  },
+  "info_version": {
+    "message": "Version"
+  },
+  "info_loveAndCoffee": {
+    "message": "Développé avec ❤️ et ☕"
+  },
+  "info_doYouLike": {
+    "message": "Vous aimez AdTab Killer ?"
+  },
+  "info_review": {
+    "message": "Laissez-nous un avis !"
+  },
+  "info_helpText": {
+    "message": "Besoin d’aide ?"
+  },
+  "info_helpCenterLink": {
+    "message": "Visitez notre centre d’aide"
+  },
+  "logs_blocked_tab": {
+    "message": "Onglet bloqué"
+  },
+  "logs_blocked_link": {
+    "message": "Lien bloqué"
+  },
+  "logs_blocked_window": {
+    "message": "Fenêtre bloquée"
+  },
+  "settings": {
+    "message": "Paramètres"
+  },
+  "settings_blockAllTabs": {
+    "message": "Bloquer tous les nouveaux onglets"
+  },
+  "settings_blockAllTabsTooltip": {
+    "message": "Bloque tous les onglets tentant de s’ouvrir depuis n’importe quel site (sauf pages internes du navigateur)"
+  },
+  "settings_blockAllWindows": {
+    "message": "Bloquer toutes les nouvelles fenêtres"
+  },
+  "settings_blockAllWindowsTooltip": {
+    "message": "Bloque toutes les fenêtres tentant de s’ouvrir depuis n’importe quel site (sauf pages internes du navigateur)"
+  },
+  "settings_allowSelfPages": {
+    "message": "Autoriser les onglets du même site"
+  },
+  "settings_allowSelfPagesTooltip": {
+    "message": "Autorise les onglets s’ils appartiennent au même domaine que celui que vous consultez"
+  },
+  "settings_allowExtensionWindows": {
+    "message": "Autoriser les pages d’extension"
+  },
+  "settings_allowExtensionWindowsTooltip": {
+    "message": "Autorise les extensions à ouvrir leurs propres pages. Ignore les paramètres bloquant la fermeture des onglets ou des fenêtres"
+  },
+  "settings_darkMode": {
+    "message": "Mode sombre"
+  },
+  "settings_skip_whats_new": {
+    "message": "Passer les nouveautés"
+  },
+  "settings_tooltip_whats_new": {
+    "message": "Ne pas afficher la page 'Quoi de neuf' après les mises à jour"
+  },
+  "tools": {
+    "message": "Outils"
+  },
+  "tools_comingSoon": {
+    "message": "Bientôt disponible"
+  },
+  "tools_logs": {
+    "message": "Journaux"
+  },
+  "tools_logs_activity": {
+    "message": "Journal d’activité"
+  },
+  "tools_logs_search_domain": {
+    "message": "Rechercher un domaine..."
+  },
+  "tools_logs_no_activity": {
+    "message": "Aucune activité trouvée"
+  },
+  "tools_logs_no_matches": {
+    "message": "Aucun résultat pour cette recherche"
+  },
+  "tools_whitelist": {
+    "message": "Autorisées"
+  },
+  "tools_blacklist": {
+    "message": "Bloquées"
+  }
+}

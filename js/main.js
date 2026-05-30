@@ -4,7 +4,7 @@ import { initUser } from './accounts.js';
 import { initSettings } from './settings.js';
 import { initPlayer } from './player.js';
 import { initHero } from './hero.js';
-import { initBlocker } from './blocker.js';
+// Chrome extension handles popup blocking — see extension/ folder
 import {
   initNav, initSearch, initModals, loadHomeCategories, openItemModal,
   addToUserCollection
@@ -125,8 +125,6 @@ async function initAppContent() {
   /* Hero events */
   window.addEventListener('heroOpenModal', (e) => { if (e.detail?.id) openItemModal(e.detail.id, e.detail.type || 'movie'); });
   window.addEventListener('heroAddToCollection', (e) => { if (e.detail) addToUserCollection(e.detail).catch(err => console.error('[Hero] Add to collection failed:', err)); });
-
-  initBlocker();
 
   /* Logo click -> home */
   const logoHome = document.getElementById('logoHome');
