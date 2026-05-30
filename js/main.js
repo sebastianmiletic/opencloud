@@ -109,70 +109,6 @@ function initAuthModal() {
   });
 }
 
-/* ── Update Modal (manual-only) ── */
-let _updateAvailable = false;
-let _updateSummary   = '';
-const LOCAL_VERSION_KEY  = 'openccloud_last_version';
-const GITHUB_REPO        = 'sebastianmiletic/opencloud';
-const GITHUB_BRANCH      = 'main';
-const GITHUB_ZIP_URL     = `https://github.com/${GITHUB_REPO}/archive/refs/heads/${GITHUB_BRANCH}.zip`;
-
-function cleanCommitMessage(raw) {
-  if (!raw) return 'General improvements and bug fixes.';
-  let firstLine = raw.split('\n')[0].trim();
-  if (!firstLine) return 'General improvements and bug fixes.';
-  firstLine = firstLine.replace(/^[a-z]+(\([^)]+\))?!?:\s*/i, '').trim();
-  firstLine = firstLine.charAt(0).toUpperCase() + firstLine.slice(1);
-  const words = firstLine.split(/\s+/);
-  if (words.length > 12) {
-    return words.slice(0, 12).join(' ') + '...';
-  }
-  return firstLine;
-}
-
-async function fetchLatestCommit() {
-  try {
-    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/commits/${GITHUB_BRANCH}`, { cache: 'no-store' });
-    if (!res.ok) {
-      if (res.status === 403 || res.status === 429) {
-        return { error: 'rate_limit', message: 'GitHub API rate limit reached. Try again in a few minutes.' };
-      }
-      return { error: 'network', message: `Server error (${res.status}). Please try again later.` };
-    }
-    return await res.json();
-  } catch (err) {
-    return { error: 'network', message: 'Network error. Check your internet connection.' };
-  }
-}
-
-function openUpdateModal() {
-  const modal         = document.getElementById('updateModal');
-  const msg           = document.getElementById('updateModalMsg');
-  const installBtn    = document.getElementById('updateModalInstallBtn');
-  const upToDateEl    = document.getElementById('updateModalUpToDate');
-  const titleEl       = document.getElementById('updateModalTitle');
-  const subtitleEl    = document.getElementById('updateModalSubtitle');
-  if (!modal) return;
-  modal.classList.remove('hidden');
-
-  if (_updateAvailable && _updateSummary) {
-    if (titleEl) titleEl.textContent = 'Update Available';
-    if (subtitleEl) subtitleEl.textContent = 'A new version of Open Cloud is ready';
-    if (msg) msg.innerHTML = escapeHtml(_updateSummary);
-    if (upToDateEl) upToDateEl.style.display = 'none';
-    if (installBtn) {
-      installBtn.style.display = 'block';
-      installBtn.innerHTML = '<i class="fas fa-download" style="margin-right:0.4rem;"></i>Download Latest ZIP';
-    }
-  } else {
-    if (titleEl) titleEl.textContent = 'No Updates';
-    if (subtitleEl) subtitleEl.textContent = 'You are on the latest version';
-    if (msg) msg.innerHTML = '<i class="fas fa-check-circle" style="color:#10b981;margin-right:0.3rem;"></i>Everything is up to date.';
-    if (upToDateEl) upToDateEl.style.display = 'none';
-    if (installBtn) installBtn.style.display = 'none';
-  }
-}
-
 /* ── App Content ── */
 async function initAppContent() {
   await initStorage();
@@ -212,135 +148,15 @@ async function initAppContent() {
     if (!e.target.closest('.account-menu')) { accountDropdown?.classList.add('hidden'); accountBtn?.classList.remove('open'); }
   });
 
-  /* Check for Updates */
+  /* Check for Updates — disabled; manual ZIP redownload only */
   const updateCheckBtn = document.getElementById('updateCheckBtn');
-  const updateBadge    = document.getElementById('versionBadge');
   if (updateCheckBtn) {
-    updateCheckBtn.addEventListener('click', async (e) => {
+    updateCheckBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       accountDropdown?.classList.add('hidden');
-      _updateAvailable = false;
-      _updateSummary   = '';
-
-      const latest = await fetchLatestCommit();
-
-      // Handle API errors gracefully
-      if (latest?.error) {
-        _updateAvailable = false;
-        _updateSummary   = '';
-        openUpdateModal();
-        showToast(latest.message, 'error');
-        return;
-      }
-
-      if (!latest?.sha) {
-        _updateAvailable = false;
-        _updateSummary   = '';
-        openUpdateModal();
-        showToast('Could not check for updates. Try again later.', 'error');
-        return;
-      }
-
-      const localSha = localStorage.getItem(LOCAL_VERSION_KEY);
-      if (latest.sha === localSha) {
-        _updateAvailable = false;
-        _updateSummary   = '';
-        if (updateBadge) updateBadge.textContent = '';
-        openUpdateModal();
-        return;
-      }
-
-      // Build a human-readable feature description from the commit
-      const rawMessage   = latest.commit?.message || '';
-      const featureDesc  = cleanCommitMessage(rawMessage);
-      const files        = (latest.files || []).map(f => f.filename).filter(Boolean);
-
-      // Only show update if there are actual code changes (not just docs/README)
-      const codeFiles    = files.filter(f => {
-        const name = f.toLowerCase();
-        return !name.startsWith('readme') && !name.startsWith('license') &&
-               !name.startsWith('docs/') && !name.startsWith('.github/') &&
-               !name.endsWith('.md') && !name.endsWith('.txt') &&
-               !name.endsWith('.log') && !name.endsWith('.png') &&
-               !name.endsWith('.jpg') && !name.endsWith('.svg');
-      });
-
-      if (codeFiles.length === 0) {
-        // No meaningful code changes — mark as up to date
-        localStorage.setItem(LOCAL_VERSION_KEY, latest.sha);
-        if (updateBadge) updateBadge.textContent = '';
-        _updateAvailable = false;
-        _updateSummary   = '';
-        openUpdateModal();
-        return;
-      }
-
-      _updateAvailable = true;
-      _updateSummary   = featureDesc;
-      if (updateBadge) updateBadge.textContent = 'New!';
-      openUpdateModal();
+      showToast('Redownload the ZIP from GitHub for updates', 'info');
     });
   }
-
-  /* Update modal close */
-  document.getElementById('updateModalClose')?.addEventListener('click', () => document.getElementById('updateModal')?.classList.add('hidden'));
-
-  /* Install Update — tell Service Worker to fetch new files from GitHub raw */
-  document.getElementById('updateModalInstallBtn')?.addEventListener('click', async () => {
-    showToast('Downloading update...', 'info');
-    const installBtn = document.getElementById('updateModalInstallBtn');
-    if (installBtn) { installBtn.disabled = true; installBtn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:0.4rem;"></i>Updating...'; }
-
-    // Re-fetch latest commit to get changed files
-    let files = [];
-    let sha   = '';
-    try {
-      const latest = await fetchLatestCommit();
-      if (latest?.sha && latest?.files) {
-        sha   = latest.sha;
-        files = (latest.files || []).map(f => f.filename).filter(f => {
-          const name = f.toLowerCase();
-          return !name.startsWith('readme') && !name.startsWith('license') &&
-                 !name.startsWith('docs/') && !name.startsWith('.github/') &&
-                 !name.endsWith('.md') && !name.endsWith('.txt') &&
-                 !name.endsWith('.log') && !name.endsWith('.png') &&
-                 !name.endsWith('.jpg') && !name.endsWith('.svg');
-        });
-      }
-    } catch (e) {}
-
-    if (!files.length || !sha) {
-      showToast('Could not get update files. Try again.', 'error');
-      if (installBtn) { installBtn.disabled = false; installBtn.innerHTML = '<i class="fas fa-rotate-right" style="margin-right:0.4rem;"></i>Install Update Now'; }
-      return;
-    }
-
-    // Send message to Service Worker to update cache
-    const reg = await navigator.serviceWorker?.ready;
-    if (!reg || !reg.active) {
-      showToast('Service Worker not ready. Please reload and try again.', 'error');
-      return;
-    }
-
-    const channel = new MessageChannel();
-    const done = new Promise((resolve) => {
-      channel.port1.onmessage = (event) => {
-        resolve(event.data);
-      };
-    });
-
-    reg.active.postMessage({ type: 'UPDATE_CACHE', files, sha }, [channel.port2]);
-    const result = await done;
-
-    if (result?.ok) {
-      localStorage.setItem(LOCAL_VERSION_KEY, sha);
-      showToast(`Update applied (${result.updated} files). Reloading...`, 'success');
-      setTimeout(() => location.reload(true), 1500);
-    } else {
-      showToast(result?.error || 'Update failed. Try again.', 'error');
-      if (installBtn) { installBtn.disabled = false; installBtn.innerHTML = '<i class="fas fa-rotate-right" style="margin-right:0.4rem;"></i>Install Update Now'; }
-    }
-  });
 
   /* Sign Out */
   document.getElementById('signOutBtn')?.addEventListener('click', async (e) => {

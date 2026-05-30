@@ -1,4 +1,4 @@
-/** In-App Ad/Tab Blocker — web-compatible port of AdTab Killer logic */
+/** In-App Ad/Tab Blocker — aggressive web-compatible popup killer */
 import { showToast } from './utils.js';
 
 /* Settings */
@@ -6,10 +6,10 @@ const STORAGE_KEY = 'openccloud_blocker_settings';
 
 let settings = {
   enabled: true,
-  blockAllTabs: false,
-  blockAllWindows: false,
-  allowSelfPages: true,
-  allowExtensionPages: true,
+  blockAllTabs: true,    // default ON — block all new tabs
+  blockAllWindows: true, // default ON — block all new windows
+  allowSelfPages: false, // default OFF — don't even allow same-origin popups
+  allowExtensionPages: false,
   counter: 0,
   logs: []
 };
@@ -44,6 +44,7 @@ export function incrementCounter() {
 }
 
 export function addBlockLog(entry) {
+  if (!settings.enabled) return;
   settings.logs.unshift(entry);
   if (settings.logs.length > 500) settings.logs = settings.logs.slice(0, 500);
   saveSettings();
@@ -54,21 +55,14 @@ export function clearBlockLogs() {
   saveSettings();
 }
 
-/* Helpers */
+/* ─── Helpers ─── */
+
 function getHostname(url) {
-  try {
-    return new URL(url).hostname;
-  } catch (e) {
-    return '';
-  }
+  try { return new URL(url).hostname; } catch (e) { return ''; }
 }
 
 function isSameOrigin(a, b) {
-  try {
-    return new URL(a).origin === new URL(b).origin;
-  } catch (e) {
-    return false;
-  }
+  try { return new URL(a).origin === new URL(b).origin; } catch (e) { return false; }
 }
 
 function shouldBlock(url, sourceUrl) {
@@ -80,51 +74,51 @@ function shouldBlock(url, sourceUrl) {
   // Allow internal browser pages
   if (isInternal) return false;
 
-  // Block all new tabs
-  if (settings.blockAllTabs) {
-    // Check self-page rule
-    if (settings.allowSelfPages && sourceUrl) {
-      if (isSameOrigin(url, sourceUrl)) return false;
-    }
-    return true;
+  // Allow same-origin if explicitly permitted
+  if (settings.allowSelfPages && sourceUrl) {
+    if (isSameOrigin(url, sourceUrl)) return false;
   }
 
-  // Block all new windows (treated the same in web context)
-  if (settings.blockAllWindows) {
-    if (settings.allowSelfPages && sourceUrl) {
-      if (isSameOrigin(url, sourceUrl)) return false;
-    }
-    return true;
-  }
+  // Block all new tabs / windows by default (aggressive mode)
+  if (settings.blockAllTabs || settings.blockAllWindows) return true;
+
+  // Even with both toggles off, block known ad/popup patterns
+  const lower = url.toLowerCase();
+  if (lower.includes('popup') || lower.includes('ad.') || lower.includes('track')) return true;
 
   return false;
 }
 
-/* Override window.open */
-let originalOpen = null;
+/* ─── 1. Override window.open ─── */
+let _origWindowOpen = null;
 
 function initWindowOpenBlocker() {
-  if (originalOpen) return;
-  originalOpen = window.open;
+  if (_origWindowOpen) return;
+  _origWindowOpen = window.open;
 
   window.open = function(url, target, features) {
     const sourceUrl = window.location.href;
 
-    if (shouldBlock(url, sourceUrl)) {
-      incrementCounter();
-      addBlockLog({ url, sourceUrl, reason: 'window.open blocked', time: new Date().toISOString() });
-      showToast('Blocked popup', 'info');
-      console.log('[Blocker] Blocked window.open:', url);
-      return null;
+    // Block any target that opens a new context
+    if (target === '_blank' || target === '_new' || target === 'popup' || !target) {
+      if (shouldBlock(url, sourceUrl)) {
+        incrementCounter();
+        addBlockLog({ url, sourceUrl, reason: 'window.open blocked', time: new Date().toISOString() });
+        showToast('Blocked popup', 'info');
+        console.log('[Blocker] Blocked window.open:', url);
+        return null;
+      }
     }
 
-    return originalOpen.apply(window, arguments);
+    return _origWindowOpen.apply(window, arguments);
   };
 }
 
-/* Intercept link clicks */
+/* ─── 2. Intercept ALL link clicks (capture phase) ─── */
 function initClickInterceptor() {
   document.addEventListener('click', (e) => {
+    if (!settings.enabled) return;
+
     const a = e.target.closest('a');
     if (!a) return;
 
@@ -132,44 +126,103 @@ function initClickInterceptor() {
     const target = a.getAttribute('target') || '';
     const sourceUrl = window.location.href;
 
-    // Block target="_blank" and _new when blocker rules apply
+    // Block target="_blank" / _new unconditionally when aggressive
     if (target === '_blank' || target === '_new') {
       if (shouldBlock(href, sourceUrl)) {
         e.preventDefault();
         e.stopPropagation();
+        e.stopImmediatePropagation();
         incrementCounter();
         addBlockLog({ url: href, sourceUrl, reason: 'link click blocked', time: new Date().toISOString() });
         showToast('Blocked new tab', 'info');
         console.log('[Blocker] Blocked link:', href);
-        return;
+        return false;
       }
     }
 
     // Block javascript: scheme links
     if (href.startsWith('javascript:')) {
-      if (settings.enabled) {
-        e.preventDefault();
-        e.stopPropagation();
-        incrementCounter();
-        addBlockLog({ url: href, sourceUrl, reason: 'javascript: link blocked', time: new Date().toISOString() });
-        console.log('[Blocker] Blocked javascript: link');
-      }
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      incrementCounter();
+      addBlockLog({ url: href, sourceUrl, reason: 'javascript: link blocked', time: new Date().toISOString() });
+      console.log('[Blocker] Blocked javascript: link');
+      return false;
     }
   }, true);
 }
 
-/* Block beforeunload popup traps */
+/* ─── 3. Intercept Element.prototype.click to stop programmatic clicks ─── */
+function initProgrammaticClickBlocker() {
+  const origClick = HTMLElement.prototype.click;
+  HTMLElement.prototype.click = function() {
+    if (this.tagName === 'A') {
+      const href = this.getAttribute('href') || '';
+      const target = this.getAttribute('target') || '';
+      if ((target === '_blank' || target === '_new' || href.startsWith('javascript:')) && settings.enabled) {
+        if (shouldBlock(href, window.location.href)) {
+          incrementCounter();
+          addBlockLog({ url: href, sourceUrl: window.location.href, reason: 'programmatic click blocked', time: new Date().toISOString() });
+          console.log('[Blocker] Blocked programmatic click on link:', href);
+          return;
+        }
+      }
+    }
+    return origClick.apply(this, arguments);
+  };
+}
+
+/* ─── 4. Block beforeunload popup traps ─── */
 function initBeforeunloadBlocker() {
   window.addEventListener('beforeunload', (e) => {
-    if (settings.enabled && settings.blockAllTabs) {
-      // Prevent sites from showing "Are you sure you want to leave?" popups
+    if (settings.enabled) {
       e.preventDefault();
       e.returnValue = '';
     }
   });
 }
 
-/* Intercept iframe load to inject popup blocker into same-origin iframes */
+/* ─── 5. Override document.open (some ads use this) ─── */
+function initDocumentOpenBlocker() {
+  const orig = document.open;
+  document.open = function() {
+    if (settings.enabled) {
+      console.log('[Blocker] Blocked document.open');
+      incrementCounter();
+      addBlockLog({ url: window.location.href, sourceUrl: window.location.href, reason: 'document.open blocked', time: new Date().toISOString() });
+      return null;
+    }
+    return orig.apply(document, arguments);
+  };
+}
+
+/* ─── 6. Override window.location.replace / assign for suspicious URLs ─── */
+function initLocationBlocker() {
+  const origReplace = window.location.replace;
+  window.location.replace = function(url) {
+    if (settings.enabled && shouldBlock(url, window.location.href)) {
+      console.log('[Blocker] Blocked location.replace:', url);
+      incrementCounter();
+      addBlockLog({ url, sourceUrl: window.location.href, reason: 'location.replace blocked', time: new Date().toISOString() });
+      return;
+    }
+    return origReplace.apply(window.location, arguments);
+  };
+
+  const origAssign = window.location.assign;
+  window.location.assign = function(url) {
+    if (settings.enabled && shouldBlock(url, window.location.href)) {
+      console.log('[Blocker] Blocked location.assign:', url);
+      incrementCounter();
+      addBlockLog({ url, sourceUrl: window.location.href, reason: 'location.assign blocked', time: new Date().toISOString() });
+      return;
+    }
+    return origAssign.apply(window.location, arguments);
+  };
+}
+
+/* ─── 7. Intercept iframe navigation ─── */
 function initIframeInterceptor() {
   const observer = new MutationObserver((mutations) => {
     mutations.forEach((mutation) => {
@@ -177,11 +230,10 @@ function initIframeInterceptor() {
         if (node.tagName === 'IFRAME') {
           try {
             const iframeSrc = node.src || '';
-            const parentOrigin = window.location.origin;
             if (!iframeSrc) return;
 
             // Same-origin iframes only
-            if (new URL(iframeSrc).origin === parentOrigin && node.contentWindow) {
+            if (new URL(iframeSrc).origin === window.location.origin && node.contentWindow) {
               const iframeWin = node.contentWindow;
               const orig = iframeWin.open;
               iframeWin.open = function(url, target, features) {
@@ -205,7 +257,7 @@ function initIframeInterceptor() {
   observer.observe(document.body, { childList: true, subtree: true });
 }
 
-/* UI updater for counter */
+/* ─── UI ─── */
 let counterEl = null;
 
 function updateCounterUI() {
@@ -303,11 +355,14 @@ function renderBlockLogs() {
   }).join('');
 }
 
-/* Init */
+/* ─── Init ─── */
 export function initBlocker() {
   loadSettings();
   initWindowOpenBlocker();
   initClickInterceptor();
+  initProgrammaticClickBlocker();
   initBeforeunloadBlocker();
+  initDocumentOpenBlocker();
+  initLocationBlocker();
   initIframeInterceptor();
 }
