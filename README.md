@@ -1,6 +1,6 @@
 # Open Cloud
 
-A black-and-white themed streaming tracker web app with TMDB/OMDB integration, inline video player, Supabase authentication, Netflix-style animations, and a companion Chrome extension for bulletproof ad/popup blocking. Track what you watch, save your favorites, and resume where you left off.
+A black-and-white themed streaming tracker web app with TMDB/OMDB integration, inline video player, Supabase authentication, Netflix-style animations, and a built-in ad/popup blocker. Track what you watch, save your favorites, and resume where you left off.
 
 ---
 
@@ -41,22 +41,6 @@ A black-and-white themed streaming tracker web app with TMDB/OMDB integration, i
 4. **Open** `http://localhost:8765` in your browser
 
 > **Note:** API keys are bundled with the ZIP — no configuration required.
-
----
-
-## Install the Ad/Popup Blocker Extension (Required)
-
-The video embeds load from third-party sites inside cross-origin iframes. A normal web page **cannot** block popups that originate inside those iframes — only a browser extension can. The included **AdTab Killer** extension closes tabs and windows at the browser level before they even appear.
-
-### Chrome / Edge / Brave
-
-1. Open Chrome and go to `chrome://extensions/`
-2. Turn on **Developer mode** (toggle in the top right)
-3. Click **Load unpacked**
-4. Select the `extension` folder inside the project (`opencloud-main/extension/`)
-5. The extension icon will appear in your toolbar — keep it enabled while using Open Cloud
-
-> **Tip:** Once loaded, the extension works automatically. You don't need to click it. It will block all unwanted popups and new tabs while you watch content.
 
 ---
 
@@ -119,14 +103,10 @@ Open Cloud/
 │   ├── sync.js         # Supabase database CRUD (collections, history, progress, admin)
 │   ├── state.js        # Central reactive state module
 │   ├── hero.js         # Hero carousel auto-slide + click handling
-│   ├── blocker.js      # Fallback in-app blocker (extension recommended)
+│   ├── blocker.js      # Built-in ad/popup blocker with block logs
 │   ├── utils.js        # Toast, scroll lock, confirm dialog
 │   ├── accounts.js     # User avatar/name initializer
 │   └── supabase.js     # Watch sessions and stats aggregation
-├── extension/          # Chrome extension — load as unpacked for popup blocking
-│   ├── manifest.json
-│   ├── js/
-│   └── ...
 ├── docs/
 │   ├── supabase_schema.sql   # SQL for creating Supabase tables
 │   ├── SUPABASE_SETUP.md     # Step-by-step Supabase setup guide
@@ -142,7 +122,7 @@ Open Cloud/
 - **Search** — Movies and TV shows via TMDB API
 - **Inline Player** — Watch content with 7 different providers
 - **Netflix UI** — Splash screen, hero carousel, smooth animations
-- **Ad/Popup Blocker** — Companion Chrome extension (included) that kills popups at the browser level
+- **Ad/Popup Blocker** — Built-in blocker intercepts popups, new tabs, and malicious links before they open
 - **Continue Watching** — Auto-saves TV progress by season/episode
 - **History** — Auto-tracks every movie and show you open in the player, with poster, rating, and year
 - **Collections** — Save items and organize with folders
