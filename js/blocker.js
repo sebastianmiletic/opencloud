@@ -89,14 +89,14 @@ function shouldBlock(url, sourceUrl) {
   return false;
 }
 
-/* ─── 1. Override window.open ─── */
+/* ─── 1. Override window.open (non-configurable so embeds can't restore it) ─── */
 let _origWindowOpen = null;
 
 function initWindowOpenBlocker() {
   if (_origWindowOpen) return;
   _origWindowOpen = window.open;
 
-  window.open = function(url, target, features) {
+  const blocker = function(url, target, features) {
     const sourceUrl = window.location.href;
 
     // Block any target that opens a new context
@@ -112,6 +112,18 @@ function initWindowOpenBlocker() {
 
     return _origWindowOpen.apply(window, arguments);
   };
+
+  // Use defineProperty so external scripts cannot overwrite window.open
+  try {
+    Object.defineProperty(window, 'open', {
+      value: blocker,
+      writable: false,
+      configurable: false
+    });
+  } catch (e) {
+    // Fallback if defineProperty fails
+    window.open = blocker;
+  }
 }
 
 /* ─── 2. Intercept ALL link clicks (capture phase) ─── */
@@ -257,6 +269,32 @@ function initIframeInterceptor() {
   observer.observe(document.body, { childList: true, subtree: true });
 }
 
+/* ─── 8. Remove dynamically injected ad/popup links ─── */
+function initDynamicLinkRemover() {
+  const observer = new MutationObserver((mutations) => {
+    if (!settings.enabled) return;
+    mutations.forEach((mutation) => {
+      mutation.addedNodes.forEach((node) => {
+        if (node.nodeType !== Node.ELEMENT_NODE) return;
+        const links = node.matches?.('a') ? [node] : node.querySelectorAll?.('a') || [];
+        links.forEach((a) => {
+          const target = a.getAttribute('target') || '';
+          const href   = (a.getAttribute('href') || '').toLowerCase();
+          if (target === '_blank' || target === '_new' || href.startsWith('javascript:') || href.includes('popup') || href.includes('ad.')) {
+            a.removeAttribute('href');
+            a.removeAttribute('target');
+            a.style.pointerEvents = 'none';
+            a.style.opacity = '0.3';
+            console.log('[Blocker] Removed dynamic popup link');
+          }
+        });
+      });
+    });
+  });
+
+  observer.observe(document.body, { childList: true, subtree: true });
+}
+
 /* ─── UI ─── */
 let counterEl = null;
 
@@ -365,4 +403,5 @@ export function initBlocker() {
   initDocumentOpenBlocker();
   initLocationBlocker();
   initIframeInterceptor();
+  initDynamicLinkRemover();
 }
