@@ -59,6 +59,7 @@ class ReuseServer(socketserver.TCPServer):
         self.socket.listen(self.request_queue_size)
 
 # Pin to port 8080 for stable localStorage. Retry a few times in case of stale bind.
+# If still busy, fall back to a free port so the app always starts.
 httpd = None
 chosen_port = None
 max_retries = 5
@@ -72,9 +73,17 @@ for attempt in range(max_retries):
             print(f"  Port {PORT} busy, retrying in 1s... (attempt {attempt + 1}/{max_retries})")
             time.sleep(1)
         else:
-            print(f"\nERROR: Port {PORT} is already in use after {max_retries} attempts.")
-            print("Please close any app using port 8080 and try again.")
-            exit(1)
+            # Fallback: find any free port
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.bind(("", 0))
+                chosen_port = s.getsockname()[1]
+                s.close()
+                httpd = ReuseServer(("", chosen_port), Handler)
+                print(f"  ⚠️  Port {PORT} unavailable. Falling back to port {chosen_port}.")
+            except Exception:
+                print(f"\nERROR: Could not bind to any port.")
+                exit(1)
 
 print(f"\n🚀 Open Cloud running at http://localhost:{chosen_port}/")
 print("Press Ctrl+C to stop\n")
