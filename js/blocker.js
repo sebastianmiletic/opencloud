@@ -1,4 +1,4 @@
-/** In-App Ad/Tab Blocker — safe popup killer */
+/** In-App Ad/Tab Blocker — port of AdTab Killer logic for web context */
 import { showToast } from './utils.js';
 
 const STORAGE_KEY = 'openccloud_blocker_settings';
@@ -16,10 +16,7 @@ let settings = {
 function loadSettings() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      settings = { ...settings, ...parsed };
-    }
+    if (raw) settings = { ...settings, ...JSON.parse(raw) };
   } catch (e) {}
 }
 
@@ -27,40 +24,19 @@ function saveSettings() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
 }
 
-export function getBlockerSettings() {
-  return { ...settings };
-}
-
-export function setBlockerSetting(key, value) {
-  settings[key] = value;
-  saveSettings();
-}
-
-export function incrementCounter() {
-  settings.counter++;
-  saveSettings();
-  updateCounterUI();
-}
-
+export function getBlockerSettings() { return { ...settings }; }
+export function setBlockerSetting(key, value) { settings[key] = value; saveSettings(); }
+export function incrementCounter() { settings.counter++; saveSettings(); updateCounterUI(); }
 export function addBlockLog(entry) {
   if (!settings.enabled) return;
   settings.logs.unshift(entry);
   if (settings.logs.length > 500) settings.logs = settings.logs.slice(0, 500);
   saveSettings();
 }
+export function clearBlockLogs() { settings.logs = []; saveSettings(); }
 
-export function clearBlockLogs() {
-  settings.logs = [];
-  saveSettings();
-}
-
-function getHostname(url) {
-  try { return new URL(url).hostname; } catch (e) { return ''; }
-}
-
-function isSameOrigin(a, b) {
-  try { return new URL(a).origin === new URL(b).origin; } catch (e) { return false; }
-}
+function getHostname(url) { try { return new URL(url).hostname; } catch (e) { return ''; } }
+function isSameOrigin(a, b) { try { return new URL(a).origin === new URL(b).origin; } catch (e) { return false; } }
 
 function shouldBlock(url, sourceUrl) {
   if (!settings.enabled) return false;
@@ -71,84 +47,89 @@ function shouldBlock(url, sourceUrl) {
   return false;
 }
 
-/* ─── 1. Override window.open ─── */
-let _origWindowOpen = null;
-
+/* ─── 1. window.open ─── */
+let _origOpen = null;
 function initWindowOpenBlocker() {
-  if (_origWindowOpen) return;
-  _origWindowOpen = window.open;
-
+  if (_origOpen) return;
+  _origOpen = window.open;
   window.open = function(url, target, features) {
-    if (!settings.enabled) return _origWindowOpen.apply(window, arguments);
-    const sourceUrl = window.location.href;
+    if (!settings.enabled) return _origOpen.apply(window, arguments);
     if (target === '_blank' || target === '_new' || target === 'popup' || !target) {
-      if (shouldBlock(url, sourceUrl)) {
+      if (shouldBlock(url, window.location.href)) {
         incrementCounter();
-        addBlockLog({ url, sourceUrl, reason: 'window.open blocked', time: new Date().toISOString() });
+        addBlockLog({ url, sourceUrl: window.location.href, reason: 'window.open blocked', time: new Date().toISOString() });
         console.log('[Blocker] Blocked window.open:', url);
         return null;
       }
     }
-    return _origWindowOpen.apply(window, arguments);
+    return _origOpen.apply(window, arguments);
   };
 }
 
-/* ─── 2. Intercept link clicks ─── */
+/* ─── 2. ALL click interception (capture phase) ─── */
 function initClickInterceptor() {
   document.addEventListener('click', (e) => {
     if (!settings.enabled) return;
     const a = e.target.closest('a');
     if (!a) return;
-
     const href = a.getAttribute('href') || '';
     const target = a.getAttribute('target') || '';
     const sourceUrl = window.location.href;
 
-    if (target === '_blank' || target === '_new') {
-      if (shouldBlock(href, sourceUrl)) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        incrementCounter();
-        addBlockLog({ url: href, sourceUrl, reason: 'link click blocked', time: new Date().toISOString() });
-        console.log('[Blocker] Blocked link:', href);
-        return false;
-      }
+    if ((target === '_blank' || target === '_new') && shouldBlock(href, sourceUrl)) {
+      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+      incrementCounter();
+      addBlockLog({ url: href, sourceUrl, reason: 'link click blocked', time: new Date().toISOString() });
+      console.log('[Blocker] Blocked link:', href);
+      return false;
     }
 
     if (href.startsWith('javascript:')) {
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
+      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
       incrementCounter();
-      addBlockLog({ url: href, sourceUrl, reason: 'javascript: link blocked', time: new Date().toISOString() });
+      addBlockLog({ url: href, sourceUrl, reason: 'javascript: blocked', time: new Date().toISOString() });
       return false;
     }
   }, true);
 }
 
-/* ─── 3. Block beforeunload traps ─── */
+/* ─── 3. Programmatic .click() on links ─── */
+function initProgrammaticClickBlocker() {
+  const orig = HTMLElement.prototype.click;
+  HTMLElement.prototype.click = function() {
+    if (this.tagName === 'A') {
+      const href = this.getAttribute('href') || '';
+      const target = this.getAttribute('target') || '';
+      if ((target === '_blank' || target === '_new') && settings.enabled && shouldBlock(href, window.location.href)) {
+        incrementCounter();
+        addBlockLog({ url: href, sourceUrl: window.location.href, reason: 'programmatic click blocked', time: new Date().toISOString() });
+        console.log('[Blocker] Blocked programmatic click:', href);
+        return;
+      }
+    }
+    return orig.apply(this, arguments);
+  };
+}
+
+/* ─── 4. beforeunload traps ─── */
 function initBeforeunloadBlocker() {
   window.addEventListener('beforeunload', (e) => {
-    if (settings.enabled) {
-      e.preventDefault();
-      e.returnValue = '';
-    }
+    if (settings.enabled) { e.preventDefault(); e.returnValue = ''; }
   });
 }
 
-/* ─── 4. Remove dynamically injected popup links ─── */
+/* ─── 5. Dynamic popup link remover ─── */
 function initDynamicLinkRemover() {
   const observer = new MutationObserver((mutations) => {
     if (!settings.enabled) return;
-    mutations.forEach((mutation) => {
-      mutation.addedNodes.forEach((node) => {
+    mutations.forEach((m) => {
+      m.addedNodes.forEach((node) => {
         if (node.nodeType !== Node.ELEMENT_NODE) return;
         const links = node.matches?.('a') ? [node] : node.querySelectorAll?.('a') || [];
         links.forEach((a) => {
           const target = a.getAttribute('target') || '';
-          const href   = (a.getAttribute('href') || '').toLowerCase();
-          if (target === '_blank' || target === '_new' || href.startsWith('javascript:')) {
+          const href = (a.getAttribute('href') || '').toLowerCase();
+          if (target === '_blank' || target === '_new' || href.startsWith('javascript:') || href.includes('popup')) {
             a.removeAttribute('href');
             a.removeAttribute('target');
             a.style.pointerEvents = 'none';
@@ -158,30 +139,58 @@ function initDynamicLinkRemover() {
       });
     });
   });
+  observer.observe(document.body, { childList: true, subtree: true });
+}
 
+/* ─── 6. Inject blocker script into every new iframe ─── */
+function initIframeInterceptor() {
+  const observer = new MutationObserver((mutations) => {
+    mutations.forEach((m) => {
+      m.addedNodes.forEach((node) => {
+        if (node.tagName === 'IFRAME') {
+          try {
+            const src = node.src || '';
+            if (!src) return;
+            if (new URL(src).origin === window.location.origin && node.contentWindow) {
+              const win = node.contentWindow;
+              const orig = win.open;
+              win.open = function(url, target, features) {
+                if (shouldBlock(url, src)) {
+                  incrementCounter();
+                  addBlockLog({ url, sourceUrl: src, reason: 'iframe window.open blocked', time: new Date().toISOString() });
+                  console.log('[Blocker] Blocked iframe popup:', url);
+                  return null;
+                }
+                return orig.apply(win, arguments);
+              };
+            }
+          } catch (e) {}
+        }
+      });
+    });
+  });
   observer.observe(document.body, { childList: true, subtree: true });
 }
 
 /* ─── UI ─── */
 let counterEl = null;
-
-function updateCounterUI() {
-  if (counterEl) counterEl.textContent = settings.counter;
-}
+function updateCounterUI() { if (counterEl) counterEl.textContent = settings.counter; }
 
 export function initBlockerUI() {
   counterEl = document.getElementById('blockerCounter');
   updateCounterUI();
 
-  const toggle = document.getElementById('blockerToggle');
-  const blockTabs = document.getElementById('blockerBlockTabs');
-  const blockWindows = document.getElementById('blockerBlockWindows');
-  const allowSelf = document.getElementById('blockerAllowSelf');
-  const allowExt = document.getElementById('blockerAllowExt');
-  const resetBtn = document.getElementById('blockerResetCounter');
-  const clearLogsBtn = document.getElementById('blockerClearLogs');
-  const logList = document.getElementById('blockerLogList');
+  const ids = {
+    toggle: 'blockerToggle',
+    blockTabs: 'blockerBlockTabs',
+    blockWindows: 'blockerBlockWindows',
+    allowSelf: 'blockerAllowSelf',
+    allowExt: 'blockerAllowExt',
+    resetBtn: 'blockerResetCounter',
+    clearLogsBtn: 'blockerClearLogs'
+  };
 
+  const toggle = document.getElementById(ids.toggle);
   if (toggle) {
     toggle.checked = settings.enabled;
     toggle.addEventListener('change', () => {
@@ -190,6 +199,7 @@ export function initBlockerUI() {
     });
   }
 
+  const blockTabs = document.getElementById(ids.blockTabs);
   if (blockTabs) {
     blockTabs.checked = settings.blockAllTabs;
     blockTabs.addEventListener('change', () => {
@@ -198,6 +208,7 @@ export function initBlockerUI() {
     });
   }
 
+  const blockWindows = document.getElementById(ids.blockWindows);
   if (blockWindows) {
     blockWindows.checked = settings.blockAllWindows;
     blockWindows.addEventListener('change', () => {
@@ -206,6 +217,7 @@ export function initBlockerUI() {
     });
   }
 
+  const allowSelf = document.getElementById(ids.allowSelf);
   if (allowSelf) {
     allowSelf.checked = settings.allowSelfPages;
     allowSelf.addEventListener('change', () => {
@@ -214,6 +226,7 @@ export function initBlockerUI() {
     });
   }
 
+  const allowExt = document.getElementById(ids.allowExt);
   if (allowExt) {
     allowExt.checked = settings.allowExtensionPages;
     allowExt.addEventListener('change', () => {
@@ -222,6 +235,7 @@ export function initBlockerUI() {
     });
   }
 
+  const resetBtn = document.getElementById(ids.resetBtn);
   if (resetBtn) {
     resetBtn.addEventListener('click', () => {
       settings.counter = 0;
@@ -231,6 +245,7 @@ export function initBlockerUI() {
     });
   }
 
+  const clearLogsBtn = document.getElementById(ids.clearLogsBtn);
   if (clearLogsBtn) {
     clearLogsBtn.addEventListener('click', () => {
       clearBlockLogs();
@@ -265,6 +280,8 @@ export function initBlocker() {
   loadSettings();
   initWindowOpenBlocker();
   initClickInterceptor();
+  initProgrammaticClickBlocker();
   initBeforeunloadBlocker();
   initDynamicLinkRemover();
+  initIframeInterceptor();
 }
