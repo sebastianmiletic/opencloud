@@ -1,6 +1,6 @@
 # Open Cloud
 
-A black-and-white themed streaming tracker web app with TMDB/OMDB integration, inline video player, Supabase authentication, Netflix-style animations, and an auto-loaded Chrome extension for bulletproof ad/popup blocking. Track what you watch, save your favorites, and resume where you left off.
+A black-and-white themed streaming tracker web app with TMDB/OMDB integration, inline video player, Supabase authentication, Netflix-style animations, and a built-in ad/popup blocker via Electron. Track what you watch, save your favorites, and resume where you left off.
 
 ---
 
@@ -18,13 +18,11 @@ A black-and-white themed streaming tracker web app with TMDB/OMDB integration, i
    cd opencloud-main
    ```
 
-3. **Start the app**
+3. **Start the Electron app**
    ```bash
    ./start.sh
-   # Or manually: python3 server.py
    ```
-
-4. **Open** the printed URL in your browser (usually `http://localhost:8765`)
+   On first run it installs Electron (~80 MB). The app window opens automatically — no browser needed.
 
 ### Windows
 
@@ -36,12 +34,10 @@ A black-and-white themed streaming tracker web app with TMDB/OMDB integration, i
 
 3. **Start the app**
    - Open Command Prompt or PowerShell in the folder
-   - Run: `python server.py`
+   - Run: `npm install && npx electron .`
 
-4. **Open** `http://localhost:8765` in your browser
-
-> **Note:** API keys are bundled with the ZIP — no configuration required.
-> **Note for Chrome users:** If Chrome is installed, `start.sh` auto-loads the included ad-blocker extension silently. No manual install needed.
+> **Note:** API keys are bundled with the ZIP — no configuration needed.
+> **Note:** Electron must be installed once via `npm install`. After that the app launches instantly.
 
 ---
 
