@@ -1,0 +1,15 @@
+{
+  "name": "opencloud",
+  "version": "1.0.0",
+  "description": "Open Cloud desktop app",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "dependencies": {
+    "electron": "^35.0.0"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "Private"
+}
