@@ -507,9 +507,16 @@ async function initApp() {
     await initAppContent();
 
     window._appLoaded = true;
+    // Hide the module error screen if it was already shown
+    const modErr = document.getElementById('moduleError');
+    if (modErr) modErr.style.display = 'none';
     window.scrollTo(0, 0);
   } catch (err) {
     console.error('Open Cloud init failed:', err);
+    // Always mark loaded so the splash screen clears
+    window._appLoaded = true;
+    const modErr2 = document.getElementById('moduleError');
+    if (modErr2) modErr2.style.display = 'none';
     const splash = document.getElementById('splashScreen');
     const msgEl = splash?.querySelector('.splash-error-msg');
     if (msgEl && splash) {
