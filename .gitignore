@@ -19,4 +19,5 @@ node_modules/
 
 # Server output
 server.log
+server_port.txt
 nohup.out

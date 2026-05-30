@@ -18,19 +18,13 @@ A black-and-white themed streaming tracker web app with TMDB/OMDB integration, i
    cd opencloud-main
    ```
 
-3. **Configure API keys**
-   ```bash
-   cp .env.example .env
-   # Edit .env and add your TMDB Bearer Token, OMDB API Key, and Supabase credentials
-   ```
-
-4. **Start the app**
+3. **Start the app**
    ```bash
    ./start.sh
    # Or manually: python3 server.py
    ```
 
-5. **Open** `http://localhost:8080` in your browser
+4. **Open** the printed URL in your browser (usually `http://localhost:8080`)
 
 ### Windows
 
@@ -40,15 +34,13 @@ A black-and-white themed streaming tracker web app with TMDB/OMDB integration, i
 
 2. **Extract the ZIP** and open the extracted `opencloud-main` folder
 
-3. **Configure API keys**
-   - Copy `.env.example` and rename it to `.env`
-   - Open `.env` in a text editor and fill in your API keys
-
-4. **Start the app**
+3. **Start the app**
    - Open Command Prompt or PowerShell in the folder
    - Run: `python server.py`
 
-5. **Open** `http://localhost:8080` in your browser
+4. **Open** `http://localhost:8080` in your browser
+
+> **Note:** API keys are bundled with the ZIP — no configuration required.
 
 ---
 
@@ -56,11 +48,10 @@ A black-and-white themed streaming tracker web app with TMDB/OMDB integration, i
 
 ### Getting Started
 
-1. **Open** `http://localhost:8080`
-2. You will see a **Sign In** modal (mandatory — no close button). You must sign in or create an account to use the app
-3. Enter your **email** and **password** to sign in, or switch to the **Create Account** tab to sign up
-4. **Account creation** requires: a username, an email, and a password (6+ characters)
-5. **Email confirmation is OFF** — accounts work immediately
+1. **Open** the app in your browser
+2. You will see a **Sign In** modal (mandatory — no close button). You must create an account or sign in to use the app
+3. **Account creation** requires: a username, an email, and a password (6+ characters)
+4. **Email confirmation is OFF** — accounts work immediately
 
 ### Home Page
 - **Hero carousel** — Featured movies/shows at the top with auto-sliding slides
@@ -95,13 +86,13 @@ A black-and-white themed streaming tracker web app with TMDB/OMDB integration, i
 Open Cloud/
 ├── index.html          # Main app shell with all modals
 ├── styles.css          # Main black-and-white theme styles
-├── server.py           # Python HTTP server + env injection
-├── .env                # API keys (gitignored — never commit this)
-├── .env.example        # Template for .env keys
+├── server.py           # Python HTTP server + env injection + port fallback
+├── start.sh            # Bash launcher (kills stale servers, opens browser)
+├── .env                # API keys (bundled in ZIP — no manual config needed)
+├── .env.example        # Template for custom .env keys
 ├── version.json        # App version metadata
-├── sw.js               # Service Worker — no hard refreshes needed
 ├── js/
-│   ├── app.js          # Entry point, auth, update checker, app init
+│   ├── main.js         # App entry point, auth, update checker, init
 │   ├── auth.js         # Supabase authentication (sign in / up / out / password)
 │   ├── api.js          # TMDB + OMDB fetch helpers
 │   ├── ui.js           # Home, search, item modals, collection, history
@@ -114,11 +105,12 @@ Open Cloud/
 │   ├── hero.js         # Hero carousel auto-slide + click handling
 │   ├── blocker.js      # Ad/popup blocker with config and logs
 │   ├── utils.js        # Toast, scroll lock, confirm dialog
+│   ├── accounts.js     # User avatar/name initializer
 │   └── supabase.js     # Watch sessions and stats aggregation
 ├── docs/
 │   ├── supabase_schema.sql   # SQL for creating Supabase tables
 │   ├── SUPABASE_SETUP.md     # Step-by-step Supabase setup guide
-│   └── architecture.md       # Architecture notes
+│   └── MIGRATION.md          # Migration notes for existing installations
 └── README.md           # This file
 ```
 
@@ -158,11 +150,10 @@ Open Cloud/
 - **Admin** *(admin only)* — User management panel (activated via activation key)
 
 ### Updates
-- **Smart Update Check** — Checks GitHub on every app load for code changes
-- **Update Modal** — Opens a modal showing the commit message, author, date, and changed files. Has "Install Update Now" button
+- **Manual Update Check** — Click "Check for Updates" in the account dropdown
+- **Update Modal** — Shows commit message, author, date, and changed files. Has "Install Update Now" button
 - **Ignores noise** — Won't notify for README, docs, images, or non-code changes
-- **After updating**, the badge disappears and the app is up to date
-- **No hard refreshes** — Service Worker handles cache invalidation automatically
+- **After installing**, caches are cleared and the page reloads
 
 ---
 
@@ -180,13 +171,16 @@ Open Cloud/
 
 ---
 
-## Supabase Setup
+## Supabase Setup (for custom hosting)
+
+If you want to use your own Supabase project instead of the bundled one:
 
 1. Create a free project at [supabase.com](https://supabase.com)
 2. Go to **Authentication > Providers > Email** and enable it
 3. Turn **Confirm email** OFF
 4. Run the SQL from `docs/supabase_schema.sql` in the SQL Editor
 5. Copy your project URL and anon key into `.env`
+6. Restart the server
 
 **Admin access** can be activated by any user who enters the correct activation key in **Settings > General**.
 

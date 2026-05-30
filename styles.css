@@ -3603,6 +3603,14 @@ body.device-phone .player-header-btn span {
   font-weight: 400;
 }
 
+.auth-intro {
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 0.5rem;
+}
+
 /* Tabs */
 .auth-tabs {
   position: relative;

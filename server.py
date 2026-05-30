@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Simple HTTP server for Open Cloud with proper MIME types and env injection."""
 import http.server
-import socketserver
 import os
+import socket
+import socketserver
+import time
 
-PORT = 8080
+PORT        = 8080
 
 # Load environment variables from .env file
 def load_env():
@@ -26,10 +28,10 @@ ENV = load_env()
 class Handler(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):
         self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate')
+        self.send_header('X-Content-Type-Options', 'nosniff')
         super().end_headers()
 
     def do_GET(self):
-        # Serve env.js endpoint
         if self.path.startswith('/env.js'):
             self.send_response(200)
             self.send_header('Content-Type', 'application/javascript')
@@ -48,12 +50,40 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 # Allow port reuse to prevent "Address already in use" after restart
-socketserver.TCPServer.allow_reuse_address = True
+class ReuseServer(socketserver.TCPServer):
+    def server_bind(self):
+        self.socket = socket.socket(self.address_family, self.socket_type)
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.socket.bind(self.server_address)
+        self.server_address = self.socket.getsockname()
+        self.socket.listen(self.request_queue_size)
 
-with socketserver.TCPServer(("", PORT), Handler) as httpd:
-    print(f"\n🚀 Open Cloud running at http://localhost:{PORT}/")
-    print("Press Ctrl+C to stop\n")
+# Pin to port 8080 for stable localStorage. Retry a few times in case of stale bind.
+httpd = None
+chosen_port = None
+max_retries = 5
+for attempt in range(max_retries):
     try:
-        httpd.serve_forever()
-    except KeyboardInterrupt:
-        print("\n👋 Server stopped.")
+        httpd = ReuseServer(("", PORT), Handler)
+        chosen_port = PORT
+        break
+    except OSError as e:
+        if attempt < max_retries - 1:
+            print(f"  Port {PORT} busy, retrying in 1s... (attempt {attempt + 1}/{max_retries})")
+            time.sleep(1)
+        else:
+            print(f"\nERROR: Port {PORT} is already in use after {max_retries} attempts.")
+            print("Please close any app using port 8080 and try again.")
+            exit(1)
+
+print(f"\n🚀 Open Cloud running at http://localhost:{chosen_port}/")
+print("Press Ctrl+C to stop\n")
+
+# Write chosen port to file so start.sh can read it
+with open('server_port.txt', 'w') as f:
+    f.write(str(chosen_port))
+
+try:
+    httpd.serve_forever()
+except KeyboardInterrupt:
+    print("\n👋 Server stopped.")

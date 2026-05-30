@@ -3,57 +3,74 @@
 
 cd "$(dirname "$0")"
 
-# Kill any stale process on port 8080
-STALE_PID=$(lsof -ti :8080 2>/dev/null)
-if [ -n "$STALE_PID" ]; then
-    echo "Killing stale server on port 8080 (PID: $STALE_PID)..."
-    kill -9 "$STALE_PID" 2>/dev/null
-    sleep 1
+# Kill any stale server.py process
+STALE_PIDS=$(pgrep -f "python.*/server\.py" 2>/dev/null)
+if [ -n "$STALE_PIDS" ]; then
+    echo "Killing stale server processes..."
+    kill -9 $STALE_PIDS 2>/dev/null
+    sleep 2
 fi
 
 # Start the server
 if command -v python3 &> /dev/null; then
-    echo "Starting Open Cloud server with Python..."
-    nohup python3 server.py > /dev/null 2>&1 &
+    echo "Starting Open Cloud server with Python on port 8080..."
+    nohup python3 server.py > server.log 2>&1 &
 elif command -v python &> /dev/null; then
-    echo "Starting Open Cloud server with Python..."
-    nohup python server.py > /dev/null 2>&1 &
-elif command -v node &> /dev/null; then
-    echo "Starting Open Cloud server with Node..."
-    nohup npx -y serve -l 8080 > /dev/null 2>&1 &
+    echo "Starting Open Cloud server with Python on port 8080..."
+    nohup python server.py > server.log 2>&1 &
 else
-    echo "ERROR: Need Python 3 or Node.js to run the local server."
-    echo "Install one of them, or run manually:"
-    echo "  python3 -m http.server 8080"
+    echo "ERROR: Python 3 is required to run the local server."
+    echo "Install from https://python.org and try again."
     exit 1
 fi
 
 SERVER_PID=$!
 
-# Wait for server to be ready
-echo -n "Waiting for server"
-for i in {1..30}; do
-    if curl -s -o /dev/null --max-time 1 http://localhost:8080/; then
-        echo ""
+# Wait for server to write port
+PORT=""
+for i in $(seq 1 40); do
+    if [ -f server_port.txt ]; then
+        PORT=$(cat server_port.txt)
         break
     fi
-    # Check if the process died
-    if ! ps -p $SERVER_PID > /dev/null 2>&1; then
-        echo ""
+    if ! kill -0 $SERVER_PID 2>/dev/null; then
         echo "ERROR: Server process exited unexpectedly"
+        tail -n 20 server.log
         exit 1
     fi
-    echo -n "."
-    sleep 0.3
+    sleep 0.25
 done
+
+if [ -z "$PORT" ]; then
+    echo "ERROR: Server did not start write port file in time"
+    tail -n 20 server.log
+    exit 1
+fi
+
+# Wait for HTTP response
+READY=0
+for i in $(seq 1 40); do
+    if curl -s -o /dev/null --max-time 1 "http://localhost:$PORT/"; then
+        READY=1
+        break
+    fi
+    sleep 0.25
+done
+
+if [ "$READY" -ne 1 ]; then
+    echo "ERROR: Server did not respond on port $PORT"
+    tail -n 20 server.log
+    exit 1
+fi
+
+URL="http://localhost:$PORT"
+echo "Open Cloud is ready: $URL"
 
 # Open browser
 if command -v open &> /dev/null; then
-    open "http://localhost:8080"
+    open "$URL"
 elif command -v xdg-open &> /dev/null; then
-    xdg-open "http://localhost:8080"
+    xdg-open "$URL"
 else
-    echo ""
-    echo "Server is running. Open your browser and go to:"
-    echo "  http://localhost:8080"
+    echo "Open your browser and go to: $URL"
 fi

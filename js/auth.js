@@ -8,6 +8,40 @@ const SUPABASE_ANON_KEY = (typeof window !== 'undefined' && window.ENV?.SUPABASE
 let supabaseClient = null;
 let currentUser = null;
 let _isAdmin = false;
+let _localUser = null;
+
+const LOCAL_IDENTITY_KEY = 'oc_local_identity';
+
+export function saveLocalIdentity(user) {
+  if (!user) return;
+  try {
+    const identity = {
+      id: user.id,
+      email: user.email || '',
+      username: user.user_metadata?.username || user.user_metadata?.display_name || '',
+      display_name: user.user_metadata?.display_name || user.user_metadata?.username || user.email?.split('@')[0] || 'User',
+      user_metadata: user.user_metadata || {},
+      created_at: new Date().toISOString()
+    };
+    localStorage.setItem(LOCAL_IDENTITY_KEY, JSON.stringify(identity));
+  } catch (e) {}
+}
+
+export function getLocalIdentity() {
+  try {
+    const raw = localStorage.getItem(LOCAL_IDENTITY_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return null;
+}
+
+export function clearLocalIdentity() {
+  try { localStorage.removeItem(LOCAL_IDENTITY_KEY); } catch (e) {}
+}
+
+export function setLocalUser(user) {
+  _localUser = user;
+}
 
 function getStoredAdmin() {
   try { return localStorage.getItem('oc_is_admin') === 'true'; } catch (e) { return false; }
@@ -161,6 +195,8 @@ export async function signOut() {
     currentUser = null;
     _isAdmin = false;
     setStoredAdmin(false);
+    clearLocalIdentity();
+    _localUser = null;
     showToast('Signed out', 'info');
   } catch (err) {
     console.error('[Auth] Signout failed:', err);
@@ -168,24 +204,29 @@ export async function signOut() {
 }
 
 export function getCurrentAuthUser() {
+  if (_localUser) return _localUser;
   return currentUser;
 }
 
 export function isAuthenticated() {
-  return !!currentUser;
+  return !!getCurrentAuthUser();
 }
 
 export function getUserDisplayName() {
-  if (!currentUser) return 'Guest';
-  return currentUser.user_metadata?.display_name || 
-         currentUser.user_metadata?.username || 
-         currentUser.email?.split('@')[0] || 
+  const user = getCurrentAuthUser();
+  if (!user) return 'Guest';
+  return user.user_metadata?.display_name ||
+         user.user_metadata?.username ||
+         user.email?.split('@')[0] ||
+         user.display_name ||
+         user.username ||
          'User';
 }
 
 export function getUserEmail() {
-  if (!currentUser) return '';
-  return currentUser.email || '';
+  const user = getCurrentAuthUser();
+  if (!user) return '';
+  return user.email || '';
 }
 
 export function isAdmin() {

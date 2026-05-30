@@ -23,14 +23,43 @@ let _cache = {
   profile: null
 };
 
+const LOCAL_PREFIX = 'oc_local_';
+
+function loadLocalCache() {
+  try { _cache.collection = JSON.parse(localStorage.getItem(LOCAL_PREFIX + 'collection')) || []; } catch (e) { _cache.collection = []; }
+  try { _cache.history = JSON.parse(localStorage.getItem(LOCAL_PREFIX + 'history')) || []; } catch (e) { _cache.history = []; }
+  try { _cache.progress = JSON.parse(localStorage.getItem(LOCAL_PREFIX + 'progress')) || {}; } catch (e) { _cache.progress = {}; }
+  try { _cache.folders = JSON.parse(localStorage.getItem(LOCAL_PREFIX + 'folders')) || []; } catch (e) { _cache.folders = []; }
+  try { _cache.settings = JSON.parse(localStorage.getItem(LOCAL_PREFIX + 'settings')) || null; } catch (e) { _cache.settings = null; }
+}
+
+function persistLocalCache() {
+  try {
+    localStorage.setItem(LOCAL_PREFIX + 'collection', JSON.stringify(_cache.collection));
+    localStorage.setItem(LOCAL_PREFIX + 'history', JSON.stringify(_cache.history));
+    localStorage.setItem(LOCAL_PREFIX + 'progress', JSON.stringify(_cache.progress));
+    localStorage.setItem(LOCAL_PREFIX + 'folders', JSON.stringify(_cache.folders));
+    if (_cache.settings) localStorage.setItem(LOCAL_PREFIX + 'settings', JSON.stringify(_cache.settings));
+  } catch (e) {}
+}
+
 function getUserId() {
   return getCurrentAuthUser()?.id || null;
 }
 
 /* ─── Init ─── */
 export async function initStorage() {
+  // Always start with local data so the app works offline / in local mode
+  loadLocalCache();
+
   const userId = getUserId();
-  if (!userId) return;
+  if (!userId) {
+    setUserCollection(_cache.collection);
+    setUserHistory(_cache.history);
+    setWatchProgress(_cache.progress);
+    setUserFolders(_cache.folders);
+    return;
+  }
 
   const results = await Promise.allSettled([
     fetchCollection(userId),
@@ -46,9 +75,13 @@ export async function initStorage() {
   const progress   = progressRes.status   === 'fulfilled' ? progressRes.value   : {};
   const settings   = settingsRes.status   === 'fulfilled' ? settingsRes.value   : {};
 
-  _cache.collection = (collection || []).filter(item => item && item.id && item.title && item.title !== 'Unknown');
+  // If Supabase returned data, use it (it may be fresher from another device).
+  // Otherwise keep the local cache.
+  if (collection?.length > 0) {
+    _cache.collection = (collection || []).filter(item => item && item.id && item.title && item.title !== 'Unknown');
+  }
 
-  // Load localStorage backup to restore poster/rating/year that Supabase may have stripped
+  // Merge Supabase history with local backup metadata
   let backup = [];
   try {
     const raw = localStorage.getItem('oc_history_backup');
@@ -59,26 +92,33 @@ export async function initStorage() {
     if (b?.id) backupMap.set(`${b.id}::${b.media_type}`, b);
   });
 
-  // Merge Supabase history with backup metadata
-  const seen = new Set();
-  _cache.history = (history || []).map(h => {
-    const key = `${h.id}::${h.media_type}`;
-    seen.add(key);
-    const b = backupMap.get(key);
-    if (b) {
-      return {
-        ...h,
-        poster_path: h.poster_path || b.poster_path || null,
-        vote_average: h.vote_average != null ? h.vote_average : (b.vote_average || 0),
-        year: h.year || b.year || null
-      };
-    }
-    return h;
-  }).filter(h => !!h.id);
+  if (history?.length > 0) {
+    const seen = new Set();
+    _cache.history = (history || []).map(h => {
+      const key = `${h.id}::${h.media_type}`;
+      seen.add(key);
+      const b = backupMap.get(key);
+      if (b) {
+        return {
+          ...h,
+          poster_path: h.poster_path || b.poster_path || null,
+          vote_average: h.vote_average != null ? h.vote_average : (b.vote_average || 0),
+          year: h.year || b.year || null
+        };
+      }
+      return h;
+    }).filter(h => !!h.id);
+  }
 
-  _cache.progress   = progress || {};
-  _cache.settings   = settings || { device: 'laptop', provider: 'videasy', autoPlay: true, folders: [] };
-  _cache.folders    = settings?.folders || [];
+  if (progress && Object.keys(progress).length > 0) {
+    _cache.progress = progress;
+  }
+  if (settings) {
+    _cache.settings = settings || { device: 'laptop', provider: 'videasy', autoPlay: true, folders: [] };
+    _cache.folders = settings?.folders || [];
+  }
+
+  persistLocalCache();
 
   setUserCollection(_cache.collection);
   setUserHistory(_cache.history);
@@ -94,6 +134,7 @@ export function getUserCollection() {
 export async function saveUserCollection(items) {
   _cache.collection = items;
   setUserCollection(items);
+  persistLocalCache();
 }
 
 export async function addToUserCollection(item) {
@@ -114,6 +155,7 @@ export async function addToUserCollection(item) {
   if (exists >= 0) _cache.collection[exists] = normalized;
   else _cache.collection.unshift(normalized);
   setUserCollection([..._cache.collection]);
+  persistLocalCache();
 
   // Supabase fire-and-forget with silent error handling
   try {
@@ -130,6 +172,7 @@ export async function removeFromUserCollection(tmdbId, mediaType) {
   // Optimistic — remove from local immediately
   _cache.collection = _cache.collection.filter(i => !(i.id === tmdbId && i.media_type === mediaType));
   setUserCollection([..._cache.collection]);
+  persistLocalCache();
 
   // Supabase in background
   try {
@@ -147,9 +190,10 @@ export function getUserHistory() {
 
 export async function saveUserHistory(items) {
   const userId = getUserId();
-  if (!userId || !Array.isArray(items)) return false;
+  if (!Array.isArray(items)) return false;
   _cache.history = items;
   setUserHistory(items);
+  persistLocalCache();
   // Bulk save to Supabase (clear then re-insert)
   const supabase = getSupabaseClient();
   if (!supabase) return false;
@@ -213,11 +257,7 @@ export async function addToUserHistory(item) {
   _cache.history.unshift(entry);
   if (_cache.history.length > 200) _cache.history = _cache.history.slice(0, 200);
   setUserHistory([..._cache.history]);
-
-  // Backup to localStorage so metadata survives even if Supabase is missing columns
-  try {
-    localStorage.setItem('oc_history_backup', JSON.stringify(_cache.history));
-  } catch (e) { /* ignore quota errors */ }
+  persistLocalCache();
 
   // Supabase in background with silent failure
   try {
@@ -237,6 +277,7 @@ export async function removeFromUserHistory(tmdbId, mediaType) {
   // Also remove progress
   delete _cache.progress[tmdbId];
   setWatchProgress({ ..._cache.progress });
+  persistLocalCache();
 
   try {
     await syncRemoveHistory(userId, tmdbId);
@@ -253,19 +294,18 @@ export function getWatchProgress() {
 }
 
 export async function saveWatchProgress(data) {
-  const userId = getUserId();
-  if (!userId) return false;
   _cache.progress = { ..._cache.progress, ...data };
   setWatchProgress(_cache.progress);
-  // Batch sync: we don't write every key individually, the caller should call syncSaveProgress for specific items
+  persistLocalCache();
   return true;
 }
 
 export async function syncWatchProgressItem(tmdbId, mediaType, season, episode, progressSeconds) {
-  const userId = getUserId();
-  if (!userId) return false;
   _cache.progress[tmdbId] = { season, episode, progress_seconds: progressSeconds };
   setWatchProgress(_cache.progress);
+  persistLocalCache();
+  const userId = getUserId();
+  if (!userId) return true;
   await syncSaveProgress(userId, { id: tmdbId, media_type: mediaType, season, episode, progress_seconds: progressSeconds });
   return true;
 }
@@ -276,10 +316,11 @@ export function getUserFolders() {
 }
 
 export async function saveUserFolders(folders) {
-  const userId = getUserId();
-  if (!userId) return false;
   _cache.folders = folders;
   setUserFolders(folders);
+  persistLocalCache();
+  const userId = getUserId();
+  if (!userId) return true;
   await syncSaveFolders(userId, folders);
   return true;
 }
@@ -290,8 +331,9 @@ export function getSettings() {
 }
 
 export async function saveSettings(settings) {
-  const userId = getUserId();
   _cache.settings = { ..._cache.settings, ...settings };
+  persistLocalCache();
+  const userId = getUserId();
   if (userId) {
     await syncSaveSettings(userId, _cache.settings);
   }
@@ -304,8 +346,9 @@ export function getLocalProfile() {
 }
 
 export async function saveLocalProfile(profile) {
-  const userId = getUserId();
   _cache.profile = { ..._cache.profile, ...profile };
+  persistLocalCache();
+  const userId = getUserId();
   if (userId) {
     const updates = {};
     if (profile.username !== undefined) updates.username = profile.username;
