@@ -111,21 +111,18 @@ function initAuthModal() {
 
 /* ── Update Modal (manual-only) ── */
 let _updateAvailable = false;
-let _lastUpdateInfo  = null;
+let _updateSummary   = '';
 const LOCAL_VERSION_KEY  = 'openccloud_last_version';
 const GITHUB_REPO        = 'sebastianmiletic/opencloud';
 const GITHUB_BRANCH      = 'main';
+const GITHUB_ZIP_URL     = `https://github.com/${GITHUB_REPO}/archive/refs/heads/${GITHUB_BRANCH}.zip`;
 
 function cleanCommitMessage(raw) {
   if (!raw) return 'General improvements and bug fixes.';
-  // Take only the first line (subject)
   let firstLine = raw.split('\n')[0].trim();
   if (!firstLine) return 'General improvements and bug fixes.';
-  // Remove conventional commit prefix (feat:, fix:, chore:, etc.)
   firstLine = firstLine.replace(/^[a-z]+(\([^)]+\))?!?:\s*/i, '').trim();
-  // Capitalize first letter
   firstLine = firstLine.charAt(0).toUpperCase() + firstLine.slice(1);
-  // Trim to ~12 words for a clean one-liner
   const words = firstLine.split(/\s+/);
   if (words.length > 12) {
     return words.slice(0, 12).join(' ') + '...';
@@ -149,25 +146,30 @@ async function fetchLatestCommit() {
 }
 
 function openUpdateModal() {
-  const updateModal          = document.getElementById('updateModal');
-  const updateModalMsg       = document.getElementById('updateModalMsg');
-  const updateModalDetails   = document.getElementById('updateModalDetails');
-  const updateModalInstall   = document.getElementById('updateModalInstallBtn');
-  const updateModalUpToDate  = document.getElementById('updateModalUpToDate');
-  if (!updateModal) return;
-  updateModal.classList.remove('hidden');
-  if (!_updateAvailable || !_lastUpdateInfo) {
-    if (updateModalMsg) updateModalMsg.innerHTML = 'You are on the latest version.';
-    if (updateModalUpToDate) updateModalUpToDate.style.display = 'block';
-    if (updateModalInstall) updateModalInstall.style.display = 'none';
-    if (updateModalDetails) updateModalDetails.innerHTML = '';
-  } else {
-    if (updateModalUpToDate) updateModalUpToDate.style.display = 'none';
-    if (updateModalInstall) updateModalInstall.style.display = 'block';
-    if (updateModalMsg) {
-      updateModalMsg.innerHTML = `<div style="color:var(--text-primary);font-weight:600;font-size:0.9375rem;">${escapeHtml(_lastUpdateInfo.message)}</div>`;
+  const modal         = document.getElementById('updateModal');
+  const msg           = document.getElementById('updateModalMsg');
+  const installBtn    = document.getElementById('updateModalInstallBtn');
+  const upToDateEl    = document.getElementById('updateModalUpToDate');
+  const titleEl       = document.getElementById('updateModalTitle');
+  const subtitleEl    = document.getElementById('updateModalSubtitle');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+
+  if (_updateAvailable && _updateSummary) {
+    if (titleEl) titleEl.textContent = 'Update Available';
+    if (subtitleEl) subtitleEl.textContent = 'A new version of Open Cloud is ready';
+    if (msg) msg.innerHTML = escapeHtml(_updateSummary);
+    if (upToDateEl) upToDateEl.style.display = 'none';
+    if (installBtn) {
+      installBtn.style.display = 'block';
+      installBtn.innerHTML = '<i class="fas fa-download" style="margin-right:0.4rem;"></i>Download Latest ZIP';
     }
-    if (updateModalDetails) updateModalDetails.innerHTML = '';
+  } else {
+    if (titleEl) titleEl.textContent = 'No Updates';
+    if (subtitleEl) subtitleEl.textContent = 'You are on the latest version';
+    if (msg) msg.innerHTML = '<i class="fas fa-check-circle" style="color:#10b981;margin-right:0.3rem;"></i>Everything is up to date.';
+    if (upToDateEl) upToDateEl.style.display = 'none';
+    if (installBtn) installBtn.style.display = 'none';
   }
 }
 
@@ -218,22 +220,22 @@ async function initAppContent() {
       e.stopPropagation();
       accountDropdown?.classList.add('hidden');
       _updateAvailable = false;
-      _lastUpdateInfo = null;
+      _updateSummary   = '';
 
       const latest = await fetchLatestCommit();
 
       // Handle API errors gracefully
       if (latest?.error) {
-        _lastUpdateInfo = null;
         _updateAvailable = false;
+        _updateSummary   = '';
         openUpdateModal();
         showToast(latest.message, 'error');
         return;
       }
 
       if (!latest?.sha) {
-        _lastUpdateInfo = null;
         _updateAvailable = false;
+        _updateSummary   = '';
         openUpdateModal();
         showToast('Could not check for updates. Try again later.', 'error');
         return;
@@ -241,9 +243,8 @@ async function initAppContent() {
 
       const localSha = localStorage.getItem(LOCAL_VERSION_KEY);
       if (latest.sha === localSha) {
-        // Already up to date
         _updateAvailable = false;
-        _lastUpdateInfo = null;
+        _updateSummary   = '';
         if (updateBadge) updateBadge.textContent = '';
         openUpdateModal();
         return;
@@ -269,13 +270,13 @@ async function initAppContent() {
         localStorage.setItem(LOCAL_VERSION_KEY, latest.sha);
         if (updateBadge) updateBadge.textContent = '';
         _updateAvailable = false;
-        _lastUpdateInfo = null;
+        _updateSummary   = '';
         openUpdateModal();
         return;
       }
 
       _updateAvailable = true;
-      _lastUpdateInfo = { message: featureDesc };
+      _updateSummary   = featureDesc;
       if (updateBadge) updateBadge.textContent = 'New!';
       openUpdateModal();
     });
@@ -284,13 +285,13 @@ async function initAppContent() {
   /* Update modal close */
   document.getElementById('updateModalClose')?.addEventListener('click', () => document.getElementById('updateModal')?.classList.add('hidden'));
 
-  /* Install update */
+  /* Download latest ZIP (honest behaviour for ZIP-based app) */
   document.getElementById('updateModalInstallBtn')?.addEventListener('click', async () => {
-    showToast('Installing update...', 'info');
+    showToast('Opening download...', 'info');
     try { const latest = await fetchLatestCommit(); if (latest?.sha) localStorage.setItem(LOCAL_VERSION_KEY, latest.sha); } catch (e) {}
-    try { const cacheNames = await caches.keys(); await Promise.all(cacheNames.map(name => caches.delete(name))); } catch (e) {}
-    try { if ('serviceWorker' in navigator) { const regs = await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r => r.unregister())); } } catch (e) {}
-    location.reload(true);
+    // Open the ZIP download in a new tab
+    window.open(GITHUB_ZIP_URL, '_blank');
+    document.getElementById('updateModal')?.classList.add('hidden');
   });
 
   /* Sign Out */
