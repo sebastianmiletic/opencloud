@@ -1,20 +1,27 @@
 /** Supabase Database Sync Module */
 import { showToast } from './utils.js';
+import { getSupabaseClient } from './auth.js';
 
 const SUPABASE_URL = (typeof window !== 'undefined' && window.ENV?.SUPABASE_URL) ? window.ENV.SUPABASE_URL : '';
 const SUPABASE_ANON_KEY = (typeof window !== 'undefined' && window.ENV?.SUPABASE_ANON_KEY) ? window.ENV.SUPABASE_ANON_KEY : '';
 
-let supabaseClient = null;
+let _fallbackClient = null;
 
 function getClient() {
-  if (!supabaseClient) {
+  // Always use the authenticated client from auth.js so RLS policies pass.
+  // auth.js initialises this before any DB calls are made.
+  const authClient = getSupabaseClient();
+  if (authClient) return authClient;
+
+  // Fallback for edge-cases where auth.js hasn't run yet
+  if (!_fallbackClient) {
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
     if (typeof window.supabase === 'undefined') return null;
-    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    _fallbackClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: false }
     });
   }
-  return supabaseClient;
+  return _fallbackClient;
 }
 
 /* ─── Collections ─── */

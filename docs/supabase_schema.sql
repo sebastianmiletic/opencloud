@@ -91,3 +91,30 @@ create policy "Users can manage own history" on watch_history for all using (aut
 create policy "Users can manage own progress" on watch_progress for all using (auth.uid() = user_id);
 create policy "Users can manage own settings" on user_settings for all using (auth.uid() = user_id);
 create policy "Users can manage own sessions" on watch_sessions for all using (auth.uid() = user_id);
+
+-- Auto-create profile on auth signup (bulletproof: works even if client-side createProfile fails)
+create or replace function public.handle_new_user()
+returns trigger as $$
+begin
+  insert into public.profiles (id, email, username, created_at)
+  values (
+    new.id,
+    new.email,
+    coalesce(new.raw_user_meta_data->>'username', split_part(new.email, '@', 1)),
+    timezone('utc'::text, now())
+  );
+  return new;
+end;
+$$ language plpgsql security definer;
+
+-- Only create the trigger if it doesn't already exist
+do $$
+begin
+  if not exists (
+    select 1 from pg_trigger where tgname = 'on_auth_user_created'
+  ) then
+    create trigger on_auth_user_created
+      after insert on auth.users
+      for each row execute procedure public.handle_new_user();
+  end if;
+end $$;
