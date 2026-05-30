@@ -1,5 +1,5 @@
 /** Main App Entry Point */
-import { initStorage } from './storage.js';
+import { initStorage, hydrateHistoryMetadata, hydrateCollectionMetadata } from './storage.js';
 import { initUser } from './accounts.js';
 import { initSettings } from './settings.js';
 import { initPlayer } from './player.js';
@@ -174,6 +174,9 @@ function openUpdateModal() {
 /* ── App Content ── */
 async function initAppContent() {
   await initStorage();
+  // Background: enrich any history/collection items missing poster or rating
+  hydrateHistoryMetadata().catch(() => {});
+  hydrateCollectionMetadata().catch(() => {});
   initUser();
   initNav();
   initSearch();

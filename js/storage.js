@@ -13,6 +13,19 @@ import {
   setUserCollection, setUserHistory, setWatchProgress, setUserFolders
 } from './state.js';
 
+/* Lazy imports to avoid circular deps */
+let _api = null;
+async function getAPI() {
+  if (!_api) {
+    const [{ fetchWithAuth }, { BASE_URL }] = await Promise.all([
+      import('./api.js'),
+      import('./config.js')
+    ]);
+    _api = { fetchWithAuth, BASE_URL };
+  }
+  return _api;
+}
+
 // In-memory state cache (hydrated from Supabase on login)
 let _cache = {
   collection: [],
@@ -105,7 +118,12 @@ export async function initStorage() {
           watched_at: remoteDate > localDate ? h.watched_at : local.watched_at,
           season: h.season ?? local.season ?? null,
           episode: h.episode ?? local.episode ?? null,
-          duration_watched: h.duration_watched || local.duration_watched || 0
+          duration_watched: h.duration_watched || local.duration_watched || 0,
+          // Explicitly keep local poster/rating/year if Supabase stripped them
+          poster_path: local.poster_path || h.poster_path || null,
+          vote_average: local.vote_average != null ? local.vote_average : (h.vote_average != null ? h.vote_average : null),
+          year: local.year || h.year || null,
+          title: local.title || h.title || 'Unknown'
         });
       } else {
         // Item from another device — add it even if metadata is thin
@@ -291,6 +309,64 @@ export async function removeFromUserHistory(tmdbId, mediaType) {
     console.error('[Storage] removeFromUserHistory Supabase failed:', err);
   }
   return true;
+}
+
+/* ─── Background Metadata Hydration ─── */
+async function _hydrateItems(items, type) {
+  const { fetchWithAuth, BASE_URL } = await getAPI();
+  const batchSize = 5;
+  let changed = false;
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+    await Promise.all(batch.map(async (item) => {
+      try {
+        const url = `${BASE_URL}/${item.media_type}/${item.id}?language=en-US`;
+        const data = await fetchWithAuth(url);
+        if (data) {
+          const newPoster = data.poster_path || item.poster_path || null;
+          const newRating = data.vote_average != null ? data.vote_average : item.vote_average;
+          const newYear = item.year || (data.release_date || data.first_air_date || '').slice(0, 4) || null;
+          const newTitle = item.title || data.title || data.name || 'Unknown';
+          if (newPoster !== item.poster_path || newRating !== item.vote_average || newYear !== item.year) {
+            item.poster_path = newPoster;
+            item.vote_average = newRating;
+            item.year = newYear;
+            item.title = newTitle;
+            changed = true;
+          }
+        }
+      } catch (e) { /* skip failed fetches */ }
+    }));
+  }
+  return changed;
+}
+
+export async function hydrateHistoryMetadata() {
+  const thin = _cache.history.filter(h =>
+    !h.poster_path ||
+    h.vote_average == null ||
+    h.vote_average === 0
+  );
+  if (!thin.length) return;
+  const changed = await _hydrateItems(thin, 'history');
+  if (changed) {
+    setUserHistory([..._cache.history]);
+    persistLocalCache();
+  }
+}
+
+export async function hydrateCollectionMetadata() {
+  const thin = _cache.collection.filter(c =>
+    !c.poster_path ||
+    c.vote_average == null ||
+    c.vote_average === 0
+  );
+  if (!thin.length) return;
+  const changed = await _hydrateItems(thin, 'collection');
+  if (changed) {
+    setUserCollection([..._cache.collection]);
+    persistLocalCache();
+  }
 }
 
 /* ─── Progress ─── */
