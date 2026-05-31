@@ -92,6 +92,7 @@ function createMainWindow(port) {
   mainWindow = new BrowserWindow({
     width: 1480, height: 920, minWidth: 1024, minHeight: 640,
     title: 'Open Cloud', backgroundColor: '#000000',
+    icon: path.join(APP_DIR, process.platform === 'win32' ? 'icon.ico' : (process.platform === 'darwin' ? 'icon.icns' : 'icon.png')),
     webPreferences: {
       nodeIntegration: false, contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),

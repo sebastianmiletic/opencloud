@@ -1,6 +1,6 @@
 # Open Cloud
 
-A black-and-white themed streaming tracker web app with TMDB/OMDB integration, inline video player, Supabase authentication, Netflix-style animations, and a built-in ad/popup blocker via Electron. Track what you watch, save your favorites, and resume where you left off.
+A black-and-white themed streaming tracker desktop app with TMDB/OMDB integration, inline video player, Supabase authentication, Netflix-style animations, and a built-in ad/popup blocker via Electron. Track what you watch, save your favorites, and resume where you left off.
 
 ---
 
@@ -45,7 +45,7 @@ A black-and-white themed streaming tracker web app with TMDB/OMDB integration, i
 
 ### Getting Started
 
-1. **Open** the app in your browser
+1. **Open** the app — it launches in its own desktop window (no browser required)
 2. You will see a **Sign In** modal (mandatory — no close button). You must create an account or sign in to use the app
 3. **Account creation** requires: a username, an email, and a password (6+ characters)
 4. **Email confirmation is OFF** — accounts work immediately
@@ -84,12 +84,15 @@ Open Cloud/
 ├── index.html          # Main app shell with all modals
 ├── styles.css          # Main black-and-white theme styles
 ├── server.py           # Python HTTP server + env injection + port fallback
-├── start.sh            # Bash launcher (kills stale servers, opens browser)
+├── start.sh            # Bash launcher (kills stale servers, launches Electron)
 ├── .env                # API keys (bundled in ZIP — no manual config needed)
 ├── .env.example        # Template for custom .env keys
 ├── version.json        # App version metadata
+├── icon.png            # App icon (cloud, transparent background)
+├── icon.icns           # macOS app icon
+├── icon.ico            # Windows app icon
 ├── js/
-│   ├── main.js         # App entry point, auth, update checker, init
+│   ├── main.js         # App entry point, auth, init
 │   ├── auth.js         # Supabase authentication (sign in / up / out / password)
 │   ├── api.js          # TMDB + OMDB fetch helpers
 │   ├── ui.js           # Home, search, item modals, collection, history
@@ -104,10 +107,9 @@ Open Cloud/
 │   ├── utils.js        # Toast, scroll lock, confirm dialog
 │   ├── accounts.js     # User avatar/name initializer
 │   └── supabase.js     # Watch sessions and stats aggregation
-├── extension/          # Chrome extension — auto-loaded by start.sh on launch
-│   ├── manifest.json
-│   ├── js/
-│   └── ...
+├── electron/           # Electron desktop wrapper
+│   ├── main.js         # Electron main process: server launcher + popup blocker
+│   └── preload.js      # Preload script (currently empty)
 ├── docs/
 │   ├── supabase_schema.sql   # SQL for creating Supabase tables
 │   ├── SUPABASE_SETUP.md     # Step-by-step Supabase setup guide
@@ -123,7 +125,7 @@ Open Cloud/
 - **Search** — Movies and TV shows via TMDB API
 - **Inline Player** — Watch content with 7 different providers
 - **Netflix UI** — Splash screen, hero carousel, smooth animations
-- **Ad/Popup Blocker** — Chrome extension auto-loaded by `start.sh` kills popups at the browser level before they appear
+- **Ad/Popup Blocker** — Electron-level protection that blocks popups, iframe redirects, and beforeunload traps
 - **Continue Watching** — Auto-saves TV progress by season/episode
 - **History** — Auto-tracks every movie and show you open in the player, with poster, rating, and year
 - **Collections** — Save items and organize with folders
@@ -181,7 +183,7 @@ If you want to use your own Supabase project instead of the bundled one:
 3. Turn **Confirm email** OFF
 4. Run the SQL from `docs/supabase_schema.sql` in the SQL Editor
 5. Copy your project URL and anon key into `.env`
-6. Restart the server
+6. Restart the app
 
 **Admin access** can be activated by any user who enters the correct activation key in **Settings > General**.
 
