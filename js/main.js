@@ -51,8 +51,16 @@ function initAuthModal() {
   function activateField(el, isPw = false) {
     if (el && el.readOnly) { el.readOnly = false; if (isPw) el.type = 'password'; }
   }
-  [signinEmail, signupEmail].forEach(el => { if (el) el.addEventListener('focus', () => activateField(el)); el.addEventListener('input', () => { activateField(el); el.classList.toggle('has-value', !!el.value); }); });
-  [signinPw,    signupPw   ].forEach(el => { if (el) el.addEventListener('focus', () => activateField(el, true)); el.addEventListener('input', () => { activateField(el, true); el.classList.toggle('has-value', !!el.value); }); });
+  [signinEmail, signupEmail].forEach(el => {
+    if (!el) return;
+    el.addEventListener('focus', () => activateField(el));
+    el.addEventListener('input', () => { activateField(el); el.classList.toggle('has-value', !!el.value); });
+  });
+  [signinPw, signupPw].forEach(el => {
+    if (!el) return;
+    el.addEventListener('focus', () => activateField(el, true));
+    el.addEventListener('input', () => { activateField(el, true); el.classList.toggle('has-value', !!el.value); });
+  });
   const signupUsername = document.getElementById('signupUsername');
   if (signupUsername) { signupUsername.addEventListener('focus', () => activateField(signupUsername)); signupUsername.addEventListener('input', () => { activateField(signupUsername); signupUsername.classList.toggle('has-value', !!signupUsername.value); }); }
 
@@ -163,7 +171,7 @@ async function initAppContent() {
     e.stopPropagation();
     accountDropdown?.classList.add('hidden');
     await signOut();
-    location.reload(true);
+    location.reload();
   });
 
   /* Load home */

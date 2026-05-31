@@ -120,7 +120,7 @@ export function initSettings() {
       const confirmed = confirm('Delete your account? This cannot be undone.');
       if (!confirmed) return;
       const { error } = await deleteAccount();
-      if (!error) location.reload(true);
+      if (!error) location.reload();
       else showToast('Failed to delete account', 'error');
     });
   }
