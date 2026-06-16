@@ -6,34 +6,59 @@ A black-and-white themed streaming tracker desktop app with TMDB/OMDB integratio
 
 ## How to Download & Install
 
-### macOS (Recommended — DMG Installer)
+<p align="center">
+  <a href="https://github.com/sebastianmiletic/opencloud/releases/download/v2.2.11/OpenCloud.dmg">
+    <img src="https://img.shields.io/badge/Download-macOS%20(.dmg)-black?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS">
+  </a>
+  &nbsp;
+  <a href="https://github.com/sebastianmiletic/opencloud/releases/download/v2.2.11/OpenCloud.exe">
+    <img src="https://img.shields.io/badge/Download-Windows%20(.exe)-black?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows">
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/sebastianmiletic/opencloud/releases/latest">View all releases</a>
+</p>
+
+<p align="center">
+  <img src="screenshot.png" alt="Open Cloud Screenshot" width="100%">
+</p>
+
+---
+
+### macOS (Recommended — DMG)
 
 1. **Download the DMG**
-   - Go to the [**Releases**](https://github.com/sebastianmiletic/opencloud/releases/latest) page
-   - Download **`OpenCloud.dmg`**
+   - Click the **macOS (.dmg)** button above, or go to the [Releases page](https://github.com/sebastianmiletic/opencloud/releases/latest) and download `OpenCloud.dmg`
 
-2. **Install**
-   - Open the downloaded `.dmg` file
+2. **Install the app**
+   - Open the downloaded `OpenCloud.dmg`
    - In the window that appears, **drag** the `OpenCloud.app` icon onto the **Applications** folder shortcut
    - Eject the mounted disk
 
-3. **Launch**
-   - Open **Finder > Applications** and double-click `OpenCloud`
+3. **Launch the app**
+   - Open **Finder > Applications** and double-click **OpenCloud**
    - **First launch only:** because the app is unsigned, macOS will show a security warning.   
      Right-click `OpenCloud.app` → **Open** → click **Open** in the dialog.   
-     After this one-time step, you can open it normally from Spotlight or the Dock.
+     After this one-time step, you can open it normally from **Spotlight** or the Dock.
 
 > **Note:** Spotlight may take a few seconds to index the app after first launch.
 
-### Windows (Recommended — EXE Installer)
+---
 
-1. **Download the EXE**
-   - Go to the [**Releases**](https://github.com/sebastianmiletic/opencloud/releases/latest) page
-   - Download **`OpenCloud.exe`**
+### Windows (Recommended — EXE)
 
-2. **Install**
-   - Run the downloaded `.exe` and follow the setup wizard
-   - A desktop shortcut will be created automatically
+1. **Download the Installer**
+   - Click the **Windows (.exe)** button above, or go to the [Releases page](https://github.com/sebastianmiletic/opencloud/releases/latest) and download `OpenCloud.exe`
+
+2. **Run the installer**
+   - Double-click the downloaded `OpenCloud.exe`
+   - Follow the on-screen setup wizard to complete installation
+
+3. **Launch the app**
+   - Once installed, open OpenCloud from your **Desktop** shortcut or the **Start Menu**
+
+---
 
 ### Build from Source (Mac / Linux / Windows)
 
