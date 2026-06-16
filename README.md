@@ -6,35 +6,54 @@ A black-and-white themed streaming tracker desktop app with TMDB/OMDB integratio
 
 ## How to Download & Install
 
-### Mac / Linux
+### macOS (Recommended — DMG Installer)
+
+1. **Download the DMG**
+   - Go to the [**Releases**](https://github.com/sebastianmiletic/opencloud/releases/latest) page
+   - Download **`OpenCloud.dmg`**
+
+2. **Install**
+   - Open the downloaded `.dmg` file
+   - In the window that appears, **drag** the `OpenCloud.app` icon onto the **Applications** folder shortcut
+   - Eject the mounted disk
+
+3. **Launch**
+   - Open **Finder > Applications** and double-click `OpenCloud`
+   - **First launch only:** because the app is unsigned, macOS will show a security warning.   
+     Right-click `OpenCloud.app` → **Open** → click **Open** in the dialog.   
+     After this one-time step, you can open it normally from Spotlight or the Dock.
+
+> **Note:** Spotlight may take a few seconds to index the app after first launch.
+
+### Windows (Recommended — EXE Installer)
+
+1. **Download the EXE**
+   - Go to the [**Releases**](https://github.com/sebastianmiletic/opencloud/releases/latest) page
+   - Download **`OpenCloud.exe`**
+
+2. **Install**
+   - Run the downloaded `.exe` and follow the setup wizard
+   - A desktop shortcut will be created automatically
+
+### Build from Source (Mac / Linux / Windows)
+
+If you prefer to run the app from code or want to develop:
 
 1. **Download the ZIP**
    - Go to [github.com/sebastianmiletic/opencloud](https://github.com/sebastianmiletic/opencloud)
    - Click the green **<> Code** button → **Download ZIP**
 
-2. **Unzip the file**
-   ```bash
-   unzip opencloud-main.zip
-   cd opencloud-main
-   ```
+2. **Unzip / extract** the file and open the extracted folder
 
-3. **Start the Electron app**
-   ```bash
-   ./start.sh
-   ```
-   On first run it installs Electron (~80 MB). The app window opens automatically — no browser needed.
-
-### Windows
-
-1. **Download the ZIP**
-   - Go to [github.com/sebastianmiletic/opencloud](https://github.com/sebastianmiletic/opencloud)
-   - Click the green **<> Code** button → **Download ZIP**
-
-2. **Extract the ZIP** and open the extracted `opencloud-main` folder
-
-3. **Start the app**
-   - Open Command Prompt or PowerShell in the folder
-   - Run: `npm install && npx electron .`
+3. **Install dependencies and start**
+   - **Mac / Linux:**
+     ```bash
+     ./start.sh
+     ```
+   - **Windows:**
+     ```cmd
+     npm install && npx electron .
+     ```
 
 > **Note:** API keys are bundled with the ZIP — no configuration needed.
 > **Note:** Electron must be installed once via `npm install`. After that the app launches instantly.
