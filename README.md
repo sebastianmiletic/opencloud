@@ -2,10 +2,6 @@
 
 A black-and-white themed streaming tracker desktop app with TMDB/OMDB integration, inline video player, Supabase authentication, Netflix-style animations, and a built-in ad/popup blocker via Electron. Track what you watch, save your favorites, and resume where you left off.
 
-<p align="center">
-  <img src="screenshot.png" alt="Open Cloud Screenshot" width="100%">
-</p>
-
 ---
 
 ## How to Download & Install
@@ -22,6 +18,10 @@ A black-and-white themed streaming tracker desktop app with TMDB/OMDB integratio
 
 <p align="center">
   <a href="https://github.com/sebastianmiletic/opencloud/releases/latest">View all releases</a>
+</p>
+
+<p align="center">
+  <img src="screenshot.png" alt="Open Cloud Screenshot" width="100%">
 </p>
 
 ---
