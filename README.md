@@ -17,7 +17,7 @@ A black-and-white themed streaming tracker desktop app with TMDB/OMDB integratio
 </p>
 
 <p align="center">
-  <a href="https://github.com/sebastianmiletic/opencloud/releases/latest">View all releases</a>
+  <a href="https://github.com/sebastianmiletic/opencloud/releases/latest"><strong>View all releases ↗</strong></a>
 </p>
 
 <p align="center">
