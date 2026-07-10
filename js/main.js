@@ -291,11 +291,15 @@ async function initApp() {
     const hasSupabase = initSupabase();
     initAuthModal();
 
+    // Mark as loaded — the JS modules and env are confirmed working at this point.
+    // The error screen timer should not fire during the (potentially slow) session check.
+    window._appLoaded = true;
+
     let user = null;
     if (hasSupabase) {
       user = await Promise.race([
         checkSession(),
-        new Promise(resolve => setTimeout(() => resolve(null), 10000))
+        new Promise(resolve => setTimeout(() => resolve(null), 4000))
       ]);
     }
 
