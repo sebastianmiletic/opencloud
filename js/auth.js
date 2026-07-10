@@ -87,6 +87,8 @@ export async function checkSession() {
     return null;
   } catch (err) {
     console.error('[Auth] Session check failed:', err);
+    // Clear the stale session so Supabase stops retrying token refresh in the background
+    try { await supabaseClient.auth.signOut(); } catch (e) {}
     return null;
   }
 }
