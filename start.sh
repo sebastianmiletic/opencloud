@@ -28,8 +28,18 @@ fi
 echo "🚀 Launching Open Cloud..."
 
 # ── Start the Electron app ──
-# Electron's main.js will spin up server.py internally
-npx electron . > app.log 2>&1 &
+# On macOS, use the custom OpenCloud.app bundle so the Dock shows "OpenCloud"
+# with the correct icon instead of "Electron".
+if [ "$(uname -s)" = "Darwin" ]; then
+    ELECTRON_DIST="$(pwd)/node_modules/electron/dist"
+    if [ -d "$ELECTRON_DIST/OpenCloud.app" ]; then
+        "$ELECTRON_DIST/OpenCloud.app/Contents/MacOS/OpenCloud" . > app.log 2>&1 &
+    else
+        npx electron . > app.log 2>&1 &
+    fi
+else
+    npx electron . > app.log 2>&1 &
+fi
 
 sleep 2
 

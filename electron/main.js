@@ -1,10 +1,11 @@
 const { app, BrowserWindow, shell } = require('electron');
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
 const APP_DIR = path.resolve(__dirname, '..');
 const PORT_FILE = path.join(APP_DIR, 'server_port.txt');
+const PID_FILE = path.join(APP_DIR, 'server_pid.txt');
 
 /* Hosts the Electron app is allowed to open (everything else = deny) */
 const ALLOWED_HOSTS = new Set([
@@ -28,9 +29,37 @@ function shouldAllowUrl(urlStr) {
 let mainWindow = null;
 let serverProcess = null;
 
+/* ── 0. Kill any stale server.py from a previous session ── */
+function killStaleServer() {
+  // 1. Kill the PID recorded in server_pid.txt
+  try {
+    const oldPid = parseInt(fs.readFileSync(PID_FILE, 'utf8').trim(), 10);
+    if (oldPid) {
+      try { process.kill(oldPid, 'SIGTERM'); } catch (e) {}
+      // Force-kill after 500ms if still alive
+      setTimeout(() => { try { process.kill(oldPid, 'SIGKILL'); } catch (e) {} }, 500);
+    }
+  } catch (e) {}
+
+  // 2. Kill any process still listening on port 8765
+  try {
+    if (process.platform === 'win32') {
+      const out = execSync('netstat -ano | findstr ":8765" | findstr "LISTENING"', { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
+      const pids = [...new Set(out.trim().split('\n').map(l => l.trim().split(/\s+/).pop()))];
+      pids.forEach(pid => { if (pid) { try { execSync(`taskkill /PID ${pid} /F`, { stdio: 'ignore' }); } catch (e) {} } });
+    } else {
+      const out = execSync('lsof -t -i :8765 2>/dev/null', { encoding: 'utf8' });
+      out.trim().split('\n').forEach(pid => {
+        if (pid) { try { execSync(`kill -9 ${pid}`, { stdio: 'ignore' }); } catch (e) {} }
+      });
+    }
+  } catch (e) {}
+}
+
 /* ── 1. Start Python server ── */
 function startServer() {
   return new Promise((resolve, reject) => {
+    killStaleServer();
     try { fs.unlinkSync(PORT_FILE); } catch (e) {}
 
     const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
@@ -38,6 +67,9 @@ function startServer() {
       cwd: APP_DIR,
       stdio: ['ignore', 'pipe', 'pipe']
     });
+
+    // Record PID so the next launch can kill us if we become stale
+    try { fs.writeFileSync(PID_FILE, String(serverProcess.pid)); } catch (e) {}
 
     serverProcess.stdout.on('data', (data) => {
       console.log('[Server]', data.toString().trim());
@@ -154,6 +186,7 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', () => {
   if (serverProcess && !serverProcess.killed) serverProcess.kill('SIGTERM');
+  try { fs.unlinkSync(PID_FILE); } catch (e) {}
   app.quit();
 });
 

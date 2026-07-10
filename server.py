@@ -51,15 +51,10 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 # Allow port reuse to prevent "Address already in use" after restart
 class ReuseServer(socketserver.TCPServer):
-    def server_bind(self):
-        self.socket = socket.socket(self.address_family, self.socket_type)
-        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.socket.bind(self.server_address)
-        self.server_address = self.socket.getsockname()
-        self.socket.listen(self.request_queue_size)
+    allow_reuse_address = True
 
 # Pin to port 8765 for stable localStorage. Retry a few times in case of stale bind.
-# If still busy, fall back to a free port so the app always starts.
+# If still busy, exit with error — Electron kills stale servers before spawning.
 httpd = None
 chosen_port = None
 max_retries = 5
@@ -73,17 +68,9 @@ for attempt in range(max_retries):
             print(f"  Port {PORT} busy, retrying in 1s... (attempt {attempt + 1}/{max_retries})")
             time.sleep(1)
         else:
-            # Fallback: find any free port
-            try:
-                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                s.bind(("", 0))
-                chosen_port = s.getsockname()[1]
-                s.close()
-                httpd = ReuseServer(("", chosen_port), Handler)
-                print(f"  ⚠️  Port {PORT} unavailable. Falling back to port {chosen_port}.")
-            except Exception:
-                print(f"\nERROR: Could not bind to any port.")
-                exit(1)
+            print(f"\nERROR: Port {PORT} is still in use after {max_retries} attempts.")
+            print("       Another Open Cloud instance may be running. Close it and try again.")
+            exit(1)
 
 print(f"\n🚀 Open Cloud running at http://localhost:{chosen_port}/")
 print("Press Ctrl+C to stop\n")

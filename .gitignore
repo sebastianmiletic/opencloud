@@ -20,4 +20,17 @@ node_modules/
 # Server output
 server.log
 server_port.txt
+server_pid.txt
 nohup.out
+
+# Build artifacts
+dist/
+build/__pycache__/
+background.jpg
+background2.jpg
+*.dmg
+*.exe
+*.blockmap
+
+# Download staging
+Download Files/
