@@ -1,11 +1,10 @@
 const { app, BrowserWindow, shell } = require('electron');
-const { spawn, execSync } = require('child_process');
-const fs = require('fs');
 const path = require('path');
+const { createOpenCloudServer } = require('./server');
 
-const APP_DIR = path.resolve(__dirname, '..');
-const PORT_FILE = path.join(APP_DIR, 'server_port.txt');
-const PID_FILE = path.join(APP_DIR, 'server_pid.txt');
+const APP_DIR = app.getAppPath();
+const LOCAL_HOST = '127.0.0.1';
+const LOCAL_PORT = 38475;
 
 /* Hosts the Electron app is allowed to open (everything else = deny) */
 const ALLOWED_HOSTS = new Set([
@@ -27,72 +26,16 @@ function shouldAllowUrl(urlStr) {
 }
 
 let mainWindow = null;
-let serverProcess = null;
+let localServer = null;
+let localServerPort = null;
 
-/* ── 0. Kill any stale server.py from a previous session ── */
-function killStaleServer() {
-  // 1. Kill the PID recorded in server_pid.txt
-  try {
-    const oldPid = parseInt(fs.readFileSync(PID_FILE, 'utf8').trim(), 10);
-    if (oldPid) {
-      try { process.kill(oldPid, 'SIGTERM'); } catch (e) {}
-      // Force-kill after 500ms if still alive
-      setTimeout(() => { try { process.kill(oldPid, 'SIGKILL'); } catch (e) {} }, 500);
-    }
-  } catch (e) {}
-
-  // 2. Kill any process still listening on port 8765
-  try {
-    if (process.platform === 'win32') {
-      const out = execSync('netstat -ano | findstr ":8765" | findstr "LISTENING"', { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
-      const pids = [...new Set(out.trim().split('\n').map(l => l.trim().split(/\s+/).pop()))];
-      pids.forEach(pid => { if (pid) { try { execSync(`taskkill /PID ${pid} /F`, { stdio: 'ignore' }); } catch (e) {} } });
-    } else {
-      const out = execSync('lsof -t -i :8765 2>/dev/null', { encoding: 'utf8' });
-      out.trim().split('\n').forEach(pid => {
-        if (pid) { try { execSync(`kill -9 ${pid}`, { stdio: 'ignore' }); } catch (e) {} }
-      });
-    }
-  } catch (e) {}
-}
-
-/* ── 1. Start Python server ── */
-function startServer() {
-  return new Promise((resolve, reject) => {
-    killStaleServer();
-    try { fs.unlinkSync(PORT_FILE); } catch (e) {}
-
-    const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
-    serverProcess = spawn(pythonCmd, ['server.py'], {
-      cwd: APP_DIR,
-      stdio: ['ignore', 'pipe', 'pipe']
-    });
-
-    // Record PID so the next launch can kill us if we become stale
-    try { fs.writeFileSync(PID_FILE, String(serverProcess.pid)); } catch (e) {}
-
-    serverProcess.stdout.on('data', (data) => {
-      console.log('[Server]', data.toString().trim());
-    });
-    serverProcess.stderr.on('data', (data) => {
-      console.error('[Server ERR]', data.toString().trim());
-    });
-
-    let attempts = 0;
-    const interval = setInterval(() => {
-      attempts++;
-      if (fs.existsSync(PORT_FILE)) {
-        const port = fs.readFileSync(PORT_FILE, 'utf8').trim();
-        if (port) { clearInterval(interval); resolve(port); return; }
-      }
-      if (!serverProcess || serverProcess.killed) {
-        clearInterval(interval); reject(new Error('Server exited')); return;
-      }
-      if (attempts > 240) {
-        clearInterval(interval); reject(new Error('Timed out waiting for server')); return;
-      }
-    }, 250);
-  });
+/* ── 1. Start Node.js HTTP server (in-process, no external Python) ── */
+async function startServer() {
+  const server = createOpenCloudServer({ baseDir: APP_DIR, host: LOCAL_HOST, port: LOCAL_PORT });
+  const started = await server.listen();
+  localServer = started;
+  localServerPort = started.port;
+  return started.port;
 }
 
 /* ── 2. Renderer-side injection ── */
@@ -119,7 +62,7 @@ function injectBlocker(win) {
 
 /* ── 3. Create main window ── */
 function createMainWindow(port) {
-  const url = 'http://localhost:' + port;
+  const url = `http://${LOCAL_HOST}:${port}`;
 
   mainWindow = new BrowserWindow({
     width: 1480, height: 920, minWidth: 1024, minHeight: 640,
@@ -185,16 +128,23 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  if (serverProcess && !serverProcess.killed) serverProcess.kill('SIGTERM');
-  try { fs.unlinkSync(PID_FILE); } catch (e) {}
   app.quit();
+});
+
+app.on('before-quit', async () => {
+  if (localServer) {
+    try {
+      await localServer.close();
+    } catch (error) {
+      console.error('Failed to stop local server:', error.message);
+    }
+    localServer = null;
+    localServerPort = null;
+  }
 });
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
-    try {
-      const port = fs.readFileSync(PORT_FILE, 'utf8').trim();
-      if (port) createMainWindow(port);
-    } catch (e) { app.quit(); }
+    if (localServerPort) createMainWindow(localServerPort);
   }
 });
