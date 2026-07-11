@@ -62,7 +62,7 @@ export function initSupabase() {
   supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: {
       autoRefreshToken: false,
-      persistSession: true,
+      persistSession: false,
       detectSessionInUrl: false
     }
   });
@@ -84,10 +84,10 @@ function clearSupabaseSessionLocal() {
 }
 
 /* Quick connectivity check — resolves true if the Supabase URL is reachable */
-async function isSupabaseReachable() {
+export async function isSupabaseReachable() {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    const timeoutId = setTimeout(() => controller.abort(), 2500);
     await fetch(`${SUPABASE_URL}/rest/v1/`, {
       method: 'HEAD',
       signal: controller.signal,
@@ -107,7 +107,7 @@ export async function checkSession() {
   // If the project is paused/deleted, skip straight to local identity.
   const reachable = await isSupabaseReachable();
   if (!reachable) {
-    console.warn('[Auth] Supabase is unreachable — clearing stale session and using local mode');
+    console.warn('[Auth] Supabase is unreachable — using local mode');
     clearSupabaseSessionLocal();
     return null;
   }

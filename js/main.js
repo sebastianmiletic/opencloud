@@ -11,7 +11,7 @@ import {
 } from './ui.js';
 import { showToast, lockScroll, unlockScroll } from './utils.js';
 import { hydrateSettingsFromCloud } from './config.js';
-import { initSupabase, checkSession, signIn, signUp, getUserDisplayName, signOut, saveLocalIdentity, getLocalIdentity, setLocalUser } from './auth.js';
+import { initSupabase, isSupabaseReachable, checkSession, signIn, signUp, getUserDisplayName, signOut, saveLocalIdentity, getLocalIdentity, setLocalUser } from './auth.js';
 
 /* Global error handler */
 window.onerror = (msg, url, line) => {
@@ -287,20 +287,27 @@ async function initApp() {
       return;
     }
 
-    // Init Supabase client
-    const hasSupabase = initSupabase();
-    initAuthModal();
-
-    // Mark as loaded — the JS modules and env are confirmed working at this point.
-    // The error screen timer should not fire during the (potentially slow) session check.
+    // Mark as loaded immediately — env is confirmed, JS modules loaded fine.
+    // The error screen should never fire from this point on.
     window._appLoaded = true;
+
+    // Check if Supabase is reachable BEFORE creating the client.
+    // If the project is paused/deleted, creating the client triggers
+    // background network retries that block the UI.
+    let hasSupabase = false;
+    const supabaseReachable = await isSupabaseReachable();
+    if (supabaseReachable) {
+      hasSupabase = initSupabase();
+    } else {
+      console.warn('[Main] Supabase is unreachable — skipping auth client creation');
+      // Clear any stale Supabase localStorage keys
+      clearSupabaseSession();
+    }
+    initAuthModal();
 
     let user = null;
     if (hasSupabase) {
-      user = await Promise.race([
-        checkSession(),
-        new Promise(resolve => setTimeout(() => resolve(null), 4000))
-      ]);
+      user = await checkSession();
     }
 
     // If no Supabase session, check for a saved local identity so the user
