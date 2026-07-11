@@ -7,7 +7,7 @@ A black-and-white themed streaming tracker desktop app with TMDB/OMDB integratio
 ## How to Download & Install
 
 <p align="center">
-  <a href="https://github.com/sebastianmiletic/opencloud/releases/download/v2.2.11/OpenCloud.dmg"><img src="https://img.shields.io/badge/Download-macOS%20(.dmg)-black?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS"></a>&nbsp;&nbsp;<a href="https://github.com/sebastianmiletic/opencloud/releases/download/v2.2.11/OpenCloud.exe"><img src="https://img.shields.io/badge/Download-Windows%20(.exe)-black?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows"></a>
+  <a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud.dmg"><img src="https://img.shields.io/badge/Download-macOS%20(.dmg)-black?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS"></a>&nbsp;&nbsp;<a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud.exe"><img src="https://img.shields.io/badge/Download-Windows%20(.exe)-black?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows"></a>
 </p>
 
 <p align="center">
