@@ -61,7 +61,7 @@ export function initSupabase() {
   }
   supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: {
-      autoRefreshToken: true,
+      autoRefreshToken: false,
       persistSession: true,
       detectSessionInUrl: false
     }
@@ -71,8 +71,47 @@ export function initSupabase() {
   return true;
 }
 
+/* Clear all Supabase session data from localStorage without hitting the network */
+function clearSupabaseSessionLocal() {
+  try {
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('sb-')) keys.push(key);
+    }
+    keys.forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
+  } catch (e) {}
+}
+
+/* Quick connectivity check — resolves true if the Supabase URL is reachable */
+async function isSupabaseReachable() {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    await fetch(`${SUPABASE_URL}/rest/v1/`, {
+      method: 'HEAD',
+      signal: controller.signal,
+      headers: { 'apikey': SUPABASE_ANON_KEY }
+    });
+    clearTimeout(timeoutId);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 export async function checkSession() {
   if (!supabaseClient) return null;
+
+  // Check if Supabase is even reachable before trying session operations.
+  // If the project is paused/deleted, skip straight to local identity.
+  const reachable = await isSupabaseReachable();
+  if (!reachable) {
+    console.warn('[Auth] Supabase is unreachable — clearing stale session and using local mode');
+    clearSupabaseSessionLocal();
+    return null;
+  }
+
   try {
     const { data: { session }, error } = await supabaseClient.auth.getSession();
     if (error) throw error;
@@ -87,8 +126,7 @@ export async function checkSession() {
     return null;
   } catch (err) {
     console.error('[Auth] Session check failed:', err);
-    // Clear the stale session so Supabase stops retrying token refresh in the background
-    try { await supabaseClient.auth.signOut(); } catch (e) {}
+    clearSupabaseSessionLocal();
     return null;
   }
 }
