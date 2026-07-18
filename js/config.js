@@ -110,31 +110,25 @@ export const DEVICES = {
 };
 
 export const DEFAULT_PROVIDER = 'videasy';
-const SETTINGS_VERSION = 3; // bump to force-reset defaults for everyone
+const SETTINGS_VERSION = 4;
+const DEFAULT_SETTINGS = Object.freeze({
+  provider: DEFAULT_PROVIDER,
+  device: 'laptop',
+  autoPlay: true,
+  autoProviderFailover: false,
+  _version: SETTINGS_VERSION
+});
 
 export function getSettings() {
   const raw = localStorage.getItem('openccloud_settings');
   if (raw) {
     try {
       const parsed = JSON.parse(raw);
-      // If version mismatch, reset to defaults (forces Nova as default for all users)
-      if (parsed._version !== SETTINGS_VERSION) {
-        return {
-          provider: DEFAULT_PROVIDER,
-          device: 'laptop',
-          autoPlay: true,
-          _version: SETTINGS_VERSION
-        };
-      }
-      return parsed;
+      // Add new defaults without discarding a user's provider and device choices.
+      return { ...DEFAULT_SETTINGS, ...parsed, _version: SETTINGS_VERSION };
     } catch (e) { /* fall through */ }
   }
-  return {
-    provider: DEFAULT_PROVIDER,
-    device: 'laptop',
-    autoPlay: true,
-    _version: SETTINGS_VERSION
-  };
+  return { ...DEFAULT_SETTINGS };
 }
 
 export function saveSettings(settings) {
@@ -182,12 +176,28 @@ export async function hydrateSettingsFromCloud() {
   }
 }
 
-export function getProviderUrl(type, id, season = 1, episode = 1) {
-  const settings = getSettings();
-  const p = PROVIDERS[settings.provider] || PROVIDERS[DEFAULT_PROVIDER];
+export function getProviderUrlFor(providerKey, type, id, season = 1, episode = 1) {
+  const p = PROVIDERS[providerKey] || PROVIDERS[DEFAULT_PROVIDER];
   let url = type === 'movie' ? p.movieUrl : p.tvUrl;
   url = url.replace(/{id}/g, id).replace(/{season}/g, season).replace(/{episode}/g, episode);
   return url;
+}
+
+export function getProviderUrl(type, id, season = 1, episode = 1) {
+  return getProviderUrlFor(getSettings().provider, type, id, season, episode);
+}
+
+export function getProviderCandidates(type) {
+  const selected = getSettings().provider;
+  return Object.entries(PROVIDERS)
+    .filter(([, provider]) => provider[type] !== false)
+    .sort((a, b) => {
+      if (a[0] === selected) return -1;
+      if (b[0] === selected) return 1;
+      const tierDiff = (a[1].tier || 99) - (b[1].tier || 99);
+      return tierDiff || a[1].name.localeCompare(b[1].name);
+    })
+    .map(([key]) => key);
 }
 
 export function getActiveProvider() {

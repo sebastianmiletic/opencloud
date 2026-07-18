@@ -13,6 +13,7 @@ import { showToast, lockScroll, unlockScroll } from './utils.js';
 import { hydrateSettingsFromCloud } from './config.js';
 import { initSupabase, isSupabaseReachable, checkSession, signIn, signUp, getUserDisplayName, signOut, saveLocalIdentity, getLocalIdentity, setLocalUser } from './auth.js';
 import { initUpdater } from './updater.js';
+import { initAccessibility } from './accessibility.js';
 
 /* Global error handler */
 window.onerror = (msg, url, line) => {
@@ -30,9 +31,10 @@ function initSplash() {
   setTimeout(() => {
     splash.style.display = 'none';
     if (app) app.classList.add('visible');
-  }, 2600);
+  }, 900);
 }
 initSplash();
+initAccessibility();
 
 /* Auth Modal Helpers */
 function initAuthModal() {
@@ -285,6 +287,9 @@ async function initApp() {
     // Mark as loaded immediately — env is confirmed, JS modules loaded fine.
     // The error screen should never fire from this point on.
     window._appLoaded = true;
+
+    // Signed update checks run for every desktop launch, including signed-out sessions.
+    initUpdater(document.getElementById('updateCheckBtn'), document.getElementById('accountDropdown'));
 
     // Check if Supabase is reachable BEFORE creating the client.
     // If the project is paused/deleted, creating the client triggers

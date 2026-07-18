@@ -8,6 +8,8 @@
   <link rel="stylesheet" href="styles.css?v=22">
 </head>
 <body>
+  <a class="skip-link" href="#mainContent">Skip to content</a>
+  <div class="sr-only" id="appAnnouncements" aria-live="polite" aria-atomic="true"></div>
   <!-- Netflix-style Splash Intro -->
   <div id="splashScreen" class="splash-screen">
     <div class="splash-logo">
@@ -125,7 +127,7 @@
       </div>
     </header>
 
-    <main class="main-content">
+    <main class="main-content" id="mainContent" tabindex="-1">
       <section id="homeView" class="home-view">
         <div class="hero-section" id="heroSection">
           <div class="hero-viewport">
@@ -156,6 +158,16 @@
             <h3>Continue Watching</h3>
           </div>
           <div class="category-row" id="continueWatchingRow"></div>
+        </div>
+
+        <div class="category-section hidden" id="upNextSection">
+          <div class="category-header category-header-with-copy">
+            <div>
+              <h3>Up Next</h3>
+              <p>Your next series episodes, ready to play</p>
+            </div>
+          </div>
+          <div class="category-row up-next-row" id="upNextRow"></div>
         </div>
 
         <div class="category-section" id="starWarsSection">
@@ -222,7 +234,7 @@
 
       <section id="collectionsView" class="collections-view hidden">
         <div class="collections-view-header">
-          <button class="collections-back-btn" id="collectionsBackBtn">
+          <button class="collections-back-btn" id="collectionsBackBtn" aria-label="Back to home">
             <i class="fas fa-arrow-left"></i>
           </button>
           <h2>Collections &amp; Franchises</h2>
@@ -287,7 +299,7 @@
       <section id="searchView" class="search-view hidden">
         <div class="search-header">
           <div class="search-header-left">
-            <button class="search-back-btn" id="searchBackBtn">
+            <button class="search-back-btn" id="searchBackBtn" aria-label="Back to previous view">
               <i class="fas fa-arrow-left"></i>
             </button>
             <h2 id="searchQueryTitle">Search Results</h2>
@@ -348,7 +360,7 @@
   <div id="itemModal" class="modal hidden">
     <div class="modal-overlay"></div>
     <div class="modal-content">
-      <button class="modal-close">
+      <button class="modal-close" aria-label="Close details">
         <i class="fas fa-times"></i>
       </button>
       <div class="modal-body">
@@ -384,16 +396,24 @@
   </div>
 
   <!-- Inline Player Overlay -->
-  <div id="playerOverlay" class="player-overlay hidden">
+  <div id="playerOverlay" class="player-overlay hidden" role="dialog" aria-modal="true" aria-label="Video player">
     <div class="player-header-bar">
       <div class="player-header-left">
         <button class="player-back-btn" id="playerBackBtn">
           <i class="fas fa-arrow-left"></i>
           <span>Back</span>
         </button>
-        <span class="player-title-text" id="playerTitleText">Loading...</span>
+        <button class="player-title-text" id="playerTitleText" type="button" title="Open title details on TMDB">Loading...</button>
       </div>
       <div class="player-header-right">
+        <div class="player-health is-idle" id="playerHealth" role="status" aria-live="polite">
+          <span class="player-health-dot" aria-hidden="true"></span>
+          <span id="playerHealthText">Player idle</span>
+        </div>
+        <button class="player-header-btn player-retry-btn hidden" id="playerRetryBtn" type="button">
+          <i class="fas fa-rotate-right"></i>
+          <span>Retry</span>
+        </button>
         <button class="player-header-btn" id="playerNextBtn" style="display:none;">
           <i class="fas fa-forward-step"></i>
           <span>Next</span>
@@ -405,7 +425,7 @@
       </div>
     </div>
     <div class="player-frame-wrap">
-      <iframe id="playerFrame" allowfullscreen allow="fullscreen; autoplay; encrypted-media; picture-in-picture"></iframe>
+      <iframe id="playerFrame" title="Open Cloud video player" allowfullscreen allow="fullscreen; autoplay; encrypted-media; picture-in-picture"></iframe>
     </div>
   </div>
 
@@ -426,7 +446,7 @@
   <div id="addAccountModal" class="modal hidden">
     <div class="modal-overlay"></div>
     <div class="modal-content edit-modal">
-      <button class="modal-close" id="addAccountClose">
+      <button class="modal-close" id="addAccountClose" aria-label="Close add account">
         <i class="fas fa-times"></i>
       </button>
       <div class="edit-modal-body">
@@ -449,7 +469,7 @@
   <div id="manageAccountsModal" class="modal hidden">
     <div class="modal-overlay"></div>
     <div class="modal-content edit-modal">
-      <button class="modal-close" id="manageAccountsClose">
+      <button class="modal-close" id="manageAccountsClose" aria-label="Close manage accounts">
         <i class="fas fa-times"></i>
       </button>
       <div class="edit-modal-body">
@@ -570,6 +590,16 @@
           </div>
           <div class="settings-tab-panel hidden" data-panel="sources">
             <p style="font-size:0.8125rem;color:var(--text-muted);margin-bottom:0.75rem;">Click a source to select it. Your current choice is highlighted.</p>
+            <div class="setting-switch-row">
+              <div>
+                <label for="settingsAutoFailover">Automatic provider failover</label>
+                <p>If a source takes too long to connect, try the next available source. Off by default.</p>
+              </div>
+              <label class="switch-control">
+                <input type="checkbox" id="settingsAutoFailover">
+                <span aria-hidden="true"></span>
+              </label>
+            </div>
             <div class="provider-cards" id="settingsProviderCards"></div>
           </div>
           <div class="settings-tab-panel hidden" data-panel="blocker">

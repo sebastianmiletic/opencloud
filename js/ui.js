@@ -14,9 +14,10 @@ import {
 } from './storage.js';
 import { BASE_URL, IMG_BASE, STAR_WARS_SAGA_ORDER, API_KEY } from './config.js';
 import { fetchWithAuth, getOMDBRatingsBatch, getOMDBRating } from './api.js';
-import { showToast, lockScroll, unlockScroll, showConfirm } from './utils.js';
+import { showToast, lockScroll, unlockScroll, showConfirm, escapeHtml } from './utils.js';
 import { openPlayer } from './player.js';
 import { renderHeroSlides } from './hero.js';
+import { resolveUpNextEpisode } from './series.js';
 
 /* DOM refs */
 const searchInput = document.getElementById('searchInput');
@@ -52,6 +53,10 @@ let _previousView = 'home';
 
 /* Saved home scroll position for back navigation */
 let _homeScrollY = 0;
+
+function escapeAttribute(value) {
+  return escapeHtml(String(value)).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
 
 /* Franchise / genre search mapping */
 const FRANCHISE_MAP = {
@@ -211,6 +216,7 @@ function toggleView(tab) {
   if (tab === 'home') {
     loadRecommendations();
     loadContinueWatching();
+    loadUpNext();
   }
 }
 
@@ -1114,46 +1120,46 @@ export async function loadHomeCategories() {
     if (el) el.innerHTML = '<div class="row-loading"><i class="fas fa-spinner"></i></div>';
   }
 
-  try {
-    const results = await Promise.all(endpoints.map(ep => fetchWithAuth(ep.url)));
-    results.forEach((data, i) => {
-      renderCategoryRow(endpoints[i].id, data.results?.slice(0, 12) || [], 'movie');
-    });
+  // Start personal and editorial rows immediately; none blocks another row.
+  loadRecommendations();
+  loadStarWarsSaga();
+  loadContinueWatching();
+  loadUpNext();
+  loadPopularCollections();
 
-    const popularData = results[0];
-    if (popularData.results?.length > 0) {
-      const featured = popularData.results.slice(0, 5).map(r => ({ ...r, media_type: 'movie' }));
-      const omdbRatings = await getOMDBRatingsBatch(featured);
-      featured.forEach(item => { if (omdbRatings[item.id]) item.omdbRating = omdbRatings[item.id]; });
-      setHeroSlides(featured);
-      renderHeroSlides();
-    }
+  await Promise.allSettled(endpoints.map(async (ep, index) => {
+    try {
+      const data = await fetchWithAuth(ep.url);
+      renderCategoryRow(ep.id, data.results?.slice(0, 12) || [], 'movie');
 
-    loadRecommendations();
-    loadStarWarsSaga();
-    loadContinueWatching();
-    loadPopularCollections();
-
-    // Attach See All listeners to genre headers
-    document.querySelectorAll('.category-header[data-genre]').forEach(header => {
-      const btn = header.querySelector('.see-all-btn');
-      if (btn) {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const genreId = header.dataset.genre;
-          const genreName = header.dataset.genreName;
-          if (genreId && genreName) {
-            showGenreGallery(genreId, genreName);
-          }
-        });
+      if (index === 0 && data.results?.length > 0) {
+        const featured = data.results.slice(0, 5).map(r => ({ ...r, media_type: 'movie' }));
+        setHeroSlides(featured);
+        renderHeroSlides();
+        getOMDBRatingsBatch(featured).then(omdbRatings => {
+          featured.forEach(item => { if (omdbRatings[item.id]) item.omdbRating = omdbRatings[item.id]; });
+          setHeroSlides(featured);
+          renderHeroSlides();
+        }).catch(() => {});
       }
-    });
-  } catch (err) {
-    endpoints.forEach(ep => {
+    } catch (error) {
       const el = document.getElementById(ep.id);
       if (el) el.innerHTML = '<div class="row-loading">Failed to load</div>';
+    }
+  }));
+
+  // Attach See All listeners to genre headers once.
+  document.querySelectorAll('.category-header[data-genre]').forEach(header => {
+    const btn = header.querySelector('.see-all-btn');
+    if (!btn || btn.dataset.wired === 'true') return;
+    btn.dataset.wired = 'true';
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const genreId = header.dataset.genre;
+      const genreName = header.dataset.genreName;
+      if (genreId && genreName) showGenreGallery(genreId, genreName);
     });
-  }
+  });
 }
 
 export async function loadStarWarsSaga() {
@@ -1236,6 +1242,76 @@ export async function loadContinueWatching() {
   } catch (err) {
     section.classList.add('hidden');
   }
+}
+
+export async function loadUpNext() {
+  const section = document.getElementById('upNextSection');
+  const container = document.getElementById('upNextRow');
+  if (!section || !container) return;
+
+  const entries = Object.entries(getWatchProgress())
+    .filter(([, progress]) => progress?.season && progress?.episode)
+    .sort((a, b) => new Date(b[1].updated_at || 0) - new Date(a[1].updated_at || 0))
+    .slice(0, 10);
+
+  if (!entries.length) {
+    section.classList.add('hidden');
+    return;
+  }
+
+  section.classList.remove('hidden');
+  container.innerHTML = '<div class="row-loading"><i class="fas fa-spinner"></i> Preparing episodes…</div>';
+
+  const settled = await Promise.allSettled(entries.map(async ([id, progress]) => {
+    const show = await fetchWithAuth(`${BASE_URL}/tv/${id}?language=en-US`);
+    const { season, episode, advanced } = resolveUpNextEpisode(show, progress);
+    const seasonData = await fetchWithAuth(`${BASE_URL}/tv/${id}/season/${season}?language=en-US`);
+    const episodeData = seasonData.episodes?.find(ep => ep.episode_number === episode);
+    return {
+      ...show,
+      media_type: 'tv',
+      _upNext: {
+        season,
+        episode,
+        name: episodeData?.name || `Episode ${episode}`,
+        runtime: episodeData?.runtime || null,
+        advanced
+      }
+    };
+  }));
+
+  const items = settled.filter(result => result.status === 'fulfilled').map(result => result.value);
+  if (!items.length) {
+    section.classList.add('hidden');
+    return;
+  }
+
+  container.innerHTML = items.map(item => {
+    const next = item._upNext;
+    const backdrop = item.backdrop_path ? `${IMG_BASE}w780${item.backdrop_path}` : '';
+    const label = next.advanced ? 'Up next' : 'Resume';
+    const showName = escapeHtml(item.name || 'Untitled series');
+    const episodeName = escapeHtml(next.name);
+    const ariaLabel = escapeAttribute(`${label} ${item.name}, season ${next.season}, episode ${next.episode}, ${next.name}`);
+    return `
+      <button class="up-next-card" type="button" data-id="${item.id}" data-season="${next.season}" data-episode="${next.episode}" aria-label="${ariaLabel}">
+        <span class="up-next-art" style="background-image:url('${backdrop}')">
+          <span class="up-next-play" aria-hidden="true"><i class="fas fa-play"></i></span>
+          <span class="up-next-label">${label}</span>
+        </span>
+        <span class="up-next-copy">
+          <strong>${showName}</strong>
+          <span>S${next.season} E${next.episode} · ${episodeName}</span>
+          <small>${next.runtime ? `${next.runtime} min` : 'Series episode'}</small>
+        </span>
+      </button>`;
+  }).join('');
+
+  container.querySelectorAll('.up-next-card').forEach(card => {
+    card.addEventListener('click', () => {
+      openPlayer(Number(card.dataset.id), 'tv', Number(card.dataset.season), Number(card.dataset.episode));
+    });
+  });
 }
 
 export async function loadRecommendations() {
@@ -1330,9 +1406,9 @@ export function renderCategoryRow(containerId, items, type, showProgress = false
     }
 
     return `
-      <div class="category-card" data-id="${item.id}" data-type="${type}">
+      <div class="category-card" data-id="${item.id}" data-type="${type}" role="button" tabindex="0" aria-label="${escapeAttribute(`Open ${title}`)}">
         <div class="card-poster">
-          <img src="${poster}" alt="${title}" loading="lazy" onerror="this.style.display='none'">
+          <img src="${poster}" alt="${title}" loading="lazy" decoding="async" onerror="this.style.display='none'">
           <span class="card-rating"><i class="fas fa-star"></i> ${rating}</span>
           ${progressBadge}
         </div>

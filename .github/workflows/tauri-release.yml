@@ -57,7 +57,11 @@ jobs:
         with:
           tagName: v__VERSION__
           releaseName: 'Open Cloud v__VERSION__'
-          releaseBody: 'Signed Open Cloud desktop release.'
+          releaseBody: |
+            Open Cloud 3.1 adds series Up Next, optional automatic provider failover,
+            progressive loading and response caching, a live player connection indicator,
+            keyboard and TV remote navigation, accessibility improvements, and automatic
+            signed update prompts with install-and-restart support.
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true

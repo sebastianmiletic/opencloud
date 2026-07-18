@@ -1,8 +1,8 @@
 /** Player Overlay & Episode Picker */
 import { playerState, setPlayerState, setWatchProgress } from './state.js';
-import { getProviderUrl } from './config.js';
+import { getProviderCandidates, getProviderUrlFor, getSettings, PROVIDERS } from './config.js';
 import { fetchWithAuth } from './api.js';
-import { BASE_URL, API_KEY } from './config.js';
+import { BASE_URL } from './config.js';
 import { showToast, lockScroll, unlockScroll } from './utils.js';
 import { recordWatchSession } from './supabase.js';
 import { getWatchProgress, saveWatchProgress, syncWatchProgressItem, addToUserHistory } from './storage.js';
@@ -15,6 +15,9 @@ const playerTitleText = document.getElementById('playerTitleText');
 const playerBackBtn = document.getElementById('playerBackBtn');
 const playerNextBtn = document.getElementById('playerNextBtn');
 const playerEpBtn = document.getElementById('playerEpBtn');
+const playerHealth = document.getElementById('playerHealth');
+const playerHealthText = document.getElementById('playerHealthText');
+const playerRetryBtn = document.getElementById('playerRetryBtn');
 const epPopoverOverlay = document.getElementById('epPopoverOverlay');
 const epPopoverList = document.getElementById('epPopoverList');
 const epPopoverTitle = document.getElementById('epPopoverTitle');
@@ -27,6 +30,56 @@ let _playerOpenedAt = 0;
 let _progressInterval = null;
 let _srcPoller = null;
 let _lastKnownSrc = '';
+let _healthTimer = null;
+let _currentProviderKey = null;
+let _providerCandidates = [];
+let _attemptedProviders = new Set();
+let _iframeErrorHandler = null;
+let _metadataFailed = false;
+
+function setPlayerHealth(state, text, retry = false) {
+  if (playerHealth) playerHealth.className = `player-health is-${state}`;
+  if (playerHealthText) playerHealthText.textContent = text;
+  playerRetryBtn?.classList.toggle('hidden', !retry);
+}
+
+function clearHealthTimer() {
+  if (_healthTimer) clearTimeout(_healthTimer);
+  _healthTimer = null;
+}
+
+function providerName(key) {
+  return PROVIDERS[key]?.name || 'source';
+}
+
+function resetProviderSession(type) {
+  _providerCandidates = getProviderCandidates(type);
+  _currentProviderKey = _providerCandidates[0] || getSettings().provider;
+  _attemptedProviders = new Set();
+}
+
+function tryNextProvider(reason = 'The source did not respond') {
+  clearHealthTimer();
+  const nextKey = _providerCandidates.find(key => !_attemptedProviders.has(key));
+  if (!nextKey) {
+    setPlayerHealth('failed', 'No source responded', true);
+    showToast('No video source responded. Retry or choose a source in Settings.', 'error');
+    return false;
+  }
+  _currentProviderKey = nextKey;
+  setPlayerHealth('switching', `Switching to ${providerName(nextKey)}…`);
+  showToast(`${reason}. Trying ${providerName(nextKey)}…`, 'info');
+  loadPlayerIframe();
+  return true;
+}
+
+function handleProviderFailure(reason) {
+  if (getSettings().autoProviderFailover === true) {
+    tryNextProvider(reason);
+    return;
+  }
+  setPlayerHealth('slow', `${providerName(_currentProviderKey)} needs attention`, true);
+}
 
 /* Active watch tracking */
 let _sessionStart = 0;
@@ -191,6 +244,8 @@ let _iframeLoadHandler = null;
 function attachIframeLoadListener() {
   if (!playerFrame || _iframeLoadHandler) return;
   _iframeLoadHandler = () => {
+    clearHealthTimer();
+    setPlayerHealth('ready', `${providerName(_currentProviderKey)} connected`);
     if (_intentionalLoad) {
       _intentionalLoad = false;
       return;
@@ -201,12 +256,16 @@ function attachIframeLoadListener() {
     handleIframeSrcChange(currentSrc);
   };
   playerFrame.addEventListener('load', _iframeLoadHandler);
+  _iframeErrorHandler = () => handleProviderFailure(`${providerName(_currentProviderKey)} failed to load`);
+  playerFrame.addEventListener('error', _iframeErrorHandler);
 }
 
 function detachIframeLoadListener() {
   if (!playerFrame || !_iframeLoadHandler) return;
   playerFrame.removeEventListener('load', _iframeLoadHandler);
+  if (_iframeErrorHandler) playerFrame.removeEventListener('error', _iframeErrorHandler);
   _iframeLoadHandler = null;
+  _iframeErrorHandler = null;
 }
 
 /* Detect iframe src changes from inside the player (user clicks next/prev in embed) */
@@ -343,6 +402,14 @@ export function initPlayer() {
       }
     });
   }
+  playerRetryBtn?.addEventListener('click', () => {
+    if (_metadataFailed) {
+      initPlayerData();
+      return;
+    }
+    resetProviderSession(playerState.type || 'movie');
+    loadPlayerIframe();
+  });
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
@@ -358,15 +425,23 @@ export function initPlayer() {
 function getPlayerSrc() {
   const p = playerState;
   if (p.type === 'movie') {
-    return getProviderUrl('movie', p.id);
+    return getProviderUrlFor(_currentProviderKey, 'movie', p.id);
   }
-  return getProviderUrl('tv', p.id, p.season, p.episode);
+  return getProviderUrlFor(_currentProviderKey, 'tv', p.id, p.season, p.episode);
 }
 
 function loadPlayerIframe() {
   if (!playerFrame) return;
+  clearHealthTimer();
+  if (!_currentProviderKey) resetProviderSession(playerState.type || 'movie');
+  _attemptedProviders.add(_currentProviderKey);
   _intentionalLoad = true;
+  setPlayerHealth('connecting', `Connecting to ${providerName(_currentProviderKey)}…`);
   playerFrame.src = getPlayerSrc();
+  _lastKnownSrc = playerFrame.src;
+  _healthTimer = setTimeout(() => {
+    handleProviderFailure(`${providerName(_currentProviderKey)} is taking too long`);
+  }, 12000);
 }
 
 export function closePlayer() {
@@ -374,6 +449,7 @@ export function closePlayer() {
   flushElapsedAndSave();
   stopProgressInterval();
   stopSrcPoller();
+  clearHealthTimer();
   recordCurrentSession();
   detachWatchActivityListeners();
   _playerOpenedAt = 0;
@@ -385,6 +461,11 @@ export function closePlayer() {
     playerOverlay.classList.add('hidden');
     playerOverlay.classList.remove('closing');
     if (playerFrame) playerFrame.src = '';
+    setPlayerHealth('idle', 'Player idle');
+    _providerCandidates = [];
+    _attemptedProviders.clear();
+    _currentProviderKey = null;
+    _metadataFailed = false;
     setPlayerState({ id: null, type: null, season: 1, episode: 1, tmdbData: null, epData: null, view: 'seasons' });
     unlockScroll();
   }, 350);
@@ -418,6 +499,8 @@ export async function openPlayer(id, type, season, episode) {
     epData: null,
     view: 'seasons'
   });
+  resetProviderSession(type);
+  _metadataFailed = false;
 
   // Save immediately so a reload right after clicking play resumes correctly
   if (type === 'tv') {
@@ -451,12 +534,10 @@ function updatePlayerTitle(name, season, episode) {
 async function initPlayerData() {
   const p = playerState;
   try {
+    _metadataFailed = false;
     if (p.type === 'movie') {
       const url = `${BASE_URL}/movie/${p.id}?language=en-US`;
-      const res = await fetch(url, {
-        headers: { 'Authorization': `Bearer ${API_KEY}`, 'accept': 'application/json' }
-      });
-      const data = await res.json();
+      const data = await fetchWithAuth(url);
       updatePlayerTitle(data.original_title || data.title);
       if (playerNextBtn) playerNextBtn.style.display = 'none';
       if (playerEpBtn) {
@@ -468,10 +549,7 @@ async function initPlayerData() {
       addToUserHistory({ id: p.id, media_type: p.type, title: data.title || data.name, poster_path: data.poster_path, vote_average: data.vote_average, year: data.release_date?.slice(0, 4) }).catch(() => {});
     } else {
       const url = `${BASE_URL}/tv/${p.id}?language=en-US`;
-      const res = await fetch(url, {
-        headers: { 'Authorization': `Bearer ${API_KEY}`, 'accept': 'application/json' }
-      });
-      const data = await res.json();
+      const data = await fetchWithAuth(url);
       const newTmdbData = { title: data.name, seasons: [] };
       for (const season of data.seasons) {
         newTmdbData[season.season_number] = season.episode_count;
@@ -524,7 +602,9 @@ async function initPlayerData() {
       loadEpPopoverData(newTmdbData);
     }
   } catch (err) {
+    _metadataFailed = true;
     if (playerTitleText) playerTitleText.textContent = 'Error loading video';
+    setPlayerHealth('failed', 'Video details unavailable', true);
     showToast('Failed to load video info', 'error');
   }
 }
@@ -544,13 +624,10 @@ async function loadEpPopoverData(tmdbData) {
   if (!tmdbData) return;
   const result = {};
   try {
-    for (const season of tmdbData.seasons) {
+    const seasonResults = await Promise.all(tmdbData.seasons.map(async season => {
       const url = `${BASE_URL}/tv/${p.id}/season/${season}?language=en-US`;
-      const res = await fetch(url, {
-        headers: { 'Authorization': `Bearer ${API_KEY}`, 'accept': 'application/json' }
-      });
-      const seasonData = await res.json();
-      result[season] = {
+      const seasonData = await fetchWithAuth(url);
+      return [season, {
         name: seasonData.name,
         air_date: seasonData.air_date,
         episodes: seasonData.episodes.map(ep => ({
@@ -560,8 +637,9 @@ async function loadEpPopoverData(tmdbData) {
           air_date: ep.air_date,
           runtime: ep.runtime
         }))
-      };
-    }
+      }];
+    }));
+    seasonResults.forEach(([season, data]) => { result[season] = data; });
     setPlayerState({ ...p, epData: result });
 
     // Cache current episode runtime in progress

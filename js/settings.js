@@ -18,11 +18,13 @@ const PRESET_COLORS = [
 ];
 
 export function initSettings() {
+  applyDeviceClass();
   const btn = document.getElementById('settingsBtn');
   const modal = document.getElementById('settingsModal');
   const close = document.getElementById('settingsClose');
   const cancel = document.getElementById('settingsCancel');
   const form = document.getElementById('settingsForm');
+  const autoFailover = document.getElementById('settingsAutoFailover');
 
   if (btn) btn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -39,6 +41,13 @@ export function initSettings() {
       await saveSettingsFromForm();
     });
   }
+
+  autoFailover?.addEventListener('change', () => {
+    settings = getSettings();
+    settings.autoProviderFailover = autoFailover.checked;
+    saveSettings(settings);
+    showToast(autoFailover.checked ? 'Automatic failover enabled' : 'Automatic failover disabled', 'success');
+  });
 
   // Tab switching
   document.querySelectorAll('.settings-tab-btn').forEach(tabBtn => {
@@ -168,9 +177,11 @@ export function openSettingsModal() {
   settings = getSettings();
   const deviceSelect = document.getElementById('settingsDevice');
   const autoPlay = document.getElementById('settingsAutoPlay');
+  const autoFailover = document.getElementById('settingsAutoFailover');
 
   if (deviceSelect) deviceSelect.value = settings.device;
   if (autoPlay) autoPlay.checked = settings.autoPlay !== false;
+  if (autoFailover) autoFailover.checked = settings.autoProviderFailover === true;
 
   // Show/hide admin tab — must be declared before activation handler
   const adminTabBtn = document.getElementById('adminTabBtn');

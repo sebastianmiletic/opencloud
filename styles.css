@@ -29,6 +29,39 @@
   box-sizing: border-box;
 }
 
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.skip-link {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 20000;
+  padding: 0.65rem 0.9rem;
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: #000;
+  font-weight: 700;
+  transform: translateY(-160%);
+  transition: transform var(--transition-fast);
+}
+
+.skip-link:focus { transform: translateY(0); }
+
+:where(button, a, input, select, textarea, [role="button"], [tabindex]):focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 3px;
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -67,7 +100,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 2rem;
-  animation: splashFadeOut 0.8s ease 2.5s forwards;
+  animation: splashFadeOut 0.25s ease 0.7s forwards;
   pointer-events: none;
 }
 
@@ -147,7 +180,7 @@ body {
   display: flex;
   flex-direction: column;
   opacity: 0;
-  animation: appReveal 0.6s ease 2.2s forwards;
+  animation: appReveal 0.25s ease 0.65s forwards;
 }
 
 @keyframes appReveal {
@@ -2239,6 +2272,11 @@ body {
 }
 
 .player-title-text {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
   font-size: 0.9375rem;
   font-weight: 600;
   white-space: nowrap;
@@ -2257,6 +2295,54 @@ body {
   align-items: center;
   gap: 0.5rem;
   flex-shrink: 0;
+}
+
+.player-health {
+  min-height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 0.6875rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.player-health-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: #737373;
+  box-shadow: 0 0 0 3px rgba(115, 115, 115, 0.12);
+}
+
+.player-health.is-connecting .player-health-dot {
+  background: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.14);
+  animation: healthPulse 1.2s ease-in-out infinite;
+}
+
+.player-health.is-ready .player-health-dot {
+  background: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.14);
+}
+
+.player-health.is-slow .player-health-dot,
+.player-health.is-switching .player-health-dot {
+  background: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.14);
+}
+
+.player-health.is-failed .player-health-dot {
+  background: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.14);
+}
+
+@keyframes healthPulse {
+  50% { opacity: 0.45; transform: scale(0.82); }
 }
 
 .player-header-btn {
@@ -2300,6 +2386,141 @@ body {
   height: 100%;
   border: none;
   display: block;
+}
+
+.category-header-with-copy { align-items: flex-end; }
+.category-header-with-copy p {
+  margin-top: 0.2rem;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.up-next-row { gap: 0.9rem; }
+
+.up-next-card {
+  width: 310px;
+  flex: 0 0 310px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.up-next-card:hover,
+.up-next-card:focus-visible {
+  transform: translateY(-3px);
+  border-color: var(--border-hover);
+  background: var(--bg-hover);
+}
+
+.up-next-art {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 8.3;
+  background-size: cover;
+  background-position: center;
+  background-color: var(--bg-tertiary);
+}
+
+.up-next-art::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,0.04), rgba(0,0,0,0.68));
+}
+
+.up-next-play,
+.up-next-label { position: absolute; z-index: 1; }
+.up-next-play {
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.94);
+  color: #000;
+  opacity: 0;
+  transition: opacity var(--transition-fast), transform var(--transition-fast);
+}
+.up-next-card:hover .up-next-play,
+.up-next-card:focus-visible .up-next-play { opacity: 1; transform: translate(-50%, -50%) scale(1.04); }
+.up-next-label {
+  left: 0.7rem;
+  bottom: 0.65rem;
+  padding: 0.22rem 0.45rem;
+  border-radius: 4px;
+  background: rgba(0,0,0,0.78);
+  color: #fff;
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.up-next-copy {
+  display: grid;
+  gap: 0.16rem;
+  padding: 0.75rem 0.85rem 0.85rem;
+}
+.up-next-copy strong { font-size: 0.8125rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.up-next-copy span { color: var(--text-secondary); font-size: 0.7rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.up-next-copy small { color: var(--text-muted); font-size: 0.625rem; }
+
+.setting-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-tertiary);
+}
+.setting-switch-row label { display: block; margin: 0 0 0.18rem; font-size: 0.8125rem; font-weight: 650; }
+.setting-switch-row p { margin: 0; color: var(--text-muted); font-size: 0.7rem; line-height: 1.45; }
+.switch-control { position: relative; flex: 0 0 auto; margin: 0 !important; }
+.switch-control input { position: absolute; opacity: 0; pointer-events: none; }
+.switch-control span {
+  display: block;
+  width: 2.7rem;
+  height: 1.5rem;
+  padding: 0.18rem;
+  border: 1px solid var(--border-hover);
+  border-radius: 999px;
+  background: #262626;
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+.switch-control span::after {
+  content: '';
+  display: block;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background: #a3a3a3;
+  transition: transform var(--transition-fast), background var(--transition-fast);
+}
+.switch-control input:checked + span { background: #fff; border-color: #fff; }
+.switch-control input:checked + span::after { transform: translateX(1.18rem); background: #000; }
+.switch-control input:focus-visible + span { outline: 3px solid #fff; outline-offset: 3px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* Episode Popover */
@@ -2790,6 +3011,11 @@ body.device-tv .category-card {
   width: 220px;
 }
 
+body.device-tv .up-next-card {
+  width: 390px;
+  flex-basis: 390px;
+}
+
 body.device-tv .category-header h3 {
   font-size: 1.5rem;
 }
@@ -2834,6 +3060,12 @@ body.device-tv .player-header-btn {
 
 body.device-tv .player-title-text {
   font-size: 1.25rem;
+}
+
+body.device-tv .player-health {
+  min-height: 2.75rem;
+  padding: 0.55rem 0.85rem;
+  font-size: 0.875rem;
 }
 
 /* TV focus styles for remote navigation */
@@ -2948,6 +3180,17 @@ body.device-phone .player-title-text {
   font-size: 0.8125rem;
 }
 
+body.device-phone .player-health {
+  max-width: 7.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+body.device-phone .up-next-card {
+  width: min(82vw, 290px);
+  flex-basis: min(82vw, 290px);
+}
+
 body.device-phone .player-header-btn span {
   display: none;
 }
@@ -3045,6 +3288,15 @@ body.device-phone .player-header-btn span {
 
   .player-title-text {
     font-size: 0.8125rem;
+  }
+  .player-health {
+    max-width: 7.5rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .up-next-card {
+    width: min(82vw, 290px);
+    flex-basis: min(82vw, 290px);
   }
   .player-header-btn span {
     display: none;
