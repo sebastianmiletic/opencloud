@@ -58,8 +58,9 @@ jobs:
           tagName: v__VERSION__
           releaseName: 'Open Cloud v__VERSION__'
           releaseBody: |
-            Open Cloud 3.1.2 checks for signed updates as the app opens and presents an
-            available update above other startup dialogs, with launch-network retry support.
+            Open Cloud 3.2.0 adds a laptop-only T shortcut for an auto-hidden player bar,
+            live five-bar provider health, optional automatic source failover, icon-only
+            player controls, and a library of themes with a rounder interface option.
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true

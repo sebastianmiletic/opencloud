@@ -10,7 +10,7 @@ import {
   addToUserCollection
 } from './ui.js';
 import { showToast, lockScroll, unlockScroll } from './utils.js';
-import { hydrateSettingsFromCloud } from './config.js';
+import { applyAppearanceSettings, hydrateSettingsFromCloud } from './config.js';
 import { initSupabase, isSupabaseReachable, checkSession, signIn, signUp, getUserDisplayName, signOut, saveLocalIdentity, getLocalIdentity, setLocalUser } from './auth.js';
 import { initUpdater } from './updater.js';
 import { initAccessibility } from './accessibility.js';
@@ -24,6 +24,8 @@ window.addEventListener('unhandledrejection', (e) => {
 });
 
 /* Splash */
+applyAppearanceSettings();
+
 function initSplash() {
   const splash = document.getElementById('splashScreen');
   const app = document.getElementById('appContainer');

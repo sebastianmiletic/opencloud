@@ -1,6 +1,6 @@
 /** Open Cloud Settings */
 
-import { getSettings, saveSettings, PROVIDERS, applyDeviceClass, getActiveProvider } from './config.js';
+import { getSettings, saveSettings, PROVIDERS, THEMES, applyDeviceClass, applyAppearanceSettings, getActiveProvider } from './config.js';
 import { showToast } from './utils.js';
 import { initBlockerUI } from './blocker.js';
 import { getCurrentUser, getLocalProfile, saveLocalProfile } from './storage.js';
@@ -11,6 +11,7 @@ import { fetchAllUsers, fetchTotalUserCount, fetchUserStats, banUser, unbanUser,
 let settings = getSettings();
 let currentSettingsTab = 'general';
 let adminRefreshTimer = null;
+const providerHealthScores = new Map();
 
 const PRESET_COLORS = [
   '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#10b981',
@@ -19,12 +20,14 @@ const PRESET_COLORS = [
 
 export function initSettings() {
   applyDeviceClass();
+  applyAppearanceSettings();
   const btn = document.getElementById('settingsBtn');
   const modal = document.getElementById('settingsModal');
   const close = document.getElementById('settingsClose');
   const cancel = document.getElementById('settingsCancel');
   const form = document.getElementById('settingsForm');
   const autoFailover = document.getElementById('settingsAutoFailover');
+  const roundedUI = document.getElementById('settingsRoundedUI');
 
   if (btn) btn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -47,6 +50,31 @@ export function initSettings() {
     settings.autoProviderFailover = autoFailover.checked;
     saveSettings(settings);
     showToast(autoFailover.checked ? 'Automatic failover enabled' : 'Automatic failover disabled', 'success');
+  });
+
+  document.querySelectorAll('[data-theme-option]').forEach(option => {
+    option.addEventListener('click', () => {
+      const theme = option.dataset.themeOption;
+      if (!THEMES.includes(theme)) return;
+      settings = { ...getSettings(), theme };
+      saveSettings(settings);
+      renderThemeOptions();
+      showToast(`${option.querySelector('strong')?.textContent || 'Theme'} applied`, 'success');
+    });
+  });
+
+  roundedUI?.addEventListener('change', () => {
+    settings = { ...getSettings(), roundedUI: roundedUI.checked };
+    saveSettings(settings);
+    showToast(roundedUI.checked ? 'Rounder UI enabled' : 'Standard UI restored', 'success');
+  });
+
+  window.addEventListener('opencloud:provider-health', (event) => {
+    const { provider, score, state } = event.detail || {};
+    if (!provider || state === 'idle') return;
+    providerHealthScores.set(provider, Math.max(1, Math.min(5, Number(score) || 1)));
+    const modalOpen = !document.getElementById('settingsModal')?.classList.contains('hidden');
+    if (modalOpen && currentSettingsTab === 'sources') renderProviderCards();
   });
 
   // Tab switching
@@ -149,6 +177,18 @@ function switchSettingsTab(tab) {
   if (tab === 'blocker') {
     initBlockerUI();
   }
+  if (tab === 'themes') {
+    renderThemeOptions();
+  }
+}
+
+function renderThemeOptions() {
+  const activeTheme = getSettings().theme || 'noir';
+  document.querySelectorAll('[data-theme-option]').forEach(option => {
+    const selected = option.dataset.themeOption === activeTheme;
+    option.classList.toggle('active', selected);
+    option.setAttribute('aria-checked', String(selected));
+  });
 }
 
 export function openSettingsModal() {
@@ -178,10 +218,13 @@ export function openSettingsModal() {
   const deviceSelect = document.getElementById('settingsDevice');
   const autoPlay = document.getElementById('settingsAutoPlay');
   const autoFailover = document.getElementById('settingsAutoFailover');
+  const roundedUI = document.getElementById('settingsRoundedUI');
 
   if (deviceSelect) deviceSelect.value = settings.device;
   if (autoPlay) autoPlay.checked = settings.autoPlay !== false;
   if (autoFailover) autoFailover.checked = settings.autoProviderFailover === true;
+  if (roundedUI) roundedUI.checked = settings.roundedUI === true;
+  renderThemeOptions();
 
   // Show/hide admin tab — must be declared before activation handler
   const adminTabBtn = document.getElementById('adminTabBtn');
@@ -251,6 +294,7 @@ function renderProviderCards() {
     const isBest = p.tier === 1;
     const rankLabel = p.rank || '';
     const badges = [];
+    const healthScore = providerHealthScores.get(key);
     if (rankLabel) badges.push(`<span class="provider-badge badge-rank">${rankLabel}</span>`);
     if (p.movie && p.tv) badges.push('<span class="provider-badge"><i class="fas fa-film"></i> Movies + TV</span>');
     else if (p.movie) badges.push('<span class="provider-badge"><i class="fas fa-film"></i> Movies</span>');
@@ -264,7 +308,13 @@ function renderProviderCards() {
       <div class="provider-card ${isActive ? 'active' : ''} ${isBest ? 'provider-best' : ''}" data-provider="${key}">
         <div class="provider-card-header">
           <div class="provider-card-name">${p.name}</div>
-          <div class="provider-card-check">${isActive ? '<i class="fas fa-check-circle"></i>' : '<i class="far fa-circle"></i>'}</div>
+          <div class="provider-card-status">
+            <span class="provider-health-mini ${healthScore ? `score-${healthScore}` : 'is-unmeasured'}" aria-label="${healthScore ? `${healthScore} out of 5 connection strength` : 'Connection strength is measured during playback'}">
+              <span class="provider-signal" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></span>
+              <small>${healthScore ? `${healthScore}/5` : 'Live in player'}</small>
+            </span>
+            <span class="provider-card-check">${isActive ? '<i class="fas fa-check-circle"></i>' : '<i class="far fa-circle"></i>'}</span>
+          </div>
         </div>
         <div class="provider-card-badges">${badges.join('')}</div>
         <div class="provider-card-desc">${p.description}</div>
@@ -290,7 +340,7 @@ async function saveSettingsFromForm() {
     return;
   }
 
-  if (currentSettingsTab === 'sources' || currentSettingsTab === 'blocker' || currentSettingsTab === 'stats') {
+  if (currentSettingsTab === 'themes' || currentSettingsTab === 'sources' || currentSettingsTab === 'blocker' || currentSettingsTab === 'stats') {
     // These tabs auto-save on interaction; just close the modal
     document.getElementById('settingsModal')?.classList.add('hidden');
     return;

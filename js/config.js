@@ -109,13 +109,17 @@ export const DEVICES = {
   phone: { name: 'Phone', class: 'device-phone' }
 };
 
+export const THEMES = Object.freeze(['noir', 'graphite', 'midnight', 'ember', 'paper']);
+
 export const DEFAULT_PROVIDER = 'videasy';
-const SETTINGS_VERSION = 4;
+const SETTINGS_VERSION = 5;
 const DEFAULT_SETTINGS = Object.freeze({
   provider: DEFAULT_PROVIDER,
   device: 'laptop',
   autoPlay: true,
   autoProviderFailover: false,
+  theme: 'noir',
+  roundedUI: false,
   _version: SETTINGS_VERSION
 });
 
@@ -132,8 +136,17 @@ export function getSettings() {
 }
 
 export function saveSettings(settings) {
-  localStorage.setItem('openccloud_settings', JSON.stringify({ ...settings, _version: SETTINGS_VERSION }));
+  const next = { ...settings, _version: SETTINGS_VERSION };
+  localStorage.setItem('openccloud_settings', JSON.stringify(next));
+  applyAppearanceSettings(next);
   queueSettingsSync();
+}
+
+export function applyAppearanceSettings(settings = getSettings()) {
+  if (typeof document === 'undefined') return;
+  const theme = THEMES.includes(settings.theme) ? settings.theme : 'noir';
+  document.documentElement.dataset.theme = theme;
+  document.documentElement.classList.toggle('ui-rounded', settings.roundedUI === true);
 }
 
 /* Sync settings to Supabase when authenticated */
@@ -207,6 +220,8 @@ export function getActiveProvider() {
 
 export function applyDeviceClass() {
   const settings = getSettings();
+  const device = DEVICES[settings.device] ? settings.device : 'laptop';
   document.body.classList.remove('device-laptop', 'device-tv', 'device-phone');
-  document.body.classList.add(DEVICES[settings.device]?.class || 'device-laptop');
+  document.body.classList.add(DEVICES[device].class);
+  window.dispatchEvent(new CustomEvent('opencloud:device-layout', { detail: { device } }));
 }

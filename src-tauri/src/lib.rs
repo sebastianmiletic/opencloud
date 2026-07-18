@@ -4,7 +4,8 @@ use std::{
     collections::BTreeMap,
     fs,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, OnceLock},
+    time::{Duration, Instant},
 };
 use tauri::{
     webview::{NewWindowResponse, PageLoadEvent, WebviewWindowBuilder},
@@ -15,6 +16,7 @@ use url::Url;
 
 const BLOCKER_INIT_SCRIPT: &str = include_str!("blocker_init.js");
 const MIGRATION_FILE_NAME: &str = "tauri-migration-v1.json";
+static PROVIDER_HEALTH_CLIENT: OnceLock<Result<reqwest::Client, String>> = OnceLock::new();
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -210,6 +212,14 @@ struct UpdateInfo {
     date: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProviderProbe {
+    reachable: bool,
+    latency_ms: u64,
+    status: Option<u16>,
+}
+
 fn is_app_url(url: &Url) -> bool {
     matches!(url.scheme(), "tauri" | "ipc")
         || matches!(
@@ -225,8 +235,19 @@ fn is_allowed_navigation(url: &Url) -> bool {
     if is_app_url(url) {
         return true;
     }
+    is_provider_host(url.host_str())
+        || matches!(
+            url.host_str(),
+            Some("image.tmdb.org")
+                | Some("www.themoviedb.org")
+                | Some("api.themoviedb.org")
+                | Some("www.omdbapi.com")
+        )
+}
+
+fn is_provider_host(host: Option<&str>) -> bool {
     matches!(
-        url.host_str(),
+        host,
         Some("vidsrc.cc")
             | Some("player.videasy.net")
             | Some("player.videasy.to")
@@ -235,11 +256,32 @@ fn is_allowed_navigation(url: &Url) -> bool {
             | Some("moviesapi.club")
             | Some("vidsrc.su")
             | Some("vidlink.pro")
-            | Some("image.tmdb.org")
-            | Some("www.themoviedb.org")
-            | Some("api.themoviedb.org")
-            | Some("www.omdbapi.com")
     )
+}
+
+fn provider_health_client() -> Result<reqwest::Client, String> {
+    PROVIDER_HEALTH_CLIENT
+        .get_or_init(|| {
+            reqwest::Client::builder()
+                .connect_timeout(Duration::from_secs(4))
+                .timeout(Duration::from_secs(8))
+                .redirect(reqwest::redirect::Policy::custom(|attempt| {
+                    if attempt.previous().len() >= 2 {
+                        return attempt.error("too many provider redirects");
+                    }
+                    if attempt.url().scheme() == "https"
+                        && is_provider_host(attempt.url().host_str())
+                    {
+                        attempt.follow()
+                    } else {
+                        attempt.stop()
+                    }
+                }))
+                .user_agent("OpenCloud/3 provider-health")
+                .build()
+                .map_err(|error| error.to_string())
+        })
+        .clone()
 }
 
 #[tauri::command]
@@ -399,6 +441,42 @@ async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn probe_provider(url: String) -> Result<ProviderProbe, String> {
+    let parsed = Url::parse(&url).map_err(|error| error.to_string())?;
+    if parsed.scheme() != "https" || !is_provider_host(parsed.host_str()) {
+        return Err("provider health probe URL is outside the allowlist".into());
+    }
+
+    let client = provider_health_client()?;
+    let started = Instant::now();
+    let response = client
+        .get(parsed)
+        .header(reqwest::header::RANGE, "bytes=0-0")
+        .send()
+        .await;
+    let latency_ms = started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
+
+    Ok(match response {
+        Ok(response) => {
+            let status = response.status().as_u16();
+            ProviderProbe {
+                reachable: status < 500,
+                latency_ms,
+                status: Some(status),
+            }
+        }
+        Err(error) => {
+            log::warn!("provider health probe failed: {error}");
+            ProviderProbe {
+                reachable: false,
+                latency_ms,
+                status: None,
+            }
+        }
+    })
+}
+
+#[tauri::command]
 fn restart_app(app: tauri::AppHandle) {
     app.restart();
 }
@@ -438,6 +516,7 @@ pub fn run() {
             open_external,
             check_for_updates,
             install_update,
+            probe_provider,
             restart_app,
             set_player_fullscreen
         ])
@@ -555,5 +634,12 @@ mod tests {
         assert!(!is_allowed_navigation(
             &Url::parse("https://ads.example.invalid/redirect").unwrap()
         ));
+    }
+
+    #[test]
+    fn provider_probe_allowlist_rejects_arbitrary_hosts() {
+        assert!(is_provider_host(Some("player.videasy.net")));
+        assert!(!is_provider_host(Some("ads.example.invalid")));
+        assert!(!is_provider_host(Some("videasy.net.ads.example.invalid")));
     }
 }

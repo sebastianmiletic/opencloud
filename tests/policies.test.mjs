@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { resolveUpNextEpisode } from '../js/series.js';
+import { connectionScoreForLatency } from '../js/player-health.js';
 
 const localValues = new Map();
 globalThis.localStorage = {
@@ -48,7 +49,16 @@ test('automatic provider failover is off by default and settings migrate safely'
     autoPlay: false
   }));
   assert.deepEqual(
-    { provider: getSettings().provider, device: getSettings().device, autoPlay: getSettings().autoPlay, autoProviderFailover: getSettings().autoProviderFailover },
-    { provider: 'moviesapi', device: 'tv', autoPlay: false, autoProviderFailover: false }
+    { provider: getSettings().provider, device: getSettings().device, autoPlay: getSettings().autoPlay, autoProviderFailover: getSettings().autoProviderFailover, theme: getSettings().theme, roundedUI: getSettings().roundedUI },
+    { provider: 'moviesapi', device: 'tv', autoPlay: false, autoProviderFailover: false, theme: 'noir', roundedUI: false }
   );
+});
+
+test('provider health maps reachability and latency onto five honest levels', () => {
+  assert.equal(connectionScoreForLatency(180, 200, true), 5);
+  assert.equal(connectionScoreForLatency(620, 200, true), 4);
+  assert.equal(connectionScoreForLatency(1300, 200, true), 3);
+  assert.equal(connectionScoreForLatency(2600, 200, true), 2);
+  assert.equal(connectionScoreForLatency(500, 503, true), 1);
+  assert.equal(connectionScoreForLatency(100, 200, false), 1);
 });

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Open Cloud</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Cpath fill='%23fff' d='M403.9 221.8c-5.5-57.9-54.9-103.2-114.3-103.2-46.5 0-86.6 27.6-105.2 67.3-5.5-1.1-11.2-1.7-17-1.7-47.5 0-86 38.5-86 86 0 5 .5 9.9 1.3 14.7C34.8 299.3 0 340.8 0 390c0 56.6 45.9 102.4 102.4 102.4h307.2C466.1 492.4 512 446.5 512 390c0-45.6-30.1-84.2-71.6-97.1 1.4-7.2 2.1-14.6 2.1-22.2 0-21.7-6.7-41.9-18.1-58.6l-20.7 9.7z'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="styles.css?v=22">
+  <link rel="stylesheet" href="styles.css?v=23">
 </head>
 <body>
   <a class="skip-link" href="#mainContent">Skip to content</a>
@@ -397,10 +397,11 @@
 
   <!-- Inline Player Overlay -->
   <div id="playerOverlay" class="player-overlay hidden" role="dialog" aria-modal="true" aria-label="Video player">
+    <div class="player-header-hover-zone" aria-hidden="true"></div>
     <div class="player-header-bar">
       <div class="player-header-left">
-        <button class="player-back-btn" id="playerBackBtn">
-          <i class="fas fa-arrow-left"></i>
+        <button class="player-back-btn" id="playerBackBtn" type="button" aria-label="Back" title="Back">
+          <i class="fas fa-arrow-left" aria-hidden="true"></i>
           <span>Back</span>
         </button>
         <button class="player-title-text" id="playerTitleText" type="button" title="Open title details on TMDB">
@@ -410,24 +411,24 @@
       </div>
       <div class="player-header-right">
         <div class="player-health is-idle" id="playerHealth" role="status" aria-live="polite">
-          <span class="player-health-dot" aria-hidden="true"></span>
+          <span class="provider-signal" id="playerHealthSignal" aria-hidden="true">
+            <span></span><span></span><span></span><span></span><span></span>
+          </span>
+          <span class="player-health-score" id="playerHealthScore">1/5</span>
           <span id="playerHealthText">Player idle</span>
         </div>
-        <button class="player-header-btn player-retry-btn hidden" id="playerRetryBtn" type="button">
-          <i class="fas fa-rotate-right"></i>
+        <button class="player-header-btn player-retry-btn hidden" id="playerRetryBtn" type="button" aria-label="Retry player" title="Retry player">
+          <i class="fas fa-rotate-right" aria-hidden="true"></i>
           <span>Retry</span>
         </button>
-        <button class="player-header-btn" id="playerNextBtn" style="display:none;">
-          <i class="fas fa-forward-step"></i>
-          <span>Next</span>
+        <button class="player-header-btn player-icon-btn" id="playerNextBtn" type="button" aria-label="Next episode" title="Next episode" style="display:none;">
+          <i class="fas fa-forward-step" aria-hidden="true"></i>
         </button>
-        <button class="player-header-btn" id="playerFullscreenBtn" type="button" aria-pressed="false" title="Enter fullscreen (F)">
+        <button class="player-header-btn player-icon-btn" id="playerFullscreenBtn" type="button" aria-label="Enter fullscreen" aria-pressed="false" title="Enter fullscreen (F)">
           <i class="fas fa-expand" aria-hidden="true"></i>
-          <span>Fullscreen</span>
         </button>
-        <button class="player-header-btn" id="playerEpBtn" style="display:none;">
-          <i class="fas fa-list"></i>
-          <span>Episodes</span>
+        <button class="player-header-btn player-icon-btn" id="playerEpBtn" type="button" aria-label="Episodes" title="Episodes" style="display:none;">
+          <i class="fas fa-list" aria-hidden="true"></i>
         </button>
       </div>
     </div>
@@ -558,19 +559,20 @@
   <!-- Settings Modal -->
   <div id="settingsModal" class="modal hidden">
     <div class="modal-overlay"></div>
-    <div class="modal-content edit-modal" style="max-width:640px;">
+    <div class="modal-content edit-modal settings-modal-content" style="max-width:740px;">
       <button class="modal-close" id="settingsClose">
         <i class="fas fa-times"></i>
       </button>
       <div class="edit-modal-body">
         <h2><i class="fas fa-sliders"></i> Settings</h2>
         <div class="settings-tabs">
-          <button class="settings-tab-btn active" data-tab="general">General</button>
-          <button class="settings-tab-btn" data-tab="sources">Video Sources</button>
-          <button class="settings-tab-btn" data-tab="blocker">Blocker</button>
-          <button class="settings-tab-btn" data-tab="stats">Stats</button>
-          <button class="settings-tab-btn" data-tab="account">Account</button>
-          <button class="settings-tab-btn hidden" data-tab="admin" id="adminTabBtn">Admin</button>
+          <button type="button" class="settings-tab-btn active" data-tab="general">General</button>
+          <button type="button" class="settings-tab-btn" data-tab="themes">Themes</button>
+          <button type="button" class="settings-tab-btn" data-tab="sources">Video Sources</button>
+          <button type="button" class="settings-tab-btn" data-tab="blocker">Blocker</button>
+          <button type="button" class="settings-tab-btn" data-tab="stats">Stats</button>
+          <button type="button" class="settings-tab-btn" data-tab="account">Account</button>
+          <button type="button" class="settings-tab-btn hidden" data-tab="admin" id="adminTabBtn">Admin</button>
         </div>
         <form id="settingsForm">
           <div class="settings-tab-panel" data-panel="general">
@@ -593,6 +595,51 @@
               <input type="password" id="activationKey" placeholder="Enter activation key" autocomplete="off">
               <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.25rem;">Unlock additional features.</p>
               <button type="button" class="btn btn-secondary" id="activateBtn" style="margin-top:0.5rem;">Activate</button>
+            </div>
+          </div>
+          <div class="settings-tab-panel hidden" data-panel="themes">
+            <div class="settings-section-heading">
+              <div>
+                <h3>Theme library</h3>
+                <p>Choose a cinematic palette. Changes apply immediately and stay on this device.</p>
+              </div>
+            </div>
+            <div class="theme-library" id="settingsThemeLibrary" role="radiogroup" aria-label="Application theme">
+              <button type="button" class="theme-option" data-theme-option="noir" role="radio" aria-checked="false">
+                <span class="theme-preview theme-preview-noir" aria-hidden="true"><span></span><span></span><span></span></span>
+                <span><strong>Noir</strong><small>Original high-contrast black</small></span>
+                <i class="fas fa-check" aria-hidden="true"></i>
+              </button>
+              <button type="button" class="theme-option" data-theme-option="graphite" role="radio" aria-checked="false">
+                <span class="theme-preview theme-preview-graphite" aria-hidden="true"><span></span><span></span><span></span></span>
+                <span><strong>Graphite</strong><small>Soft charcoal for long sessions</small></span>
+                <i class="fas fa-check" aria-hidden="true"></i>
+              </button>
+              <button type="button" class="theme-option" data-theme-option="midnight" role="radio" aria-checked="false">
+                <span class="theme-preview theme-preview-midnight" aria-hidden="true"><span></span><span></span><span></span></span>
+                <span><strong>Midnight</strong><small>Cool navy with a quiet blue accent</small></span>
+                <i class="fas fa-check" aria-hidden="true"></i>
+              </button>
+              <button type="button" class="theme-option" data-theme-option="ember" role="radio" aria-checked="false">
+                <span class="theme-preview theme-preview-ember" aria-hidden="true"><span></span><span></span><span></span></span>
+                <span><strong>Ember</strong><small>Warm cinema-inspired neutrals</small></span>
+                <i class="fas fa-check" aria-hidden="true"></i>
+              </button>
+              <button type="button" class="theme-option" data-theme-option="paper" role="radio" aria-checked="false">
+                <span class="theme-preview theme-preview-paper" aria-hidden="true"><span></span><span></span><span></span></span>
+                <span><strong>Paper</strong><small>Calm light theme for bright rooms</small></span>
+                <i class="fas fa-check" aria-hidden="true"></i>
+              </button>
+            </div>
+            <div class="setting-switch-row theme-shape-row">
+              <div>
+                <label for="settingsRoundedUI">Rounder UI</label>
+                <p>Uses larger corner radii and softer controls across the entire app.</p>
+              </div>
+              <label class="switch-control">
+                <input type="checkbox" id="settingsRoundedUI">
+                <span aria-hidden="true"></span>
+              </label>
             </div>
           </div>
           <div class="settings-tab-panel hidden" data-panel="sources">
@@ -785,7 +832,7 @@
 
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/bootstrap.js?v=23"></script>
+  <script type="module" src="js/bootstrap.js?v=24"></script>
 
   <div id="updateModal" class="modal update-modal hidden" role="dialog" aria-modal="true" aria-labelledby="updateModalTitle" aria-describedby="updateModalMsg">
     <div class="modal-overlay"></div>

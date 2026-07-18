@@ -7,6 +7,7 @@ import { showToast, lockScroll, unlockScroll } from './utils.js';
 import { recordWatchSession } from './supabase.js';
 import { getWatchProgress, saveWatchProgress, syncWatchProgressItem, addToUserHistory } from './storage.js';
 import { invokeDesktop, isTauri, openExternal } from './desktop.js';
+import { connectionScoreForLatency } from './player-health.js';
 
 /* DOM refs */
 const playerOverlay = document.getElementById('playerOverlay');
@@ -20,6 +21,7 @@ const playerEpBtn = document.getElementById('playerEpBtn');
 const playerFullscreenBtn = document.getElementById('playerFullscreenBtn');
 const playerHealth = document.getElementById('playerHealth');
 const playerHealthText = document.getElementById('playerHealthText');
+const playerHealthScore = document.getElementById('playerHealthScore');
 const playerRetryBtn = document.getElementById('playerRetryBtn');
 const epPopoverOverlay = document.getElementById('epPopoverOverlay');
 const epPopoverList = document.getElementById('epPopoverList');
@@ -32,19 +34,52 @@ const epPopoverTabs = document.getElementById('epPopoverTabs');
 let _playerOpenedAt = 0;
 let _progressInterval = null;
 let _healthTimer = null;
+let _providerProbeInterval = null;
+let _providerProbeTimeout = null;
+let _providerProbeToken = 0;
+let _providerProbeFailures = 0;
+let _frameLoadStartedAt = 0;
+let _lastFrameScore = 1;
 let _currentProviderKey = null;
 let _providerCandidates = [];
 let _attemptedProviders = new Set();
 let _iframeErrorHandler = null;
 let _metadataFailed = false;
 let _isPlayerFullscreen = false;
+let _headerAutohide = false;
 let _metadataRequestId = 0;
 const _seasonCache = new Map();
 
-function setPlayerHealth(state, text, retry = false) {
-  if (playerHealth) playerHealth.className = `player-health is-${state}`;
+function healthQuality(score) {
+  return ['Unavailable', 'Poor', 'Fair', 'Good', 'Excellent'][Math.max(1, Math.min(5, score)) - 1];
+}
+
+function adjustScoreForConnection(score) {
+  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  if (!navigator.onLine) return 1;
+  if (!connection) return score;
+  if (connection.saveData) score = Math.min(score, 3);
+  if (connection.effectiveType === 'slow-2g') return 1;
+  if (connection.effectiveType === '2g') score = Math.min(score, 2);
+  if (connection.effectiveType === '3g') score = Math.min(score, 3);
+  if (Number(connection.rtt) > 1200 || (Number(connection.downlink) > 0 && Number(connection.downlink) < 1)) return Math.min(score, 2);
+  if (Number(connection.rtt) > 600 || (Number(connection.downlink) > 0 && Number(connection.downlink) < 3)) return Math.min(score, 3);
+  return score;
+}
+
+function setPlayerHealth(state, text, retry = false, score = 1, latencyMs = null) {
+  const normalizedScore = Math.max(1, Math.min(5, Number(score) || 1));
+  if (playerHealth) {
+    playerHealth.className = `player-health is-${state} score-${normalizedScore}`;
+    const latency = Number.isFinite(Number(latencyMs)) ? `, ${Math.round(Number(latencyMs))} milliseconds` : '';
+    playerHealth.setAttribute('aria-label', `${providerName(_currentProviderKey)} connection ${normalizedScore} out of 5, ${healthQuality(normalizedScore)}${latency}`);
+  }
+  if (playerHealthScore) playerHealthScore.textContent = `${normalizedScore}/5`;
   if (playerHealthText) playerHealthText.textContent = text;
   playerRetryBtn?.classList.toggle('hidden', !retry);
+  window.dispatchEvent(new CustomEvent('opencloud:provider-health', {
+    detail: { provider: _currentProviderKey, state, score: normalizedScore, text, latencyMs }
+  }));
 }
 
 function clearHealthTimer() {
@@ -60,18 +95,21 @@ function resetProviderSession(type) {
   _providerCandidates = getProviderCandidates(type);
   _currentProviderKey = _providerCandidates[0] || getSettings().provider;
   _attemptedProviders = new Set();
+  _providerProbeFailures = 0;
+  _lastFrameScore = 1;
 }
 
 function tryNextProvider(reason = 'The source did not respond') {
   clearHealthTimer();
   const nextKey = _providerCandidates.find(key => !_attemptedProviders.has(key));
   if (!nextKey) {
-    setPlayerHealth('failed', 'No source responded', true);
+    setPlayerHealth('failed', 'No source responded', true, 1);
     showToast('No video source responded. Retry or choose a source in Settings.', 'error');
     return false;
   }
   _currentProviderKey = nextKey;
-  setPlayerHealth('switching', `Switching to ${providerName(nextKey)}…`);
+  _providerProbeFailures = 0;
+  setPlayerHealth('switching', `Switching to ${providerName(nextKey)}…`, false, 2);
   showToast(`${reason}. Trying ${providerName(nextKey)}…`, 'info');
   loadPlayerIframe();
   return true;
@@ -82,7 +120,59 @@ function handleProviderFailure(reason) {
     tryNextProvider(reason);
     return;
   }
-  setPlayerHealth('slow', `${providerName(_currentProviderKey)} needs attention`, true);
+  setPlayerHealth('slow', `${providerName(_currentProviderKey)} · Poor`, true, 1);
+}
+
+function stopProviderHealthProbes() {
+  _providerProbeToken += 1;
+  if (_providerProbeTimeout) clearTimeout(_providerProbeTimeout);
+  if (_providerProbeInterval) clearInterval(_providerProbeInterval);
+  _providerProbeTimeout = null;
+  _providerProbeInterval = null;
+}
+
+async function probeCurrentProvider() {
+  const providerKey = _currentProviderKey;
+  if (!providerKey || !playerState.id || playerOverlay?.classList.contains('hidden')) return;
+  const probeToken = _providerProbeToken;
+  if (!navigator.onLine) {
+    setPlayerHealth('failed', `${providerName(providerKey)} · Offline`, true, 1);
+    return;
+  }
+  if (!isTauri()) return;
+
+  try {
+    const result = await invokeDesktop('probe_provider', { url: getPlayerSrc() });
+    if (probeToken !== _providerProbeToken || providerKey !== _currentProviderKey) return;
+    const measuredScore = connectionScoreForLatency(result?.latencyMs, result?.status, result?.reachable);
+    const statusRejectedProbe = Number(result?.status) >= 400 && Number(result?.status) < 500 && result?.reachable;
+    const score = adjustScoreForConnection(statusRejectedProbe ? _lastFrameScore : measuredScore);
+    if (score === 1) _providerProbeFailures += 1;
+    else _providerProbeFailures = 0;
+
+    if (_providerProbeFailures >= 2 && getSettings().autoProviderFailover === true) {
+      tryNextProvider(`${providerName(providerKey)} stopped responding`);
+      return;
+    }
+
+    const state = score <= 2 ? 'slow' : 'ready';
+    setPlayerHealth(state, `${providerName(providerKey)} · ${healthQuality(score)}`, score <= 1, score, result?.latencyMs);
+  } catch (error) {
+    if (probeToken !== _providerProbeToken || providerKey !== _currentProviderKey) return;
+    console.warn('[provider probe]', error);
+    _providerProbeFailures += 1;
+    if (_providerProbeFailures >= 2 && getSettings().autoProviderFailover === true) {
+      tryNextProvider(`${providerName(providerKey)} stopped responding`);
+    } else {
+      setPlayerHealth('slow', `${providerName(providerKey)} · Check connection`, true, 1);
+    }
+  }
+}
+
+function startProviderHealthProbes() {
+  stopProviderHealthProbes();
+  _providerProbeTimeout = setTimeout(probeCurrentProvider, 2500);
+  _providerProbeInterval = setInterval(probeCurrentProvider, 15000);
 }
 
 /* Active watch tracking */
@@ -248,7 +338,12 @@ function attachIframeLoadListener() {
   if (!playerFrame || _iframeLoadHandler) return;
   _iframeLoadHandler = () => {
     clearHealthTimer();
-    setPlayerHealth('ready', `${providerName(_currentProviderKey)} connected`);
+    const latency = Math.max(0, performance.now() - _frameLoadStartedAt);
+    const score = adjustScoreForConnection(connectionScoreForLatency(latency));
+    _lastFrameScore = score;
+    _providerProbeFailures = 0;
+    setPlayerHealth(score <= 2 ? 'slow' : 'ready', `${providerName(_currentProviderKey)} · ${healthQuality(score)}`, false, score, latency);
+    startProviderHealthProbes();
   };
   playerFrame.addEventListener('load', _iframeLoadHandler);
   _iframeErrorHandler = () => handleProviderFailure(`${providerName(_currentProviderKey)} failed to load`);
@@ -285,9 +380,7 @@ function updateFullscreenButton(fullscreen) {
   playerFullscreenBtn.setAttribute('aria-label', fullscreen ? 'Exit fullscreen' : 'Enter fullscreen');
   playerFullscreenBtn.title = fullscreen ? 'Exit fullscreen (F)' : 'Enter fullscreen (F)';
   const icon = playerFullscreenBtn.querySelector('i');
-  const label = playerFullscreenBtn.querySelector('span');
   if (icon) icon.className = fullscreen ? 'fas fa-compress' : 'fas fa-expand';
-  if (label) label.textContent = fullscreen ? 'Exit' : 'Fullscreen';
 }
 
 async function setPlayerFullscreen(fullscreen) {
@@ -326,6 +419,27 @@ function togglePlayerFullscreen() {
   return setPlayerFullscreen(!_isPlayerFullscreen);
 }
 
+function setPlayerHeaderAutohide(enabled, notify = true) {
+  const isLaptop = document.body.classList.contains('device-laptop');
+  _headerAutohide = Boolean(enabled && isLaptop);
+  playerOverlay?.classList.toggle('player-header-autohide', _headerAutohide);
+  playerOverlay?.setAttribute('data-header-mode', _headerAutohide ? 'auto-hide' : 'fixed');
+  if (_headerAutohide && document.activeElement instanceof HTMLElement && document.activeElement.closest('.player-header-bar')) {
+    document.activeElement.blur();
+  }
+  if (!notify) return;
+  showToast(
+    _headerAutohide
+      ? 'Player bar hidden. Move to the top edge or press T to restore it.'
+      : 'Player bar will stay visible.',
+    'info'
+  );
+}
+
+function togglePlayerHeaderAutohide() {
+  setPlayerHeaderAutohide(!_headerAutohide);
+}
+
 export function initPlayer() {
   if (playerBackBtn) playerBackBtn.addEventListener('click', closePlayer);
   if (epPopoverClose) epPopoverClose.addEventListener('click', closeEpPopover);
@@ -353,6 +467,15 @@ export function initPlayer() {
     loadPlayerIframe();
   });
   playerFullscreenBtn?.addEventListener('click', togglePlayerFullscreen);
+  window.addEventListener('offline', () => {
+    if (!playerOverlay?.classList.contains('hidden')) setPlayerHealth('failed', `${providerName(_currentProviderKey)} · Offline`, true, 1);
+  });
+  window.addEventListener('online', () => {
+    if (!playerOverlay?.classList.contains('hidden')) probeCurrentProvider();
+  });
+  window.addEventListener('opencloud:device-layout', (event) => {
+    if (event.detail?.device !== 'laptop') setPlayerHeaderAutohide(false, false);
+  });
   document.addEventListener('fullscreenchange', () => updateFullscreenButton(Boolean(document.fullscreenElement)));
   document.addEventListener('webkitfullscreenchange', () => updateFullscreenButton(Boolean(document.webkitFullscreenElement)));
 
@@ -360,6 +483,12 @@ export function initPlayer() {
     const playerIsOpen = playerOverlay && !playerOverlay.classList.contains('hidden');
     const target = e.target;
     const isTyping = target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
+    if (playerIsOpen && !isTyping && e.key.toLowerCase() === 't') {
+      if (!document.body.classList.contains('device-laptop')) return;
+      e.preventDefault();
+      togglePlayerHeaderAutohide();
+      return;
+    }
     if (playerIsOpen && !isTyping && e.key.toLowerCase() === 'f') {
       e.preventDefault();
       togglePlayerFullscreen();
@@ -389,9 +518,12 @@ function getPlayerSrc() {
 function loadPlayerIframe() {
   if (!playerFrame) return;
   clearHealthTimer();
+  stopProviderHealthProbes();
   if (!_currentProviderKey) resetProviderSession(playerState.type || 'movie');
   _attemptedProviders.add(_currentProviderKey);
-  setPlayerHealth('connecting', `Connecting to ${providerName(_currentProviderKey)}…`);
+  _frameLoadStartedAt = performance.now();
+  _lastFrameScore = 1;
+  setPlayerHealth('connecting', `Connecting to ${providerName(_currentProviderKey)}…`, false, 2);
   playerFrame.src = getPlayerSrc();
   _healthTimer = setTimeout(() => {
     handleProviderFailure(`${providerName(_currentProviderKey)} is taking too long`);
@@ -401,11 +533,13 @@ function loadPlayerIframe() {
 export function closePlayer() {
   if (!playerOverlay) return;
   _metadataRequestId += 1;
+  setPlayerHeaderAutohide(false, false);
   if (_isPlayerFullscreen) setPlayerFullscreen(false);
   flushElapsedAndSave();
   stopProgressInterval();
   stopFrameMonitoring();
   clearHealthTimer();
+  stopProviderHealthProbes();
   recordCurrentSession();
   detachWatchActivityListeners();
   _playerOpenedAt = 0;
@@ -417,7 +551,7 @@ export function closePlayer() {
     playerOverlay.classList.add('hidden');
     playerOverlay.classList.remove('closing');
     if (playerFrame) playerFrame.src = '';
-    setPlayerHealth('idle', 'Player idle');
+    setPlayerHealth('idle', 'Player idle', false, 1);
     _providerCandidates = [];
     _attemptedProviders.clear();
     _currentProviderKey = null;
@@ -429,6 +563,8 @@ export function closePlayer() {
 
 export async function openPlayer(id, type, season, episode) {
   if (!playerOverlay || !playerFrame) return;
+
+  setPlayerHeaderAutohide(false, false);
 
   let startSeason = season ?? 1;
   let startEpisode = episode ?? 1;
@@ -531,7 +667,9 @@ async function initPlayerData() {
       if (playerEpBtn) {
         playerEpBtn.style.display = 'flex';
         playerEpBtn.disabled = true;
-        playerEpBtn.innerHTML = '<i class="fas fa-list"></i> <span>Loading…</span>';
+        playerEpBtn.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i>';
+        playerEpBtn.setAttribute('aria-label', 'Loading episodes');
+        playerEpBtn.title = 'Loading episodes';
       }
       loadSeasonData(playerState.season).catch(handleSeasonLoadFailure);
     }
@@ -559,7 +697,9 @@ function configureNextButton(tmdbData = playerState.tmdbData) {
   const [nextS, nextE] = getNextEp(playerState.season, playerState.episode, tmdbData);
   playerNextBtn.style.display = 'flex';
   playerNextBtn.disabled = nextS === null;
-  playerNextBtn.title = nextS === null ? 'No next episode' : `Next: S${nextS} E${nextE}`;
+  const label = nextS === null ? 'No next episode' : `Next episode: season ${nextS}, episode ${nextE}`;
+  playerNextBtn.title = label;
+  playerNextBtn.setAttribute('aria-label', label);
   playerNextBtn.onclick = nextS === null ? null : () => switchEpisode(nextS, nextE);
 }
 
@@ -629,7 +769,9 @@ async function loadSeasonData(season) {
   }
   if (playerEpBtn) {
     playerEpBtn.disabled = false;
-    playerEpBtn.innerHTML = '<i class="fas fa-list"></i> <span>Episodes</span>';
+    playerEpBtn.innerHTML = '<i class="fas fa-list" aria-hidden="true"></i>';
+    playerEpBtn.setAttribute('aria-label', 'Episodes');
+    playerEpBtn.title = 'Episodes';
     playerEpBtn.onclick = (event) => { event.stopPropagation(); openEpPopover(); };
   }
   return seasonData;
@@ -639,7 +781,9 @@ function handleSeasonLoadFailure(error) {
   console.error('[episode metadata]', error);
   if (playerEpBtn && !Object.keys(playerState.epData || {}).length) {
     playerEpBtn.disabled = false;
-    playerEpBtn.innerHTML = '<i class="fas fa-list"></i> <span>Retry episodes</span>';
+    playerEpBtn.innerHTML = '<i class="fas fa-rotate-right" aria-hidden="true"></i>';
+    playerEpBtn.setAttribute('aria-label', 'Retry loading episodes');
+    playerEpBtn.title = 'Retry loading episodes';
     playerEpBtn.onclick = () => loadSeasonData(playerState.season).catch(handleSeasonLoadFailure);
   }
 }
