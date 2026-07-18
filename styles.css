@@ -2190,12 +2190,12 @@ body {
   background: var(--bg-primary);
   display: flex;
   flex-direction: column;
-  animation: playerOpen 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: playerOpen 0.16s ease-out forwards;
   overflow: hidden;
 }
 
 .player-overlay.closing {
-  animation: playerClose 0.35s cubic-bezier(0.4, 0, 1, 1) forwards;
+  animation: playerClose 0.14s ease-in forwards;
 }
 
 .player-overlay.hidden {
@@ -2203,29 +2203,13 @@ body {
 }
 
 @keyframes playerOpen {
-  0% {
-    opacity: 0;
-    transform: scale(0.92) translateY(20px);
-    filter: brightness(0.3);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-    filter: brightness(1);
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes playerClose {
-  0% {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-    filter: brightness(1);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(0.96) translateY(10px);
-    filter: brightness(0.3);
-  }
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
 .player-header-bar {
@@ -2279,11 +2263,34 @@ body {
   text-align: left;
   font-size: 0.9375rem;
   font-weight: 600;
-  white-space: nowrap;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
   color: var(--text-primary);
   cursor: pointer;
+}
+
+.player-series-title,
+.player-episode-title {
+  display: block;
+  max-width: min(42vw, 34rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-episode-title {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.player-episode-title.hidden {
+  display: none;
 }
 
 .player-title-text:hover {
@@ -2386,6 +2393,7 @@ body {
   height: 100%;
   border: none;
   display: block;
+  contain: strict;
 }
 
 .category-header-with-copy { align-items: flex-end; }

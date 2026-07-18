@@ -46,6 +46,8 @@ function activeDialog() {
 }
 
 function closeTopLayer() {
+  // Let the player handle Escape first when it owns native/browser fullscreen.
+  if (document.body.classList.contains('player-fullscreen') || document.fullscreenElement) return false;
   const dialog = activeDialog();
   if (dialog) {
     const close = dialog.querySelector('#epPopoverClose,#playerBackBtn,.modal-close,[data-dialog-close]');
@@ -171,7 +173,8 @@ export function initAccessibility() {
 
   const iconLabels = {
     clearSearch: 'Clear search', settingsClose: 'Close settings', updateModalClose: 'Close update',
-    epPopoverBack: 'Back to seasons', epPopoverClose: 'Close episode selector'
+    epPopoverBack: 'Back to seasons', epPopoverClose: 'Close episode selector',
+    playerFullscreenBtn: 'Enter fullscreen'
   };
   Object.entries(iconLabels).forEach(([id, label]) => document.getElementById(id)?.setAttribute('aria-label', label));
 }

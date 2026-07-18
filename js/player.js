@@ -6,15 +6,18 @@ import { BASE_URL } from './config.js';
 import { showToast, lockScroll, unlockScroll } from './utils.js';
 import { recordWatchSession } from './supabase.js';
 import { getWatchProgress, saveWatchProgress, syncWatchProgressItem, addToUserHistory } from './storage.js';
-import { openExternal } from './desktop.js';
+import { invokeDesktop, isTauri, openExternal } from './desktop.js';
 
 /* DOM refs */
 const playerOverlay = document.getElementById('playerOverlay');
 const playerFrame = document.getElementById('playerFrame');
 const playerTitleText = document.getElementById('playerTitleText');
+const playerSeriesTitle = document.getElementById('playerSeriesTitle');
+const playerEpisodeTitle = document.getElementById('playerEpisodeTitle');
 const playerBackBtn = document.getElementById('playerBackBtn');
 const playerNextBtn = document.getElementById('playerNextBtn');
 const playerEpBtn = document.getElementById('playerEpBtn');
+const playerFullscreenBtn = document.getElementById('playerFullscreenBtn');
 const playerHealth = document.getElementById('playerHealth');
 const playerHealthText = document.getElementById('playerHealthText');
 const playerRetryBtn = document.getElementById('playerRetryBtn');
@@ -28,14 +31,15 @@ const epPopoverTabs = document.getElementById('epPopoverTabs');
 /* Elapsed-time tracking */
 let _playerOpenedAt = 0;
 let _progressInterval = null;
-let _srcPoller = null;
-let _lastKnownSrc = '';
 let _healthTimer = null;
 let _currentProviderKey = null;
 let _providerCandidates = [];
 let _attemptedProviders = new Set();
 let _iframeErrorHandler = null;
 let _metadataFailed = false;
+let _isPlayerFullscreen = false;
+let _metadataRequestId = 0;
+const _seasonCache = new Map();
 
 function setPlayerHealth(state, text, retry = false) {
   if (playerHealth) playerHealth.className = `player-health is-${state}`;
@@ -145,7 +149,7 @@ function startProgressInterval() {
         }
       }
     }
-  }, 30000); // tick every 30s
+  }, 60000); // one lightweight local save per minute
 }
 
 function stopProgressInterval() {
@@ -237,8 +241,7 @@ function resetWatchSession() {
   _pausedAt = null;
 }
 
-/* Track our own iframe loads vs user-initiated embed navigation */
-let _intentionalLoad = false;
+/* Observe the embed lifecycle without polling cross-origin state. */
 let _iframeLoadHandler = null;
 
 function attachIframeLoadListener() {
@@ -246,14 +249,6 @@ function attachIframeLoadListener() {
   _iframeLoadHandler = () => {
     clearHealthTimer();
     setPlayerHealth('ready', `${providerName(_currentProviderKey)} connected`);
-    if (_intentionalLoad) {
-      _intentionalLoad = false;
-      return;
-    }
-    // User navigated inside the embed — try to detect the new episode
-    const currentSrc = playerFrame.src || '';
-    console.log('[iframe] load event fired, src=', currentSrc);
-    handleIframeSrcChange(currentSrc);
   };
   playerFrame.addEventListener('load', _iframeLoadHandler);
   _iframeErrorHandler = () => handleProviderFailure(`${providerName(_currentProviderKey)} failed to load`);
@@ -268,114 +263,12 @@ function detachIframeLoadListener() {
   _iframeErrorHandler = null;
 }
 
-/* Detect iframe src changes from inside the player (user clicks next/prev in embed) */
-function startSrcPoller() {
-  stopSrcPoller();
+function startFrameMonitoring() {
   attachIframeLoadListener();
-  _lastKnownSrc = playerFrame?.src || '';
-  _srcPoller = setInterval(() => {
-    const currentSrc = playerFrame?.src || '';
-    if (currentSrc && currentSrc !== _lastKnownSrc) {
-      _lastKnownSrc = currentSrc;
-      console.log('[srcPoller] src changed', currentSrc);
-      handleIframeSrcChange(currentSrc);
-    }
-  }, 2000);
 }
 
-function stopSrcPoller() {
-  if (_srcPoller) {
-    clearInterval(_srcPoller);
-    _srcPoller = null;
-  }
-  _lastKnownSrc = '';
+function stopFrameMonitoring() {
   detachIframeLoadListener();
-}
-
-async function handleIframeSrcChange(src) {
-  if (playerState.type !== 'tv' || !playerState.id) return;
-  const parsed = parseSeasonEpisodeFromUrl(src);
-  if (!parsed) {
-    console.log('[handleIframeSrcChange] could not parse', src);
-    return;
-  }
-
-  const newS = parseInt(parsed.season);
-  const newE = parseInt(parsed.episode);
-  if (isNaN(newS) || isNaN(newE)) return;
-
-  // Only act if actually changed
-  if (newS === parseInt(playerState.season) && newE === parseInt(playerState.episode)) {
-    console.log('[handleIframeSrcChange] same ep, ignoring');
-    return;
-  }
-
-  console.log('[handleIframeSrcChange] detected change', 'S' + newS, 'E' + newE);
-
-  // Save elapsed for old episode and record active watch session
-  const minutesWatched = addSessionElapsed();
-  const progress = getCurrentProgress();
-  const existing = progress[String(playerState.id)];
-  if (existing) {
-    existing.elapsedMinutes = (existing.elapsedMinutes || 0) + minutesWatched;
-  }
-  setCurrentProgress(progress);
-  resetWatchSession();
-
-  // Update state and title
-  setPlayerState({ ...playerState, season: newS, episode: newE });
-  updatePlayerTitle(playerState.tmdbData?.title || '', newS, newE);
-  await persistProgress(playerState.id, newS, newE, { elapsedMinutes: 0 });
-
-  // Update Next button state
-  if (playerState.tmdbData && playerNextBtn) {
-    const [nextS, nextE] = getNextEp(newS, newE, playerState.tmdbData);
-    if (nextS !== null) {
-      playerNextBtn.style.display = 'flex';
-      playerNextBtn.disabled = false;
-      playerNextBtn.title = `Next: S${nextS} E${nextE}`;
-        playerNextBtn.onclick = async () => {
-          const minutes = addSessionElapsed();
-          const p = getCurrentProgress();
-          const ex = p[String(playerState.id)];
-          if (ex) ex.elapsedMinutes = (ex.elapsedMinutes || 0) + minutes;
-          setCurrentProgress(p);
-          setPlayerState({ ...playerState, season: nextS, episode: nextE });
-          updatePlayerTitle(playerState.tmdbData.title, nextS, nextE);
-          await persistProgress(playerState.id, nextS, nextE, { elapsedMinutes: 0 });
-          _playerOpenedAt = Date.now();
-          initPlayerData();
-        };
-    } else {
-      playerNextBtn.style.display = 'flex';
-      playerNextBtn.disabled = true;
-      playerNextBtn.title = 'No next episode';
-    }
-  }
-}
-
-function parseSeasonEpisodeFromUrl(url) {
-  try {
-    const u = new URL(url);
-    const path = u.pathname;
-    const search = u.search;
-
-    // Format: /tv/{id}/{season}/{episode}  (vidsrccc, vidsrcto, videasy, vidsrcsu, vidlink)
-    let m = path.match(/\/tv\/\d+\/(\d+)\/(\d+)/);
-    if (m) return { season: m[1], episode: m[2] };
-
-    // Format: /tv/{id}-{season}-{episode}  (moviesapi)
-    m = path.match(/\/tv\/\d+-(\d+)-(\d+)/);
-    if (m) return { season: m[1], episode: m[2] };
-
-    // Format: ?tmdb={id}&season={season}&episode={episode}  (vidsrcme)
-    const s = new URLSearchParams(search).get('season');
-    const e = new URLSearchParams(search).get('episode');
-    if (s && e) return { season: s, episode: e };
-  } catch (e) {
-    console.error('[parseSeasonEpisodeFromUrl]', e);
-  }
-  return null;
 }
 
 /* beforeunload: always do a final save */
@@ -383,6 +276,55 @@ window.addEventListener('beforeunload', () => {
   flushElapsedAndSave();
   recordCurrentSession();
 });
+
+function updateFullscreenButton(fullscreen) {
+  _isPlayerFullscreen = fullscreen;
+  document.body.classList.toggle('player-fullscreen', fullscreen);
+  if (!playerFullscreenBtn) return;
+  playerFullscreenBtn.setAttribute('aria-pressed', String(fullscreen));
+  playerFullscreenBtn.setAttribute('aria-label', fullscreen ? 'Exit fullscreen' : 'Enter fullscreen');
+  playerFullscreenBtn.title = fullscreen ? 'Exit fullscreen (F)' : 'Enter fullscreen (F)';
+  const icon = playerFullscreenBtn.querySelector('i');
+  const label = playerFullscreenBtn.querySelector('span');
+  if (icon) icon.className = fullscreen ? 'fas fa-compress' : 'fas fa-expand';
+  if (label) label.textContent = fullscreen ? 'Exit' : 'Fullscreen';
+}
+
+async function setPlayerFullscreen(fullscreen) {
+  const setWebFullscreen = async () => {
+    if (fullscreen) {
+      const request = playerOverlay?.requestFullscreen || playerOverlay?.webkitRequestFullscreen;
+      if (!request) throw new Error('Fullscreen is not supported');
+      await request.call(playerOverlay);
+    } else {
+      const exit = document.exitFullscreen || document.webkitExitFullscreen;
+      if (exit && (document.fullscreenElement || document.webkitFullscreenElement)) await exit.call(document);
+    }
+    return Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+  };
+
+  try {
+    if (isTauri()) {
+      updateFullscreenButton(fullscreen);
+      try {
+        const actualState = await invokeDesktop('set_player_fullscreen', { fullscreen });
+        updateFullscreenButton(Boolean(actualState));
+        return;
+      } catch (nativeError) {
+        console.warn('[player fullscreen] native fullscreen failed, using web fallback', nativeError);
+      }
+    }
+    updateFullscreenButton(await setWebFullscreen());
+  } catch (error) {
+    updateFullscreenButton(false);
+    console.error('[player fullscreen]', error);
+    showToast('Fullscreen could not be changed', 'error');
+  }
+}
+
+function togglePlayerFullscreen() {
+  return setPlayerFullscreen(!_isPlayerFullscreen);
+}
 
 export function initPlayer() {
   if (playerBackBtn) playerBackBtn.addEventListener('click', closePlayer);
@@ -410,10 +352,24 @@ export function initPlayer() {
     resetProviderSession(playerState.type || 'movie');
     loadPlayerIframe();
   });
+  playerFullscreenBtn?.addEventListener('click', togglePlayerFullscreen);
+  document.addEventListener('fullscreenchange', () => updateFullscreenButton(Boolean(document.fullscreenElement)));
+  document.addEventListener('webkitfullscreenchange', () => updateFullscreenButton(Boolean(document.webkitFullscreenElement)));
 
   document.addEventListener('keydown', (e) => {
+    const playerIsOpen = playerOverlay && !playerOverlay.classList.contains('hidden');
+    const target = e.target;
+    const isTyping = target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
+    if (playerIsOpen && !isTyping && e.key.toLowerCase() === 'f') {
+      e.preventDefault();
+      togglePlayerFullscreen();
+      return;
+    }
     if (e.key === 'Escape') {
-      if (epPopoverOverlay && !epPopoverOverlay.classList.contains('hidden')) {
+      if (_isPlayerFullscreen) {
+        e.preventDefault();
+        setPlayerFullscreen(false);
+      } else if (epPopoverOverlay && !epPopoverOverlay.classList.contains('hidden')) {
         closeEpPopover();
       } else if (playerOverlay && !playerOverlay.classList.contains('hidden')) {
         closePlayer();
@@ -435,10 +391,8 @@ function loadPlayerIframe() {
   clearHealthTimer();
   if (!_currentProviderKey) resetProviderSession(playerState.type || 'movie');
   _attemptedProviders.add(_currentProviderKey);
-  _intentionalLoad = true;
   setPlayerHealth('connecting', `Connecting to ${providerName(_currentProviderKey)}…`);
   playerFrame.src = getPlayerSrc();
-  _lastKnownSrc = playerFrame.src;
   _healthTimer = setTimeout(() => {
     handleProviderFailure(`${providerName(_currentProviderKey)} is taking too long`);
   }, 12000);
@@ -446,9 +400,11 @@ function loadPlayerIframe() {
 
 export function closePlayer() {
   if (!playerOverlay) return;
+  _metadataRequestId += 1;
+  if (_isPlayerFullscreen) setPlayerFullscreen(false);
   flushElapsedAndSave();
   stopProgressInterval();
-  stopSrcPoller();
+  stopFrameMonitoring();
   clearHealthTimer();
   recordCurrentSession();
   detachWatchActivityListeners();
@@ -468,7 +424,7 @@ export function closePlayer() {
     _metadataFailed = false;
     setPlayerState({ id: null, type: null, season: 1, episode: 1, tmdbData: null, epData: null, view: 'seasons' });
     unlockScroll();
-  }, 350);
+  }, 150);
 }
 
 export async function openPlayer(id, type, season, episode) {
@@ -502,9 +458,9 @@ export async function openPlayer(id, type, season, episode) {
   resetProviderSession(type);
   _metadataFailed = false;
 
-  // Save immediately so a reload right after clicking play resumes correctly
+  // Save immediately, without delaying the stream on cloud synchronization.
   if (type === 'tv') {
-    await persistProgress(id, startSeason, startEpisode);
+    persistProgress(id, startSeason, startEpisode).catch(console.error);
   }
 
   _playerOpenedAt = Date.now();
@@ -517,95 +473,74 @@ export async function openPlayer(id, type, season, episode) {
   lockScroll();
   window.dispatchEvent(new CustomEvent('watchStarted', { detail: { id, type, season: startSeason, episode: startEpisode } }));
   startProgressInterval();
-  startSrcPoller();
+  startFrameMonitoring();
+  updatePlayerTitle('Loading…', startSeason, startEpisode);
+  loadPlayerIframe();
   initPlayerData();
 }
 
-function updatePlayerTitle(name, season, episode) {
-  if (playerTitleText) {
-    if (playerState.type === 'tv') {
-      playerTitleText.textContent = `${name} S${season} E${episode}`;
-    } else {
-      playerTitleText.textContent = name;
-    }
+function updatePlayerTitle(name, season, episode, episodeName = '') {
+  const seriesText = playerState.type === 'tv'
+    ? `${name || 'Series'} · S${season} E${episode}`
+    : name;
+  if (playerSeriesTitle) playerSeriesTitle.textContent = seriesText;
+  else if (playerTitleText) playerTitleText.textContent = seriesText;
+  if (playerEpisodeTitle) {
+    playerEpisodeTitle.textContent = episodeName;
+    playerEpisodeTitle.classList.toggle('hidden', !episodeName || playerState.type !== 'tv');
   }
 }
 
 async function initPlayerData() {
-  const p = playerState;
+  const requestId = ++_metadataRequestId;
+  const mediaId = playerState.id;
+  const mediaType = playerState.type;
   try {
     _metadataFailed = false;
-    if (p.type === 'movie') {
-      const url = `${BASE_URL}/movie/${p.id}?language=en-US`;
+    if (mediaType === 'movie') {
+      const url = `${BASE_URL}/movie/${mediaId}?language=en-US`;
       const data = await fetchWithAuth(url);
+      if (requestId !== _metadataRequestId || playerState.id !== mediaId) return;
       updatePlayerTitle(data.original_title || data.title);
       if (playerNextBtn) playerNextBtn.style.display = 'none';
       if (playerEpBtn) {
         playerEpBtn.style.display = 'none';
         playerEpBtn.disabled = true;
       }
-      loadPlayerIframe();
-      // Add to watch history
-      addToUserHistory({ id: p.id, media_type: p.type, title: data.title || data.name, poster_path: data.poster_path, vote_average: data.vote_average, year: data.release_date?.slice(0, 4) }).catch(() => {});
+      addToUserHistory({ id: mediaId, media_type: mediaType, title: data.title || data.name, poster_path: data.poster_path, vote_average: data.vote_average, year: data.release_date?.slice(0, 4) }).catch(() => {});
     } else {
-      const url = `${BASE_URL}/tv/${p.id}?language=en-US`;
+      const url = `${BASE_URL}/tv/${mediaId}?language=en-US`;
       const data = await fetchWithAuth(url);
-      const newTmdbData = { title: data.name, seasons: [] };
+      if (requestId !== _metadataRequestId || playerState.id !== mediaId) return;
+      const newTmdbData = {
+        title: data.name,
+        poster_path: data.poster_path,
+        vote_average: data.vote_average,
+        year: data.first_air_date?.slice(0, 4),
+        seasons: []
+      };
       for (const season of data.seasons) {
         newTmdbData[season.season_number] = season.episode_count;
         if (season.season_number !== 0) newTmdbData.seasons.push(season.season_number);
       }
-      setPlayerState({ ...p, tmdbData: newTmdbData });
-
-      // Update title with CURRENT state (which may have been changed by Next/Ep picker/srcPoller)
+      setPlayerState({ ...playerState, tmdbData: newTmdbData, epData: playerState.epData || {} });
       updatePlayerTitle(data.name, playerState.season, playerState.episode);
-
-      // Save progress again now that metadata is confirmed loaded
-      await persistProgress(p.id, playerState.season, playerState.episode);
-
-      // Add to watch history with season/episode
-      addToUserHistory({ id: p.id, media_type: p.type, title: data.name, poster_path: data.poster_path, vote_average: data.vote_average, year: data.first_air_date?.slice(0, 4), season: playerState.season, episode: playerState.episode }).catch(() => {});
-
-      const [nextS, nextE] = getNextEp(playerState.season, playerState.episode, newTmdbData);
-      if (nextS !== null && playerNextBtn) {
-        playerNextBtn.style.display = 'flex';
-        playerNextBtn.disabled = false;
-        playerNextBtn.title = `Next: S${nextS} E${nextE}`;
-        playerNextBtn.onclick = async () => {
-          const minutesWatched = addSessionElapsed();
-          // Save old episode elapsed first
-          const progress = getCurrentProgress();
-          const existing = progress[String(p.id)];
-          if (existing) {
-            existing.elapsedMinutes = (existing.elapsedMinutes || 0) + minutesWatched;
-          }
-          setCurrentProgress(progress);
-          resetWatchSession();
-
-          setPlayerState({ ...playerState, season: nextS, episode: nextE });
-          updatePlayerTitle(newTmdbData.title, nextS, nextE);
-          await persistProgress(p.id, nextS, nextE, { elapsedMinutes: 0 });
-          initPlayerData();
-        };
-      } else if (playerNextBtn) {
-        playerNextBtn.style.display = 'flex';
-        playerNextBtn.disabled = true;
-        playerNextBtn.title = 'No next episode';
-      }
-
+      persistProgress(mediaId, playerState.season, playerState.episode).catch(console.error);
+      addToUserHistory({ id: mediaId, media_type: mediaType, title: data.name, poster_path: data.poster_path, vote_average: data.vote_average, year: data.first_air_date?.slice(0, 4), season: playerState.season, episode: playerState.episode }).catch(() => {});
+      configureNextButton(newTmdbData);
       if (playerEpBtn) {
         playerEpBtn.style.display = 'flex';
         playerEpBtn.disabled = true;
-        playerEpBtn.innerHTML = '<i class="fas fa-list"></i> <span>Loading...</span>';
+        playerEpBtn.innerHTML = '<i class="fas fa-list"></i> <span>Loading…</span>';
       }
-      loadPlayerIframe();
-      loadEpPopoverData(newTmdbData);
+      loadSeasonData(playerState.season).catch(handleSeasonLoadFailure);
     }
   } catch (err) {
+    if (requestId !== _metadataRequestId || playerState.id !== mediaId) return;
     _metadataFailed = true;
-    if (playerTitleText) playerTitleText.textContent = 'Error loading video';
-    setPlayerHealth('failed', 'Video details unavailable', true);
-    showToast('Failed to load video info', 'error');
+    updatePlayerTitle('Video details unavailable', playerState.season, playerState.episode);
+    playerRetryBtn?.classList.remove('hidden');
+    showToast('Video details could not be loaded. Playback will keep trying.', 'error');
   }
 }
 
@@ -619,65 +554,104 @@ function getNextEp(currentSeason, currentEpisode, data) {
   return [null, null];
 }
 
-async function loadEpPopoverData(tmdbData) {
-  const p = playerState;
-  if (!tmdbData) return;
-  const result = {};
-  try {
-    const seasonResults = await Promise.all(tmdbData.seasons.map(async season => {
-      const url = `${BASE_URL}/tv/${p.id}/season/${season}?language=en-US`;
-      const seasonData = await fetchWithAuth(url);
-      return [season, {
-        name: seasonData.name,
-        air_date: seasonData.air_date,
-        episodes: seasonData.episodes.map(ep => ({
-          name: ep.name,
-          episode_number: ep.episode_number,
-          season_number: ep.season_number,
-          air_date: ep.air_date,
-          runtime: ep.runtime
-        }))
-      }];
-    }));
-    seasonResults.forEach(([season, data]) => { result[season] = data; });
-    setPlayerState({ ...p, epData: result });
+function configureNextButton(tmdbData = playerState.tmdbData) {
+  if (!playerNextBtn || !tmdbData) return;
+  const [nextS, nextE] = getNextEp(playerState.season, playerState.episode, tmdbData);
+  playerNextBtn.style.display = 'flex';
+  playerNextBtn.disabled = nextS === null;
+  playerNextBtn.title = nextS === null ? 'No next episode' : `Next: S${nextS} E${nextE}`;
+  playerNextBtn.onclick = nextS === null ? null : () => switchEpisode(nextS, nextE);
+}
 
-    // Cache current episode runtime in progress
-    const currentEp = result[p.season]?.episodes?.find(
-      ep => String(ep.episode_number) === String(p.episode)
-    );
+function saveCurrentEpisodeElapsed() {
+  const minutesWatched = addSessionElapsed();
+  const progress = getCurrentProgress();
+  const existing = progress[String(playerState.id)];
+  if (existing) existing.elapsedMinutes = (existing.elapsedMinutes || 0) + minutesWatched;
+  setCurrentProgress(progress);
+  resetWatchSession();
+}
+
+async function switchEpisode(season, episode, knownName = '') {
+  if (!playerState.id || playerState.type !== 'tv') return;
+  saveCurrentEpisodeElapsed();
+  setPlayerState({ ...playerState, season: Number(season), episode: Number(episode) });
+  updatePlayerTitle(playerState.tmdbData?.title || 'Series', season, episode, knownName);
+  configureNextButton();
+  persistProgress(playerState.id, season, episode, { elapsedMinutes: 0 }).catch(console.error);
+  loadPlayerIframe();
+  window.dispatchEvent(new CustomEvent('watchStarted', { detail: { id: playerState.id, type: 'tv', season: Number(season), episode: Number(episode) } }));
+  loadSeasonData(season).catch(handleSeasonLoadFailure);
+
+  const info = playerState.tmdbData;
+  if (info) {
+    addToUserHistory({ id: playerState.id, media_type: 'tv', title: info.title, poster_path: info.poster_path, vote_average: info.vote_average, year: info.year, season: Number(season), episode: Number(episode) }).catch(() => {});
+  }
+}
+
+function seasonCacheKey(showId, season) {
+  return `${showId}:${Number(season)}`;
+}
+
+async function loadSeasonData(season) {
+  const showId = playerState.id;
+  if (!showId || playerState.type !== 'tv') return null;
+  const key = seasonCacheKey(showId, season);
+  let seasonData = _seasonCache.get(key);
+  if (!seasonData) {
+    const data = await fetchWithAuth(`${BASE_URL}/tv/${showId}/season/${season}?language=en-US`);
+    seasonData = {
+      name: data.name,
+      air_date: data.air_date,
+      episodes: data.episodes.map(ep => ({
+        name: ep.name,
+        episode_number: ep.episode_number,
+        season_number: ep.season_number,
+        air_date: ep.air_date,
+        runtime: ep.runtime
+      }))
+    };
+    _seasonCache.set(key, seasonData);
+  }
+  if (playerState.id !== showId) return seasonData;
+  setPlayerState({ ...playerState, epData: { ...(playerState.epData || {}), [Number(season)]: seasonData } });
+
+  if (String(playerState.season) === String(season)) {
+    const currentEp = seasonData.episodes.find(ep => String(ep.episode_number) === String(playerState.episode));
+    updatePlayerTitle(playerState.tmdbData?.title || 'Series', playerState.season, playerState.episode, currentEp?.name || '');
     if (currentEp?.runtime) {
       const progress = getCurrentProgress();
-      if (progress[String(p.id)]) {
-        progress[String(p.id)].episodeRuntime = currentEp.runtime;
+      if (progress[String(showId)]) {
+        progress[String(showId)].episodeRuntime = currentEp.runtime;
         setCurrentProgress(progress);
       }
     }
+  }
+  if (playerEpBtn) {
+    playerEpBtn.disabled = false;
+    playerEpBtn.innerHTML = '<i class="fas fa-list"></i> <span>Episodes</span>';
+    playerEpBtn.onclick = (event) => { event.stopPropagation(); openEpPopover(); };
+  }
+  return seasonData;
+}
 
-    if (playerEpBtn) {
-      playerEpBtn.disabled = false;
-      playerEpBtn.innerHTML = '<i class="fas fa-list"></i> <span>Episodes</span>';
-      playerEpBtn.onclick = (e) => { e.stopPropagation(); openEpPopover(); };
-    }
-  } catch (err) {
-    if (playerEpBtn) {
-      playerEpBtn.disabled = true;
-      playerEpBtn.innerHTML = '<i class="fas fa-list"></i> <span>Error</span>';
-    }
-    showToast('Failed to load episode data', 'error');
+function handleSeasonLoadFailure(error) {
+  console.error('[episode metadata]', error);
+  if (playerEpBtn && !Object.keys(playerState.epData || {}).length) {
+    playerEpBtn.disabled = false;
+    playerEpBtn.innerHTML = '<i class="fas fa-list"></i> <span>Retry episodes</span>';
+    playerEpBtn.onclick = () => loadSeasonData(playerState.season).catch(handleSeasonLoadFailure);
   }
 }
 
 function openEpPopover() {
   if (!epPopoverOverlay) return;
-  if (!playerState.epData) {
-    showToast('Episodes still loading...', 'info');
+  if (!playerState.tmdbData) {
+    showToast('Series details are still loading…', 'info');
     return;
   }
   epPopoverOverlay.classList.remove('hidden');
-  if (playerState.tmdbData) {
-    showSeasons(playerState.tmdbData.title);
-  }
+  showSeasons(playerState.tmdbData.title);
 }
 
 function closeEpPopover() {
@@ -688,7 +662,7 @@ function renderSeasonTabs(activeSeason) {
   if (!epPopoverTabs || !playerState.tmdbData) return;
   epPopoverTabs.innerHTML = playerState.tmdbData.seasons.map(season => {
     const s = playerState.epData?.[season];
-    const label = s ? s.name : `Season ${season}`;
+    const label = s?.name || `Season ${season}`;
     const isActive = String(season) === String(activeSeason);
     return `<button class="ep-popover-tab ${isActive ? 'active' : ''}" data-season="${season}">${label}</button>`;
   }).join('');
@@ -704,46 +678,53 @@ function showSeasons(tvShowTitle) {
   setPlayerState({ ...playerState, view: 'seasons' });
   if (epPopoverTitle) epPopoverTitle.innerText = tvShowTitle;
   if (epPopoverBack) epPopoverBack.style.visibility = 'hidden';
-  if (!epPopoverList || !playerState.epData || !playerState.tmdbData) return;
-
-  const firstSeason = playerState.tmdbData.seasons[0];
-  renderSeasonTabs(firstSeason);
-  showEpisodes(firstSeason);
+  if (!epPopoverList || !playerState.tmdbData) return;
+  renderSeasonTabs(playerState.season);
+  showEpisodes(playerState.season);
 }
 
-function showEpisodes(season) {
-  setPlayerState({ ...playerState, view: 'episodes', season });
-  const s = playerState.epData?.[season];
-  if (!s || !epPopoverList) return;
+async function showEpisodes(season) {
+  setPlayerState({ ...playerState, view: 'episodes' });
+  if (!epPopoverList) return;
+  renderSeasonTabs(season);
+  epPopoverList.innerHTML = '<li class="ep-popover-loading"><div class="item-name">Loading episodes…</div></li>';
+  let s = playerState.epData?.[season];
+  if (!s) {
+    try {
+      s = await loadSeasonData(season);
+    } catch (error) {
+      epPopoverList.innerHTML = '<li class="ep-popover-loading"><div class="item-name">Could not load this season. Select it to retry.</div></li>';
+      handleSeasonLoadFailure(error);
+      return;
+    }
+  }
+  if (!s || epPopoverOverlay?.classList.contains('hidden')) return;
   if (epPopoverTitle) epPopoverTitle.innerText = s.name;
   if (epPopoverBack) epPopoverBack.style.visibility = 'visible';
-
   renderSeasonTabs(season);
 
-  epPopoverList.innerHTML = s.episodes.map(ep => `
-    <li data-season="${ep.season_number}" data-episode="${ep.episode_number}" class="${String(ep.season_number) === String(playerState.season) && String(ep.episode_number) === String(playerState.episode) ? 'current-ep' : ''}">
-      <div class="item-name">E${ep.episode_number} - ${ep.name}</div>
-      <div class="item-details">${ep.air_date || ''}${ep.runtime ? ` &middot; ${ep.runtime}m` : ''}</div>
-    </li>
-  `).join('');
+  epPopoverList.replaceChildren(...s.episodes.map(ep => {
+    const item = document.createElement('li');
+    item.dataset.season = ep.season_number;
+    item.dataset.episode = ep.episode_number;
+    item.dataset.name = ep.name || '';
+    if (String(ep.season_number) === String(playerState.season) && String(ep.episode_number) === String(playerState.episode)) item.classList.add('current-ep');
+    const name = document.createElement('div');
+    name.className = 'item-name';
+    name.textContent = `E${ep.episode_number} - ${ep.name}`;
+    const details = document.createElement('div');
+    details.className = 'item-details';
+    details.textContent = [ep.air_date || '', ep.runtime ? `${ep.runtime}m` : ''].filter(Boolean).join(' · ');
+    item.append(name, details);
+    return item;
+  }));
 
   epPopoverList.querySelectorAll('li').forEach(li => {
-    li.addEventListener('click', async () => {
+    li.addEventListener('click', () => {
       const newSeason = li.getAttribute('data-season');
       const newEpisode = li.getAttribute('data-episode');
-      const minutesWatched = addSessionElapsed();
-      const progress = getCurrentProgress();
-      const existing = progress[String(playerState.id)];
-      if (existing) {
-        existing.elapsedMinutes = (existing.elapsedMinutes || 0) + minutesWatched;
-      }
-      setCurrentProgress(progress);
-      resetWatchSession();
-
-      setPlayerState({ ...playerState, season: newSeason, episode: newEpisode });
-      await persistProgress(playerState.id, newSeason, newEpisode, { elapsedMinutes: 0 });
       closeEpPopover();
-      initPlayerData();
+      switchEpisode(newSeason, newEpisode, li.dataset.name || '');
     });
   });
 }

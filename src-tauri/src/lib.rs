@@ -403,6 +403,14 @@ fn restart_app(app: tauri::AppHandle) {
     app.restart();
 }
 
+#[tauri::command]
+fn set_player_fullscreen(window: tauri::WebviewWindow, fullscreen: bool) -> Result<bool, String> {
+    window
+        .set_simple_fullscreen(fullscreen)
+        .map_err(|error| error.to_string())?;
+    Ok(fullscreen)
+}
+
 fn ensure_parent(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
@@ -430,7 +438,8 @@ pub fn run() {
             open_external,
             check_for_updates,
             install_update,
-            restart_app
+            restart_app,
+            set_player_fullscreen
         ])
         .setup(|app| {
             let config_dir = app.path().app_config_dir()?;

@@ -58,10 +58,9 @@ jobs:
           tagName: v__VERSION__
           releaseName: 'Open Cloud v__VERSION__'
           releaseBody: |
-            Open Cloud 3.1 adds series Up Next, optional automatic provider failover,
-            progressive loading and response caching, a live player connection indicator,
-            keyboard and TV remote navigation, accessibility improvements, and automatic
-            signed update prompts with install-and-restart support.
+            Open Cloud 3.1.1 adds reliable native fullscreen with keyboard and web fallbacks,
+            episode names in the player header, faster playback startup, lazy season metadata,
+            fewer background player tasks, and more reliable episode switching.
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true

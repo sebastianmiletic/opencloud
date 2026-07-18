@@ -403,7 +403,10 @@
           <i class="fas fa-arrow-left"></i>
           <span>Back</span>
         </button>
-        <button class="player-title-text" id="playerTitleText" type="button" title="Open title details on TMDB">Loading...</button>
+        <button class="player-title-text" id="playerTitleText" type="button" title="Open title details on TMDB">
+          <span class="player-series-title" id="playerSeriesTitle">Loading...</span>
+          <span class="player-episode-title hidden" id="playerEpisodeTitle"></span>
+        </button>
       </div>
       <div class="player-header-right">
         <div class="player-health is-idle" id="playerHealth" role="status" aria-live="polite">
@@ -418,6 +421,10 @@
           <i class="fas fa-forward-step"></i>
           <span>Next</span>
         </button>
+        <button class="player-header-btn" id="playerFullscreenBtn" type="button" aria-pressed="false" title="Enter fullscreen (F)">
+          <i class="fas fa-expand" aria-hidden="true"></i>
+          <span>Fullscreen</span>
+        </button>
         <button class="player-header-btn" id="playerEpBtn" style="display:none;">
           <i class="fas fa-list"></i>
           <span>Episodes</span>
@@ -425,7 +432,7 @@
       </div>
     </div>
     <div class="player-frame-wrap">
-      <iframe id="playerFrame" title="Open Cloud video player" allowfullscreen allow="fullscreen; autoplay; encrypted-media; picture-in-picture"></iframe>
+      <iframe id="playerFrame" title="Open Cloud video player" loading="eager" allowfullscreen allow="fullscreen; autoplay; encrypted-media; picture-in-picture"></iframe>
     </div>
   </div>
 
