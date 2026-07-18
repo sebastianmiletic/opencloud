@@ -2278,7 +2278,7 @@ body {
   display: none !important;
 }
 
-.player-header-hover-zone {
+.player-pointer-tracker {
   display: none;
 }
 
@@ -2304,12 +2304,15 @@ body {
   z-index: 10;
 }
 
-body.device-laptop .player-overlay.player-header-autohide .player-header-hover-zone {
+body.device-laptop .player-overlay.player-header-autohide .player-pointer-tracker {
   display: block;
   position: absolute;
-  inset: 0 0 auto;
-  height: 4rem;
+  inset: 0;
   z-index: 11;
+}
+
+body.device-laptop .player-overlay.player-header-autohide.player-header-visible .player-pointer-tracker {
+  pointer-events: none;
 }
 
 body.device-laptop .player-overlay.player-header-autohide .player-header-bar {
@@ -2327,8 +2330,7 @@ body.device-laptop .player-overlay.player-header-autohide .player-header-bar {
     transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-body.device-laptop .player-overlay.player-header-autohide .player-header-hover-zone:hover + .player-header-bar,
-body.device-laptop .player-overlay.player-header-autohide .player-header-bar:hover,
+body.device-laptop .player-overlay.player-header-autohide.player-header-visible .player-header-bar,
 body.device-laptop .player-overlay.player-header-autohide .player-header-bar:focus-within {
   opacity: 1;
   transform: translateY(0);

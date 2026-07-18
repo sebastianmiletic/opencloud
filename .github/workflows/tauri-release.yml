@@ -58,9 +58,9 @@ jobs:
           tagName: v__VERSION__
           releaseName: 'Open Cloud v__VERSION__'
           releaseBody: |
-            Open Cloud 3.2.0 adds a laptop-only T shortcut for an auto-hidden player bar,
-            live five-bar provider health, optional automatic source failover, icon-only
-            player controls, and a library of themes with a rounder interface option.
+            Open Cloud 3.2.1 improves the laptop-only T player mode: moving the mouse
+            anywhere over the player reveals the transparent controls for three seconds,
+            without requiring a hover over the top edge.
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true

@@ -47,8 +47,10 @@ let _iframeErrorHandler = null;
 let _metadataFailed = false;
 let _isPlayerFullscreen = false;
 let _headerAutohide = false;
+let _headerHideTimer = null;
 let _metadataRequestId = 0;
 const _seasonCache = new Map();
+const PLAYER_HEADER_IDLE_MS = 3000;
 
 function healthQuality(score) {
   return ['Unavailable', 'Poor', 'Fair', 'Good', 'Excellent'][Math.max(1, Math.min(5, score)) - 1];
@@ -419,10 +421,27 @@ function togglePlayerFullscreen() {
   return setPlayerFullscreen(!_isPlayerFullscreen);
 }
 
+function clearPlayerHeaderHideTimer() {
+  if (_headerHideTimer) clearTimeout(_headerHideTimer);
+  _headerHideTimer = null;
+}
+
+function showPlayerHeaderForMouseActivity() {
+  if (!_headerAutohide || !document.body.classList.contains('device-laptop')) return;
+  playerOverlay?.classList.add('player-header-visible');
+  clearPlayerHeaderHideTimer();
+  _headerHideTimer = setTimeout(() => {
+    _headerHideTimer = null;
+    playerOverlay?.classList.remove('player-header-visible');
+  }, PLAYER_HEADER_IDLE_MS);
+}
+
 function setPlayerHeaderAutohide(enabled, notify = true) {
   const isLaptop = document.body.classList.contains('device-laptop');
   _headerAutohide = Boolean(enabled && isLaptop);
+  clearPlayerHeaderHideTimer();
   playerOverlay?.classList.toggle('player-header-autohide', _headerAutohide);
+  playerOverlay?.classList.remove('player-header-visible');
   playerOverlay?.setAttribute('data-header-mode', _headerAutohide ? 'auto-hide' : 'fixed');
   if (_headerAutohide && document.activeElement instanceof HTMLElement && document.activeElement.closest('.player-header-bar')) {
     document.activeElement.blur();
@@ -430,7 +449,7 @@ function setPlayerHeaderAutohide(enabled, notify = true) {
   if (!notify) return;
   showToast(
     _headerAutohide
-      ? 'Player bar hidden. Move to the top edge or press T to restore it.'
+      ? 'Player bar hidden. Move the mouse to show it for 3 seconds, or press T to restore it.'
       : 'Player bar will stay visible.',
     'info'
   );
@@ -467,6 +486,7 @@ export function initPlayer() {
     loadPlayerIframe();
   });
   playerFullscreenBtn?.addEventListener('click', togglePlayerFullscreen);
+  playerOverlay?.addEventListener('mousemove', showPlayerHeaderForMouseActivity);
   window.addEventListener('offline', () => {
     if (!playerOverlay?.classList.contains('hidden')) setPlayerHealth('failed', `${providerName(_currentProviderKey)} · Offline`, true, 1);
   });

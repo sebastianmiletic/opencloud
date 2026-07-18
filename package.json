@@ -1,6 +1,6 @@
 {
   "name": "opencloud",
-  "version": "3.2.0",
+  "version": "3.2.1",
   "description": "Open Cloud desktop app",
   "main": "electron/main.js",
   "scripts": {
@@ -19,7 +19,7 @@
     "check": "npm run check:js && npm run test:js && npm run build:web && npm run test:rust",
     "build:dmg-background": "python3 build/create-dmg-background.py",
     "dist": "npm run build:dmg-background && electron-builder",
-    "dist:mac": "npm run build:dmg-background && electron-builder --mac dmg --universal && python3 build/fix-dmg-layout.py dist/OpenCloud-3.2.0-mac.dmg",
+    "dist:mac": "npm run build:dmg-background && electron-builder --mac dmg --universal && python3 build/fix-dmg-layout.py dist/OpenCloud-3.2.1-mac.dmg",
     "dist:win": "npm run build:dmg-background && electron-builder --win nsis --x64"
   },
   "devDependencies": {
