@@ -6,7 +6,7 @@ export const API_KEY = ENV.TMDB_BEARER_TOKEN || '';
 export const BASE_URL = 'https://api.themoviedb.org/3';
 export const IMG_BASE = 'https://image.tmdb.org/t/p/';
 export const OMDB_KEY = ENV.OMDB_API_KEY || '';
-export const OMDB_URL = 'http://www.omdbapi.com/';
+export const OMDB_URL = 'https://www.omdbapi.com/';
 
 export const HERO_SLIDE_DURATION = 12000;
 

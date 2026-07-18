@@ -1,13 +1,13 @@
 # Open Cloud
 
-A black-and-white themed streaming tracker desktop app with TMDB/OMDB integration, inline video player, Supabase authentication, Netflix-style animations, and a built-in ad/popup blocker via Electron. Track what you watch, save your favorites, and resume where you left off.
+A black-and-white themed Tauri desktop streaming tracker with TMDB/OMDB integration, an inline video player, Supabase authentication, Netflix-style animations, and a built-in native ad/popup blocker. Track what you watch, save your favorites, and resume where you left off. The Electron shell remains temporarily available as a migration rollback path.
 
 ---
 
 ## How to Download & Install
 
 <p align="center">
-  <a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud.dmg"><img src="https://img.shields.io/badge/Download-macOS%20(.dmg)-black?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS"></a>&nbsp;&nbsp;<a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud.exe"><img src="https://img.shields.io/badge/Download-Windows%20(.exe)-black?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows"></a>
+  <a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud_3.0.0_universal.dmg"><img src="https://img.shields.io/badge/Download-macOS%20(.dmg)-black?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS"></a>&nbsp;&nbsp;<a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud_3.0.0_x64-setup.exe"><img src="https://img.shields.io/badge/Download-Windows%20(.exe)-black?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows"></a>
 </p>
 
 <p align="center">
@@ -23,7 +23,7 @@ A black-and-white themed streaming tracker desktop app with TMDB/OMDB integratio
 ### macOS (Recommended — DMG)
 
 1. **Download the DMG**
-   - Click the **macOS (.dmg)** button above, or go to the [Releases page](https://github.com/sebastianmiletic/opencloud/releases/latest) and download `OpenCloud.dmg`
+   - Click the **macOS (.dmg)** button above, or go to the [Releases page](https://github.com/sebastianmiletic/opencloud/releases/latest) and download `OpenCloud_3.0.0_universal.dmg`
 
 2. **Install the app**
    - Open the downloaded `OpenCloud.dmg`
@@ -43,7 +43,7 @@ A black-and-white themed streaming tracker desktop app with TMDB/OMDB integratio
 ### Windows (Recommended — EXE)
 
 1. **Download the Installer**
-   - Click the **Windows (.exe)** button above, or go to the [Releases page](https://github.com/sebastianmiletic/opencloud/releases/latest) and download `OpenCloud.exe`
+   - Click the **Windows (.exe)** button above, or go to the [Releases page](https://github.com/sebastianmiletic/opencloud/releases/latest) and download `OpenCloud_3.0.0_x64-setup.exe`
 
 2. **Run the installer**
    - Double-click the downloaded `OpenCloud.exe`
@@ -64,18 +64,16 @@ If you prefer to run the app from code or want to develop:
 
 2. **Unzip / extract** the file and open the extracted folder
 
-3. **Install dependencies and start**
-   - **Mac / Linux:**
-     ```bash
-     ./start.sh
-     ```
-   - **Windows:**
-     ```cmd
-     npm install && npx electron .
-     ```
+3. **Install dependencies and start the Tauri app**
 
-> **Note:** API keys are bundled with the ZIP — no configuration needed.
-> **Note:** Electron must be installed once via `npm install`. After that the app launches instantly.
+   ```bash
+   npm install
+   npm run tauri:dev
+   ```
+
+   Install the platform prerequisites from the [Tauri prerequisites guide](https://v2.tauri.app/start/prerequisites/) first. Use `npm run check` for the complete frontend and Rust test suite, or `npm run electron:dev` only when validating the temporary Electron rollback build.
+
+> **Note:** Create `.env` from `.env.example` when building from a source checkout.
 
 ---
 
@@ -121,9 +119,8 @@ If you prefer to run the app from code or want to develop:
 Open Cloud/
 ├── index.html          # Main app shell with all modals
 ├── styles.css          # Main black-and-white theme styles
-├── server.py           # Python HTTP server + env injection + port fallback
-├── start.sh            # Bash launcher (kills stale servers, launches Electron)
-├── .env                # API keys (bundled in ZIP — no manual config needed)
+├── vite.config.js      # Tauri frontend development and production build
+├── .env                # Local API configuration (never commit real secrets)
 ├── .env.example        # Template for custom .env keys
 ├── version.json        # App version metadata
 ├── icon.png            # App icon (cloud, transparent background)
@@ -131,6 +128,9 @@ Open Cloud/
 ├── icon.ico            # Windows app icon
 ├── js/
 │   ├── main.js         # App entry point, auth, init
+│   ├── bootstrap.js    # Loads local dependencies and desktop configuration
+│   ├── desktop.js      # Shared Tauri/Electron desktop bridge
+│   ├── updater.js      # Signed Tauri update UI and restart flow
 │   ├── auth.js         # Supabase authentication (sign in / up / out / password)
 │   ├── api.js          # TMDB + OMDB fetch helpers
 │   ├── ui.js           # Home, search, item modals, collection, history
@@ -141,17 +141,22 @@ Open Cloud/
 │   ├── sync.js         # Supabase database CRUD (collections, history, progress, admin)
 │   ├── state.js        # Central reactive state module
 │   ├── hero.js         # Hero carousel auto-slide + click handling
-│   ├── blocker.js      # Built-in ad/popup blocker with block logs
+│   ├── blocker.js      # Blocker settings UI and native policy synchronization
 │   ├── utils.js        # Toast, scroll lock, confirm dialog
 │   ├── accounts.js     # User avatar/name initializer
 │   └── supabase.js     # Watch sessions and stats aggregation
-├── electron/           # Electron desktop wrapper
-│   ├── main.js         # Electron main process: server launcher + popup blocker
-│   └── preload.js      # Preload script (currently empty)
+├── src-tauri/          # Primary Tauri/Rust desktop shell
+│   ├── src/lib.rs      # Window lifecycle, blocker policy, migration, updater
+│   ├── src/blocker_init.js # All-frame popup/link/form/unload interception
+│   └── tauri.conf.json # CSP, bundles, signing key, updater endpoint
+├── electron/           # Temporary rollback and local-data export shell
+│   ├── main.js         # Electron lifecycle, migration export, legacy blocker
+│   └── preload.js      # Narrow Electron bridge
 ├── docs/
 │   ├── supabase_schema.sql   # SQL for creating Supabase tables
 │   ├── SUPABASE_SETUP.md     # Step-by-step Supabase setup guide
-│   └── MIGRATION.md          # Migration notes for existing installations
+│   ├── MIGRATION.md          # Existing data migration notes
+│   └── TAURI_MIGRATION.md    # Architecture, release signing, parity checklist
 └── README.md           # This file
 ```
 
@@ -163,7 +168,7 @@ Open Cloud/
 - **Search** — Movies and TV shows via TMDB API
 - **Inline Player** — Watch content with 7 different providers
 - **Netflix UI** — Splash screen, hero carousel, smooth animations
-- **Ad/Popup Blocker** — Electron-level protection that blocks popups, iframe redirects, and beforeunload traps
+- **Ad/Popup Blocker** — Rust-owned policy plus all-frame protection that blocks popups, untrusted navigation, popup links/forms, JavaScript URLs, and unload traps
 - **Continue Watching** — Auto-saves TV progress by season/episode
 - **History** — Auto-tracks every movie and show you open in the player, with poster, rating, and year
 - **Collections** — Save items and organize with folders
@@ -192,9 +197,8 @@ Open Cloud/
 
 ### Updates
 - **Manual Update Check** — Click "Check for Updates" in the account dropdown
-- **Update Modal** — Shows commit message, author, date, and changed files. Has "Install Update Now" button
-- **Ignores noise** — Won't notify for README, docs, images, or non-code changes
-- **After installing**, caches are cleared and the page reloads
+- **Cryptographically signed** — Tauri verifies release signatures before installation
+- **Native install and restart** — Download progress is shown in the existing modal, then the app installs and relaunches
 
 ---
 

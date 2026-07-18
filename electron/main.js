@@ -1,10 +1,11 @@
-const { app, BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const fs = require('fs/promises');
 const path = require('path');
 const { createOpenCloudServer } = require('./server');
 
 const APP_DIR = app.getAppPath();
 const LOCAL_HOST = '127.0.0.1';
-const LOCAL_PORT = 38475;
+const LOCAL_PORT = Number(process.env.OPENCLOUD_ELECTRON_PORT || 38475);
 
 /* Hosts the Electron app is allowed to open (everything else = deny) */
 const ALLOWED_HOSTS = new Set([
@@ -28,6 +29,43 @@ function shouldAllowUrl(urlStr) {
 let mainWindow = null;
 let localServer = null;
 let localServerPort = null;
+
+function registerDesktopBridge() {
+  ipcMain.handle('opencloud:export-migration', async (_event, payload) => {
+    if (!payload || payload.version !== 1 || typeof payload.storage !== 'object') {
+      throw new Error('Invalid Open Cloud migration payload');
+    }
+    const safeStorage = {};
+    for (const [key, value] of Object.entries(payload.storage)) {
+      if (typeof key !== 'string' || typeof value !== 'string') continue;
+      if (key === 'oc_is_admin' || key.startsWith('sb-')) continue;
+      safeStorage[key.slice(0, 256)] = value;
+    }
+    const migration = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      storage: safeStorage
+    };
+    const destination = path.join(app.getPath('userData'), 'tauri-migration-v1.json');
+    const temporary = `${destination}.tmp`;
+    const serialized = JSON.stringify(migration, null, 2);
+    if (Buffer.byteLength(serialized, 'utf8') > 15 * 1024 * 1024) {
+      throw new Error('Migration payload is larger than 15 MB');
+    }
+    await fs.mkdir(path.dirname(destination), { recursive: true });
+    await fs.writeFile(temporary, serialized, { encoding: 'utf8', mode: 0o600 });
+    await fs.rename(temporary, destination);
+    return { path: destination };
+  });
+
+  ipcMain.handle('opencloud:open-external', async (_event, url) => {
+    const parsed = new URL(String(url));
+    if (parsed.protocol !== 'https:' || !['www.themoviedb.org', 'github.com'].includes(parsed.hostname)) {
+      throw new Error('External URL is outside the Open Cloud allowlist');
+    }
+    await shell.openExternal(parsed.toString());
+  });
+}
 
 /* ── 1. Start Node.js HTTP server (in-process, no external Python) ── */
 async function startServer() {
@@ -119,6 +157,7 @@ function createMainWindow(port) {
 /* ── 4. App lifecycle ── */
 app.whenReady().then(async () => {
   try {
+    registerDesktopBridge();
     const port = await startServer();
     createMainWindow(port);
   } catch (err) {

@@ -12,6 +12,7 @@ import {
 import { showToast, lockScroll, unlockScroll } from './utils.js';
 import { hydrateSettingsFromCloud } from './config.js';
 import { initSupabase, isSupabaseReachable, checkSession, signIn, signUp, getUserDisplayName, signOut, saveLocalIdentity, getLocalIdentity, setLocalUser } from './auth.js';
+import { initUpdater } from './updater.js';
 
 /* Global error handler */
 window.onerror = (msg, url, line) => {
@@ -134,7 +135,7 @@ async function initAppContent() {
   window.addEventListener('heroOpenModal', (e) => { if (e.detail?.id) openItemModal(e.detail.id, e.detail.type || 'movie'); });
   window.addEventListener('heroAddToCollection', (e) => { if (e.detail) addToUserCollection(e.detail).catch(err => console.error('[Hero] Add to collection failed:', err)); });
 
-  initBlocker();
+  await initBlocker();
 
   /* Logo click -> home */
   const logoHome = document.getElementById('logoHome');
@@ -156,15 +157,9 @@ async function initAppContent() {
     if (!e.target.closest('.account-menu')) { accountDropdown?.classList.add('hidden'); accountBtn?.classList.remove('open'); }
   });
 
-  /* Check for Updates — disabled; manual ZIP redownload only */
+  /* Check for Updates */
   const updateCheckBtn = document.getElementById('updateCheckBtn');
-  if (updateCheckBtn) {
-    updateCheckBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      accountDropdown?.classList.add('hidden');
-      showToast('Redownload the ZIP from GitHub for updates', 'info');
-    });
-  }
+  initUpdater(updateCheckBtn, accountDropdown);
 
   /* Sign Out */
   document.getElementById('signOutBtn')?.addEventListener('click', async (e) => {

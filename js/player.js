@@ -6,6 +6,7 @@ import { BASE_URL, API_KEY } from './config.js';
 import { showToast, lockScroll, unlockScroll } from './utils.js';
 import { recordWatchSession } from './supabase.js';
 import { getWatchProgress, saveWatchProgress, syncWatchProgressItem, addToUserHistory } from './storage.js';
+import { openExternal } from './desktop.js';
 
 /* DOM refs */
 const playerOverlay = document.getElementById('playerOverlay');
@@ -338,7 +339,7 @@ export function initPlayer() {
   if (playerTitleText) {
     playerTitleText.addEventListener('click', () => {
       if (playerState.id) {
-        window.open(`https://www.themoviedb.org/${playerState.type}/${playerState.id}`, '_blank');
+        openExternal(`https://www.themoviedb.org/${playerState.type}/${playerState.id}`).catch(console.error);
       }
     });
   }

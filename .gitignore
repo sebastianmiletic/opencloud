@@ -25,6 +25,9 @@ nohup.out
 
 # Build artifacts
 dist/
+web-dist/
+src-tauri/target/
+src-tauri/.keys/
 build/__pycache__/
 background.jpg
 background2.jpg

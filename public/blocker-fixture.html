@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Open Cloud blocker fixture</title></head>
+<body>
+  <button id="windowOpen">window.open</button>
+  <a id="blankLink" href="https://example.invalid/popup" target="_blank">blank link</a>
+  <a id="javascriptLink" href="javascript:window.open('https://example.invalid/javascript')">JavaScript link</a>
+  <form id="popupForm" action="https://example.invalid/form" target="_blank"><button>popup form</button></form>
+  <script>
+    document.getElementById('windowOpen').addEventListener('click', () => {
+      window.open('https://example.invalid/window-open', '_blank');
+    });
+  </script>
+</body>
+</html>

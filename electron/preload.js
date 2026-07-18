@@ -1,4 +1,6 @@
 const { ipcRenderer, contextBridge } = require('electron');
 
-// Nothing exposed to renderer for now; Electron handles blocking in main process
-// The renderer has no special privileges — it runs as a normal web app
+contextBridge.exposeInMainWorld('openCloudElectron', {
+  exportMigration: (payload) => ipcRenderer.invoke('opencloud:export-migration', payload),
+  openExternal: (url) => ipcRenderer.invoke('opencloud:open-external', url)
+});

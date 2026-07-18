@@ -1,5 +1,13 @@
 /** In-App Ad/Tab Blocker — port of AdTab Killer logic for web context */
 import { showToast } from './utils.js';
+import {
+  broadcastBlockerPolicy,
+  getNativeBlockerState,
+  isTauri,
+  listenNativeEvent,
+  setNativeBlockerActivity,
+  setNativeBlockerPolicy
+} from './desktop.js';
 
 const STORAGE_KEY = 'openccloud_blocker_settings';
 
@@ -13,15 +21,44 @@ let settings = {
   logs: []
 };
 
-function loadSettings() {
+async function loadSettings() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) settings = { ...settings, ...JSON.parse(raw) };
   } catch (e) {}
+
+  if (!isTauri()) return;
+  try {
+    const nativeState = await getNativeBlockerState();
+    if (nativeState?.initialized) {
+      settings = {
+        ...settings,
+        enabled: nativeState.enabled,
+        blockAllTabs: nativeState.blockAllTabs,
+        blockAllWindows: nativeState.blockAllWindows,
+        allowSelfPages: nativeState.allowSelfPages,
+        allowExtensionPages: nativeState.allowExtensionPages,
+        counter: nativeState.counter || 0,
+        logs: Array.isArray(nativeState.logs) ? nativeState.logs : []
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    } else {
+      await Promise.all([
+        setNativeBlockerPolicy(settings),
+        setNativeBlockerActivity(settings)
+      ]);
+    }
+  } catch (error) {
+    console.error('[Blocker] Failed to hydrate native blocker state:', error);
+  }
 }
 
 function saveSettings() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  if (isTauri()) {
+    setNativeBlockerPolicy(settings).catch(error => console.error('[Blocker] Policy sync failed:', error));
+    setNativeBlockerActivity(settings).catch(error => console.error('[Blocker] Activity sync failed:', error));
+  }
 }
 
 export function getBlockerSettings() { return { ...settings }; }
@@ -276,8 +313,43 @@ function renderBlockLogs() {
 }
 
 /* ─── Init ─── */
-export function initBlocker() {
-  loadSettings();
+export async function initBlocker() {
+  await loadSettings();
+
+  if (isTauri()) {
+    const policy = {
+      enabled: settings.enabled,
+      blockAllTabs: settings.blockAllTabs,
+      blockAllWindows: settings.blockAllWindows,
+      allowSelfPages: settings.allowSelfPages,
+      allowExtensionPages: settings.allowExtensionPages
+    };
+    broadcastBlockerPolicy(policy);
+
+    window.addEventListener('opencloud:blocker-event', (event) => {
+      const entry = event.detail;
+      if (!entry || !settings.enabled) return;
+      incrementCounter();
+      addBlockLog(entry);
+      renderBlockLogs();
+    });
+
+    listenNativeEvent('opencloud:blocker-event', async () => {
+      try {
+        const nativeState = await getNativeBlockerState();
+        if (!nativeState) return;
+        settings.counter = nativeState.counter || 0;
+        settings.logs = Array.isArray(nativeState.logs) ? nativeState.logs : [];
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+        updateCounterUI();
+        renderBlockLogs();
+      } catch (error) {
+        console.error('[Blocker] Failed to refresh native event:', error);
+      }
+    }).catch(console.error);
+    return;
+  }
+
   initWindowOpenBlocker();
   initClickInterceptor();
   initProgrammaticClickBlocker();
