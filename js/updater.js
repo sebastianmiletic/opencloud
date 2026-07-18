@@ -4,7 +4,7 @@ import { showToast } from './utils.js';
 let availableUpdate = null;
 let downloadedBytes = 0;
 let initialized = false;
-let automaticCheckScheduled = false;
+let launchCheckStarted = false;
 let installing = false;
 
 function elements() {
@@ -41,6 +41,7 @@ function showAvailableUpdate(update) {
     ui.install.innerHTML = '<i class="fas fa-rotate-right" style="margin-right:0.4rem;"></i>Install and Restart';
   }
   if (ui.upToDate) ui.upToDate.style.display = 'none';
+  requestAnimationFrame(() => ui.install?.focus({ preventScroll: true }));
 }
 
 async function checkForUpdate({ interactive = false } = {}) {
@@ -67,7 +68,7 @@ async function checkForUpdate({ interactive = false } = {}) {
     } else {
       console.warn('[Updater] Automatic update check failed:', error);
     }
-    return null;
+    return undefined;
   }
 }
 
@@ -95,12 +96,19 @@ async function installUpdate() {
   }
 }
 
-function scheduleAutomaticCheck() {
-  if (automaticCheckScheduled || !isTauri()) return;
-  automaticCheckScheduled = true;
-  const run = () => setTimeout(() => checkForUpdate({ interactive: false }), 4500);
-  if (navigator.onLine) run();
-  else window.addEventListener('online', run, { once: true });
+function startLaunchCheck() {
+  if (launchCheckStarted || !isTauri()) return;
+  launchCheckStarted = true;
+
+  const check = async (retry = true) => {
+    const result = await checkForUpdate({ interactive: false });
+    if (result === undefined && retry) setTimeout(() => check(false), 6000);
+  };
+
+  // The splash clears at 900 ms. Check immediately after it so an available
+  // update becomes the first actionable prompt, even for signed-out users.
+  setTimeout(() => check(true), 1050);
+  if (!navigator.onLine) window.addEventListener('online', () => check(false), { once: true });
 }
 
 export function initUpdater(button, accountDropdown) {
@@ -136,5 +144,5 @@ export function initUpdater(button, accountDropdown) {
       checkForUpdate({ interactive: true });
     });
   }
-  scheduleAutomaticCheck();
+  startLaunchCheck();
 }

@@ -58,9 +58,8 @@ jobs:
           tagName: v__VERSION__
           releaseName: 'Open Cloud v__VERSION__'
           releaseBody: |
-            Open Cloud 3.1.1 adds reliable native fullscreen with keyboard and web fallbacks,
-            episode names in the player header, faster playback startup, lazy season metadata,
-            fewer background player tasks, and more reliable episode switching.
+            Open Cloud 3.1.2 checks for signed updates as the app opens and presents an
+            available update above other startup dialogs, with launch-network retry support.
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true

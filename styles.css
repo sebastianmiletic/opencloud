@@ -1872,6 +1872,10 @@ body {
   display: none !important;
 }
 
+.update-modal {
+  z-index: 100001;
+}
+
 .modal-overlay {
   position: absolute;
   inset: 0;
