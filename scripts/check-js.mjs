@@ -2,7 +2,7 @@ import { readdir } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 
 const directories = ['js', 'electron'];
-const files = ['sw.js'];
+const files = ['sw.js', 'src-tauri/src/blocker_init.js'];
 
 for (const directory of directories) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {

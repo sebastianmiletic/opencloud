@@ -1,5 +1,6 @@
 (() => {
   const CHANNEL = '__opencloud_blocker_v1__';
+  const PLAYER_INPUT_CHANNEL = '__opencloud_player_input_v1__';
   if (window.__openCloudNativeBlockerInstalled) return;
   window.__openCloudNativeBlockerInstalled = true;
 
@@ -55,9 +56,47 @@
     } catch (_) {}
   };
 
+  let lastPointerActivityAt = 0;
+  const forwardPlayerInput = (type) => {
+    if (window.top === window) return;
+    try { window.parent.postMessage({ channel: PLAYER_INPUT_CHANNEL, type }, '*'); } catch (_) {}
+  };
+
+  window.addEventListener('keydown', (event) => {
+    if (window.top === window || event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
+    const target = event.target;
+    const isTyping = target instanceof HTMLElement
+      && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
+    if (isTyping || event.key?.toLowerCase() !== 't') return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    forwardPlayerInput('toggle-header');
+  }, true);
+
+  window.addEventListener('mousemove', () => {
+    if (window.top === window) return;
+    const now = Date.now();
+    if (now - lastPointerActivityAt < 200) return;
+    lastPointerActivityAt = now;
+    forwardPlayerInput('pointer-activity');
+  }, true);
+
   window.addEventListener('message', (event) => {
     const data = event.data;
-    if (!data || data.channel !== CHANNEL) return;
+    if (!data) return;
+
+    if (data.channel === PLAYER_INPUT_CHANNEL && event.source !== window) {
+      if (window.top === window) {
+        window.dispatchEvent(new CustomEvent('opencloud:player-frame-input', {
+          detail: { type: data.type }
+        }));
+      } else if (event.source !== window.parent) {
+        try { window.parent.postMessage({ channel: PLAYER_INPUT_CHANNEL, type: data.type }, '*'); } catch (_) {}
+      }
+      return;
+    }
+
+    if (data.channel !== CHANNEL) return;
 
     if (data.type === 'policy') {
       const fromTrustedParent = window.top === window ? event.source === window : event.source === window.parent;

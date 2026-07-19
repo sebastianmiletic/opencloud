@@ -1,6 +1,6 @@
 /** Player Overlay & Episode Picker */
 import { playerState, setPlayerState, setWatchProgress } from './state.js';
-import { getProviderCandidates, getProviderUrlFor, getSettings, PROVIDERS } from './config.js';
+import { getProviderCandidates, getProviderUrlFor, getSettings, saveSettings, PROVIDERS } from './config.js';
 import { fetchWithAuth } from './api.js';
 import { BASE_URL } from './config.js';
 import { showToast, lockScroll, unlockScroll } from './utils.js';
@@ -48,6 +48,7 @@ let _metadataFailed = false;
 let _isPlayerFullscreen = false;
 let _headerAutohide = false;
 let _headerHideTimer = null;
+let _lastHeaderToggleAt = Number.NEGATIVE_INFINITY;
 let _metadataRequestId = 0;
 const _seasonCache = new Map();
 const PLAYER_HEADER_IDLE_MS = 3000;
@@ -436,7 +437,7 @@ function showPlayerHeaderForMouseActivity() {
   }, PLAYER_HEADER_IDLE_MS);
 }
 
-function setPlayerHeaderAutohide(enabled, notify = true) {
+function setPlayerHeaderAutohide(enabled, notify = true, persist = false) {
   const isLaptop = document.body.classList.contains('device-laptop');
   _headerAutohide = Boolean(enabled && isLaptop);
   clearPlayerHeaderHideTimer();
@@ -445,6 +446,12 @@ function setPlayerHeaderAutohide(enabled, notify = true) {
   playerOverlay?.setAttribute('data-header-mode', _headerAutohide ? 'auto-hide' : 'fixed');
   if (_headerAutohide && document.activeElement instanceof HTMLElement && document.activeElement.closest('.player-header-bar')) {
     document.activeElement.blur();
+  }
+  if (persist) {
+    const settings = getSettings();
+    if (settings.playerHeaderAutoHide !== _headerAutohide) {
+      saveSettings({ ...settings, playerHeaderAutoHide: _headerAutohide });
+    }
   }
   if (!notify) return;
   showToast(
@@ -456,7 +463,16 @@ function setPlayerHeaderAutohide(enabled, notify = true) {
 }
 
 function togglePlayerHeaderAutohide() {
-  setPlayerHeaderAutohide(!_headerAutohide);
+  setPlayerHeaderAutohide(!_headerAutohide, true, true);
+}
+
+function handlePlayerHeaderShortcut() {
+  if (playerOverlay?.classList.contains('hidden') || !document.body.classList.contains('device-laptop')) return false;
+  const now = performance.now();
+  if (now - _lastHeaderToggleAt < 250) return true;
+  _lastHeaderToggleAt = now;
+  togglePlayerHeaderAutohide();
+  return true;
 }
 
 export function initPlayer() {
@@ -487,6 +503,10 @@ export function initPlayer() {
   });
   playerFullscreenBtn?.addEventListener('click', togglePlayerFullscreen);
   playerOverlay?.addEventListener('mousemove', showPlayerHeaderForMouseActivity);
+  window.addEventListener('opencloud:player-frame-input', (event) => {
+    if (event.detail?.type === 'toggle-header') handlePlayerHeaderShortcut();
+    if (event.detail?.type === 'pointer-activity') showPlayerHeaderForMouseActivity();
+  });
   window.addEventListener('offline', () => {
     if (!playerOverlay?.classList.contains('hidden')) setPlayerHealth('failed', `${providerName(_currentProviderKey)} · Offline`, true, 1);
   });
@@ -494,7 +514,8 @@ export function initPlayer() {
     if (!playerOverlay?.classList.contains('hidden')) probeCurrentProvider();
   });
   window.addEventListener('opencloud:device-layout', (event) => {
-    if (event.detail?.device !== 'laptop') setPlayerHeaderAutohide(false, false);
+    const enabled = event.detail?.device === 'laptop' && getSettings().playerHeaderAutoHide === true;
+    setPlayerHeaderAutohide(enabled, false);
   });
   document.addEventListener('fullscreenchange', () => updateFullscreenButton(Boolean(document.fullscreenElement)));
   document.addEventListener('webkitfullscreenchange', () => updateFullscreenButton(Boolean(document.webkitFullscreenElement)));
@@ -503,10 +524,9 @@ export function initPlayer() {
     const playerIsOpen = playerOverlay && !playerOverlay.classList.contains('hidden');
     const target = e.target;
     const isTyping = target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
-    if (playerIsOpen && !isTyping && e.key.toLowerCase() === 't') {
-      if (!document.body.classList.contains('device-laptop')) return;
+    if (playerIsOpen && !isTyping && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 't') {
+      if (!handlePlayerHeaderShortcut()) return;
       e.preventDefault();
-      togglePlayerHeaderAutohide();
       return;
     }
     if (playerIsOpen && !isTyping && e.key.toLowerCase() === 'f') {
@@ -584,7 +604,8 @@ export function closePlayer() {
 export async function openPlayer(id, type, season, episode) {
   if (!playerOverlay || !playerFrame) return;
 
-  setPlayerHeaderAutohide(false, false);
+  _lastHeaderToggleAt = Number.NEGATIVE_INFINITY;
+  setPlayerHeaderAutohide(getSettings().playerHeaderAutoHide === true, false);
 
   let startSeason = season ?? 1;
   let startEpisode = episode ?? 1;

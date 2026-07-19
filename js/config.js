@@ -112,12 +112,13 @@ export const DEVICES = {
 export const THEMES = Object.freeze(['noir', 'graphite', 'midnight', 'ember', 'paper']);
 
 export const DEFAULT_PROVIDER = 'videasy';
-const SETTINGS_VERSION = 5;
+const SETTINGS_VERSION = 6;
 const DEFAULT_SETTINGS = Object.freeze({
   provider: DEFAULT_PROVIDER,
   device: 'laptop',
   autoPlay: true,
   autoProviderFailover: false,
+  playerHeaderAutoHide: false,
   theme: 'noir',
   roundedUI: false,
   _version: SETTINGS_VERSION

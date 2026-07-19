@@ -58,9 +58,9 @@ jobs:
           tagName: v__VERSION__
           releaseName: 'Open Cloud v__VERSION__'
           releaseBody: |
-            Open Cloud 3.2.1 improves the laptop-only T player mode: moving the mouse
-            anywhere over the player reveals the transparent controls for three seconds,
-            without requiring a hover over the top edge.
+            Open Cloud 3.2.2 makes the laptop T player mode reliable while a provider has
+            keyboard focus, preserves the chosen mode across titles and app restarts, and
+            keeps the three-second control timer responsive inside embedded players.
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true

@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
 import { resolveUpNextEpisode } from '../js/series.js';
 import { connectionScoreForLatency } from '../js/player-health.js';
 
@@ -49,9 +51,12 @@ test('automatic provider failover is off by default and settings migrate safely'
     autoPlay: false
   }));
   assert.deepEqual(
-    { provider: getSettings().provider, device: getSettings().device, autoPlay: getSettings().autoPlay, autoProviderFailover: getSettings().autoProviderFailover, theme: getSettings().theme, roundedUI: getSettings().roundedUI },
-    { provider: 'moviesapi', device: 'tv', autoPlay: false, autoProviderFailover: false, theme: 'noir', roundedUI: false }
+    { provider: getSettings().provider, device: getSettings().device, autoPlay: getSettings().autoPlay, autoProviderFailover: getSettings().autoProviderFailover, playerHeaderAutoHide: getSettings().playerHeaderAutoHide, theme: getSettings().theme, roundedUI: getSettings().roundedUI },
+    { provider: 'moviesapi', device: 'tv', autoPlay: false, autoProviderFailover: false, playerHeaderAutoHide: false, theme: 'noir', roundedUI: false }
   );
+
+  localValues.set('openccloud_settings', JSON.stringify({ playerHeaderAutoHide: true }));
+  assert.equal(getSettings().playerHeaderAutoHide, true);
 });
 
 test('provider health maps reachability and latency onto five honest levels', () => {
@@ -61,4 +66,59 @@ test('provider health maps reachability and latency onto five honest levels', ()
   assert.equal(connectionScoreForLatency(2600, 200, true), 2);
   assert.equal(connectionScoreForLatency(500, 503, true), 1);
   assert.equal(connectionScoreForLatency(100, 200, false), 1);
+});
+
+test('native child-frame bridge forwards T and mouse activity to the app', () => {
+  const listeners = {};
+  const messages = [];
+  class MockHTMLElement {}
+  MockHTMLElement.prototype.click = () => {};
+  const parent = { postMessage: message => messages.push(message) };
+  const mockWindow = {
+    top: {},
+    parent,
+    location: { href: 'https://player.videasy.net/tv/1/1/1' },
+    open: () => null,
+    addEventListener: (type, listener) => { listeners[type] = listener; },
+    dispatchEvent: () => {}
+  };
+  const mockDocument = {
+    addEventListener: () => {},
+    querySelectorAll: () => [],
+    documentElement: {}
+  };
+
+  runInNewContext(
+    readFileSync(new URL('../src-tauri/src/blocker_init.js', import.meta.url), 'utf8'),
+    {
+      window: mockWindow,
+      document: mockDocument,
+      HTMLElement: MockHTMLElement,
+      URL,
+      Date,
+      CustomEvent: class {},
+      MutationObserver: class { observe() {} }
+    }
+  );
+
+  let prevented = false;
+  let stopped = false;
+  listeners.keydown({
+    key: 't',
+    repeat: false,
+    ctrlKey: false,
+    metaKey: false,
+    altKey: false,
+    target: {},
+    preventDefault: () => { prevented = true; },
+    stopImmediatePropagation: () => { stopped = true; }
+  });
+  listeners.mousemove();
+
+  assert.equal(prevented, true);
+  assert.equal(stopped, true);
+  assert.deepEqual(
+    messages.map(message => message.type),
+    ['toggle-header', 'pointer-activity']
+  );
 });
