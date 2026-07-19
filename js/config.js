@@ -44,6 +44,16 @@ export const PROVIDERS = {
     movieUrl: 'https://player.videasy.net/movie/{id}?nextEpisode=true&episodeSelector=true',
     tvUrl: 'https://player.videasy.net/tv/{id}/{season}/{episode}?nextEpisode=true&episodeSelector=true'
   },
+  vsembed: {
+    name: 'Plasma',
+    rank: 'New',
+    tier: 1,
+    movie: true,
+    tv: true,
+    description: 'New movie and series source powered by the VSEmbed player.',
+    movieUrl: 'https://vsembed.ru/embed/movie/{id}',
+    tvUrl: 'https://vsembed.ru/embed/tv/{id}/{season}/{episode}'
+  },
   vidsrcme: {
     name: 'Pulse',
     rank: '2nd',

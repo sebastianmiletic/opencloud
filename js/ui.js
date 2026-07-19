@@ -216,7 +216,6 @@ function toggleView(tab) {
   if (tab === 'home') {
     loadRecommendations();
     loadContinueWatching();
-    loadUpNext();
   }
 }
 
@@ -1124,7 +1123,6 @@ export async function loadHomeCategories() {
   loadRecommendations();
   loadStarWarsSaga();
   loadContinueWatching();
-  loadUpNext();
   loadPopularCollections();
 
   await Promise.allSettled(endpoints.map(async (ep, index) => {
@@ -1194,62 +1192,8 @@ export async function loadContinueWatching() {
   const container = document.getElementById('continueWatchingRow');
   if (!section || !container) return;
 
-  const progress = getWatchProgress();
-  const entries = Object.entries(progress)
-    .filter(([, v]) => v && v.season && v.episode)
-    .sort((a, b) => new Date(b[1].updated_at || 0) - new Date(a[1].updated_at || 0))
-    .slice(0, 12);
-
-  if (entries.length === 0) {
-    section.classList.add('hidden');
-    return;
-  }
-
-  section.classList.remove('hidden');
-  container.innerHTML = '<div class="row-loading"><i class="fas fa-spinner"></i></div>';
-
-  try {
-    const items = [];
-    for (const [idStr, prog] of entries) {
-      try {
-        const [showData, seasonData] = await Promise.all([
-          fetchWithAuth(`${BASE_URL}/tv/${idStr}?language=en-US`),
-          fetchWithAuth(`${BASE_URL}/tv/${idStr}/season/${prog.season}?language=en-US`)
-        ]);
-        if (showData && showData.id) {
-          const currentEp = seasonData.episodes?.find(ep => ep.episode_number === prog.episode);
-          if (currentEp?.runtime && !prog.episodeRuntime) {
-            prog.episodeRuntime = currentEp.runtime;
-            // Cache it back to storage
-            const allProgress = getWatchProgress();
-            if (allProgress[idStr]) {
-              allProgress[idStr].episodeRuntime = currentEp.runtime;
-              saveWatchProgress(allProgress);
-              setWatchProgress(allProgress);
-            }
-          }
-          items.push({ ...showData, media_type: 'tv', _savedProgress: prog });
-        }
-      } catch (e) { /* skip invalid */ }
-    }
-
-    if (items.length === 0) {
-      section.classList.add('hidden');
-      return;
-    }
-
-    renderCategoryRow('continueWatchingRow', items, 'tv', true);
-  } catch (err) {
-    section.classList.add('hidden');
-  }
-}
-
-export async function loadUpNext() {
-  const section = document.getElementById('upNextSection');
-  const container = document.getElementById('upNextRow');
-  if (!section || !container) return;
-
-  const entries = Object.entries(getWatchProgress())
+  const allProgress = getWatchProgress();
+  const entries = Object.entries(allProgress)
     .filter(([, progress]) => progress?.season && progress?.episode)
     .sort((a, b) => new Date(b[1].updated_at || 0) - new Date(a[1].updated_at || 0))
     .slice(0, 10);
@@ -1260,13 +1204,28 @@ export async function loadUpNext() {
   }
 
   section.classList.remove('hidden');
-  container.innerHTML = '<div class="row-loading"><i class="fas fa-spinner"></i> Preparing episodes…</div>';
+  container.innerHTML = '<div class="row-loading"><i class="fas fa-spinner"></i> Preparing your episodes…</div>';
 
+  let progressChanged = false;
   const settled = await Promise.allSettled(entries.map(async ([id, progress]) => {
-    const show = await fetchWithAuth(`${BASE_URL}/tv/${id}?language=en-US`);
-    const { season, episode, advanced } = resolveUpNextEpisode(show, progress);
-    const seasonData = await fetchWithAuth(`${BASE_URL}/tv/${id}/season/${season}?language=en-US`);
-    const episodeData = seasonData.episodes?.find(ep => ep.episode_number === episode);
+    const currentSeason = Number(progress.season) || 1;
+    const currentEpisode = Number(progress.episode) || 1;
+    const [show, currentSeasonData] = await Promise.all([
+      fetchWithAuth(`${BASE_URL}/tv/${id}?language=en-US`),
+      fetchWithAuth(`${BASE_URL}/tv/${id}/season/${currentSeason}?language=en-US`)
+    ]);
+    const currentEpisodeData = currentSeasonData.episodes?.find(ep => ep.episode_number === currentEpisode);
+    const episodeRuntime = Number(progress.episodeRuntime) || Number(currentEpisodeData?.runtime) || 0;
+    if (!progress.episodeRuntime && episodeRuntime > 0) {
+      progress.episodeRuntime = episodeRuntime;
+      progressChanged = true;
+    }
+
+    const { season, episode, advanced } = resolveUpNextEpisode(show, { ...progress, episodeRuntime });
+    const targetSeasonData = season === currentSeason
+      ? currentSeasonData
+      : await fetchWithAuth(`${BASE_URL}/tv/${id}/season/${season}?language=en-US`);
+    const episodeData = targetSeasonData.episodes?.find(ep => ep.episode_number === episode);
     return {
       ...show,
       media_type: 'tv',
@@ -1280,6 +1239,11 @@ export async function loadUpNext() {
     };
   }));
 
+  if (progressChanged) {
+    await saveWatchProgress(allProgress);
+    setWatchProgress(allProgress);
+  }
+
   const items = settled.filter(result => result.status === 'fulfilled').map(result => result.value);
   if (!items.length) {
     section.classList.add('hidden');
@@ -1289,7 +1253,7 @@ export async function loadUpNext() {
   container.innerHTML = items.map(item => {
     const next = item._upNext;
     const backdrop = item.backdrop_path ? `${IMG_BASE}w780${item.backdrop_path}` : '';
-    const label = next.advanced ? 'Up next' : 'Resume';
+    const label = next.advanced ? 'Next episode' : 'Resume';
     const showName = escapeHtml(item.name || 'Untitled series');
     const episodeName = escapeHtml(next.name);
     const ariaLabel = escapeAttribute(`${label} ${item.name}, season ${next.season}, episode ${next.episode}, ${next.name}`);

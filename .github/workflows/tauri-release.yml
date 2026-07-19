@@ -58,12 +58,11 @@ jobs:
           tagName: v__VERSION__
           releaseName: 'Open Cloud v__VERSION__'
           releaseBody: |
-            Open Cloud 3.3.0 adds precise, automatic playback resume for movies and every
-            saved series episode across all embedded providers. Checkpoints are captured
-            during playback and immediately on pause, seek, episode changes, player close,
-            app backgrounding, and shutdown. Resume survives provider failover, rejects
-            short ad videos, retains offline per-episode history, and safely synchronizes
-            the latest whole-second checkpoint across signed-in devices.
+            Open Cloud 3.4.0 adds Plasma, a new movie and series provider powered by
+            VSEmbed, with the same health monitoring, failover, blocker, fullscreen, and
+            resume support as every other source. The home screen now has one clearer
+            Continue Watching row that resumes unfinished episodes or advances completed
+            episodes automatically, with less duplicated loading work.
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true

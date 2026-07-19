@@ -251,6 +251,8 @@ fn is_provider_host(host: Option<&str>) -> bool {
         Some("vidsrc.cc")
             | Some("player.videasy.net")
             | Some("player.videasy.to")
+            | Some("vsembed.ru")
+            | Some("cloudorchestranova.com")
             | Some("vidsrc.me")
             | Some("vidsrc.to")
             | Some("moviesapi.club")
@@ -639,6 +641,8 @@ mod tests {
     #[test]
     fn provider_probe_allowlist_rejects_arbitrary_hosts() {
         assert!(is_provider_host(Some("player.videasy.net")));
+        assert!(is_provider_host(Some("vsembed.ru")));
+        assert!(is_provider_host(Some("cloudorchestranova.com")));
         assert!(!is_provider_host(Some("ads.example.invalid")));
         assert!(!is_provider_host(Some("videasy.net.ads.example.invalid")));
     }

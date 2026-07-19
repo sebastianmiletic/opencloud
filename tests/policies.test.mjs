@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import { resolveUpNextEpisode } from '../js/series.js';
 import { connectionScoreForLatency } from '../js/player-health.js';
+import { getProviderUrlFor, PROVIDERS } from '../js/config.js';
 import {
   getSavedPlaybackDuration,
   getSavedPlaybackSeconds,
@@ -17,7 +18,7 @@ globalThis.localStorage = {
   setItem: (key, value) => localValues.set(key, String(value))
 };
 
-test('Up Next resumes an episode below the completion threshold', () => {
+test('Continue Watching resumes an episode below the completion threshold', () => {
   const show = { seasons: [{ season_number: 1, episode_count: 8 }] };
   assert.deepEqual(
     resolveUpNextEpisode(show, { season: 1, episode: 3, elapsedMinutes: 20, episodeRuntime: 45 }),
@@ -25,7 +26,7 @@ test('Up Next resumes an episode below the completion threshold', () => {
   );
 });
 
-test('Up Next advances completed episodes and crosses season boundaries', () => {
+test('Continue Watching advances completed episodes and crosses season boundaries', () => {
   const show = { seasons: [
     { season_number: 0, episode_count: 4 },
     { season_number: 1, episode_count: 8 },
@@ -37,12 +38,20 @@ test('Up Next advances completed episodes and crosses season boundaries', () => 
   );
 });
 
-test('Up Next stays on the series finale instead of inventing an episode', () => {
+test('Continue Watching stays on the series finale instead of inventing an episode', () => {
   const show = { seasons: [{ season_number: 1, episode_count: 2 }] };
   assert.deepEqual(
     resolveUpNextEpisode(show, { season: 1, episode: 2, elapsedMinutes: 50, episodeRuntime: 50 }),
     { season: 1, episode: 2, advanced: false }
   );
+});
+
+test('home exposes one episode-aware Continue Watching row and no Up Next heading', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  assert.equal((html.match(/id="continueWatchingSection"/g) || []).length, 1);
+  assert.match(html, /<h3>Continue Watching<\/h3>/);
+  assert.match(html, /class="category-row up-next-row" id="continueWatchingRow"/);
+  assert.doesNotMatch(html, /<h3>Up Next<\/h3>/);
 });
 
 test('automatic provider failover is off by default and settings migrate safely', async () => {
@@ -72,6 +81,13 @@ test('provider health maps reachability and latency onto five honest levels', ()
   assert.equal(connectionScoreForLatency(2600, 200, true), 2);
   assert.equal(connectionScoreForLatency(500, 503, true), 1);
   assert.equal(connectionScoreForLatency(100, 200, false), 1);
+});
+
+test('Plasma is marked new and generates exact movie and TV embed URLs', () => {
+  assert.equal(PROVIDERS.vsembed.name, 'Plasma');
+  assert.equal(PROVIDERS.vsembed.rank, 'New');
+  assert.equal(getProviderUrlFor('vsembed', 'movie', 550), 'https://vsembed.ru/embed/movie/550');
+  assert.equal(getProviderUrlFor('vsembed', 'tv', 66732, 1, 1), 'https://vsembed.ru/embed/tv/66732/1/1');
 });
 
 test('exact playback checkpoints stay isolated per episode', () => {

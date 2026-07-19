@@ -302,7 +302,7 @@ function renderProviderCards() {
     if (p.quality === '4K') badges.push('<span class="provider-badge badge-4k">4K</span>');
     else if (p.quality) badges.push(`<span class="provider-badge">${p.quality}</span>`);
     if (p.subtitles) badges.push('<span class="provider-badge"><i class="fas fa-closed-captioning"></i> Subs</span>');
-    badges.push(`<span class="provider-badge"><i class="fas fa-bolt"></i> ${p.speed}</span>`);
+    if (p.speed) badges.push(`<span class="provider-badge"><i class="fas fa-bolt"></i> ${p.speed}</span>`);
 
     return `
       <div class="provider-card ${isActive ? 'active' : ''} ${isBest ? 'provider-best' : ''}" data-provider="${key}">

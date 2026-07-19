@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "OpenCloud",
-  "version": "3.3.0",
+  "version": "3.4.0",
   "identifier": "com.opencloud.desktop",
   "build": {
     "beforeDevCommand": "npm run dev:web",
@@ -17,13 +17,13 @@
         "default-src": "'self' customprotocol: asset:",
         "connect-src": "'self' ipc: http://ipc.localhost https://api.themoviedb.org https://www.omdbapi.com https://*.supabase.co wss://*.supabase.co",
         "font-src": "'self' data:",
-        "frame-src": "https://vidsrc.cc https://player.videasy.net https://player.videasy.to https://vidsrc.me https://vidsrc.to https://moviesapi.club https://vidsrc.su https://vidlink.pro",
+        "frame-src": "https://vidsrc.cc https://player.videasy.net https://player.videasy.to https://vsembed.ru https://cloudorchestranova.com https://vidsrc.me https://vidsrc.to https://moviesapi.club https://vidsrc.su https://vidlink.pro",
         "img-src": "'self' asset: http://asset.localhost data: blob: https://image.tmdb.org https://*.supabase.co",
         "media-src": "'self' blob: data: https:",
         "script-src": "'self'",
         "style-src": "'self' 'unsafe-inline'"
       },
-      "devCsp": "default-src 'self' http://127.0.0.1:1420; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:1420 ws://127.0.0.1:1420 https://api.themoviedb.org https://www.omdbapi.com https://*.supabase.co wss://*.supabase.co; font-src 'self' data:; frame-src https://vidsrc.cc https://player.videasy.net https://player.videasy.to https://vidsrc.me https://vidsrc.to https://moviesapi.club https://vidsrc.su https://vidlink.pro; img-src 'self' data: blob: https://image.tmdb.org https://*.supabase.co; media-src 'self' blob: data: https:; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'"
+      "devCsp": "default-src 'self' http://127.0.0.1:1420; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:1420 ws://127.0.0.1:1420 https://api.themoviedb.org https://www.omdbapi.com https://*.supabase.co wss://*.supabase.co; font-src 'self' data:; frame-src https://vidsrc.cc https://player.videasy.net https://player.videasy.to https://vsembed.ru https://cloudorchestranova.com https://vidsrc.me https://vidsrc.to https://moviesapi.club https://vidsrc.su https://vidlink.pro; img-src 'self' data: blob: https://image.tmdb.org https://*.supabase.co; media-src 'self' blob: data: https:; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'"
     }
   },
   "bundle": {

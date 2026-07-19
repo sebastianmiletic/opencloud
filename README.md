@@ -7,7 +7,7 @@ A black-and-white themed Tauri desktop streaming tracker with TMDB/OMDB integrat
 ## How to Download & Install
 
 <p align="center">
-  <a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud_3.3.0_universal.dmg"><img src="https://img.shields.io/badge/Download-macOS%20(.dmg)-black?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS"></a>&nbsp;&nbsp;<a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud_3.3.0_x64-setup.exe"><img src="https://img.shields.io/badge/Download-Windows%20(.exe)-black?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows"></a>
+  <a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud_3.4.0_universal.dmg"><img src="https://img.shields.io/badge/Download-macOS%20(.dmg)-black?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS"></a>&nbsp;&nbsp;<a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud_3.4.0_x64-setup.exe"><img src="https://img.shields.io/badge/Download-Windows%20(.exe)-black?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows"></a>
 </p>
 
 <p align="center">
@@ -23,7 +23,7 @@ A black-and-white themed Tauri desktop streaming tracker with TMDB/OMDB integrat
 ### macOS (Recommended — DMG)
 
 1. **Download the DMG**
-   - Click the **macOS (.dmg)** button above, or go to the [Releases page](https://github.com/sebastianmiletic/opencloud/releases/latest) and download `OpenCloud_3.3.0_universal.dmg`
+   - Click the **macOS (.dmg)** button above, or go to the [Releases page](https://github.com/sebastianmiletic/opencloud/releases/latest) and download `OpenCloud_3.4.0_universal.dmg`
 
 2. **Install the app**
    - Open the downloaded `OpenCloud.dmg`
@@ -43,7 +43,7 @@ A black-and-white themed Tauri desktop streaming tracker with TMDB/OMDB integrat
 ### Windows (Recommended — EXE)
 
 1. **Download the Installer**
-   - Click the **Windows (.exe)** button above, or go to the [Releases page](https://github.com/sebastianmiletic/opencloud/releases/latest) and download `OpenCloud_3.3.0_x64-setup.exe`
+   - Click the **Windows (.exe)** button above, or go to the [Releases page](https://github.com/sebastianmiletic/opencloud/releases/latest) and download `OpenCloud_3.4.0_x64-setup.exe`
 
 2. **Run the installer**
    - Double-click the downloaded `OpenCloud.exe`
@@ -89,7 +89,7 @@ If you prefer to run the app from code or want to develop:
 ### Home Page
 - **Hero carousel** — Featured movies/shows at the top with auto-sliding slides
 - **Categories** — "Popular Now", "Recently Released", "Star Wars Saga", and recommendation rows
-- **Continue Watching** — Resume TV shows from where you left off
+- **Continue Watching** — Resume the current episode or start the next one after finishing
 - **Search** — Type in the top-center search bar to find movies and TV shows
 - **Item Modal** — Click any poster to see details, ratings, synopsis, and options to Watch Now or Add to Collection
 
@@ -189,7 +189,7 @@ Open Cloud/
 
 ### Settings Tabs
 - **General** — Device layout (laptop / TV / phone), auto-play toggle, activation key input
-- **Video Sources** — Pick from 7 providers with quality and subtitle info
+- **Video Sources** — Pick from 8 providers with available capability information
 - **Blocker** — Toggle protection, configure rules, view block logs
 - **Stats** — Watch heatmap, hours watched, movies/episodes count, current streak
 - **Account** — Avatar upload, color presets, display name, email, password, account deletion
@@ -208,6 +208,7 @@ Open Cloud/
 |------|--------|---------|-----------|
 | Nova | vidsrc.cc | 1080p | Yes |
 | Helix | player.videasy.net | 4K | Yes |
+| Plasma | vsembed.ru | Not specified | Not specified |
 | Pulse | vidsrc.me | 1080p | Yes |
 | Phantom | vidsrc.to | 1080p | No |
 | Dossier | moviesapi.club | 720p | No |

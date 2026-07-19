@@ -10,7 +10,7 @@ const LOCAL_PORT = Number(process.env.OPENCLOUD_ELECTRON_PORT || 38475);
 /* Hosts the Electron app is allowed to open (everything else = deny) */
 const ALLOWED_HOSTS = new Set([
   'localhost', '127.0.0.1',
-  'vidsrc.cc', 'player.videasy.net', 'vidsrc.me', 'vidsrc.to',
+  'vidsrc.cc', 'player.videasy.net', 'vsembed.ru', 'cloudorchestranova.com', 'vidsrc.me', 'vidsrc.to',
   'moviesapi.club', 'vidsrc.su', 'vidlink.pro',
   'image.tmdb.org', 'www.themoviedb.org', 'api.themoviedb.org', 'www.omdbapi.com',
 ]);
