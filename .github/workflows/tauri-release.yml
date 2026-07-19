@@ -58,9 +58,8 @@ jobs:
           tagName: v__VERSION__
           releaseName: 'Open Cloud v__VERSION__'
           releaseBody: |
-            Open Cloud 3.2.2 makes the laptop T player mode reliable while a provider has
-            keyboard focus, preserves the chosen mode across titles and app restarts, and
-            keeps the three-second control timer responsive inside embedded players.
+            Open Cloud 3.2.3 keeps the transparent laptop player controls visible for five
+            seconds after mouse activity before automatically hiding them again.
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true

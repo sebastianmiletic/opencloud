@@ -51,7 +51,7 @@ let _headerHideTimer = null;
 let _lastHeaderToggleAt = Number.NEGATIVE_INFINITY;
 let _metadataRequestId = 0;
 const _seasonCache = new Map();
-const PLAYER_HEADER_IDLE_MS = 3000;
+const PLAYER_HEADER_IDLE_MS = 5000;
 
 function healthQuality(score) {
   return ['Unavailable', 'Poor', 'Fair', 'Good', 'Excellent'][Math.max(1, Math.min(5, score)) - 1];
@@ -456,7 +456,7 @@ function setPlayerHeaderAutohide(enabled, notify = true, persist = false) {
   if (!notify) return;
   showToast(
     _headerAutohide
-      ? 'Player bar hidden. Move the mouse to show it for 3 seconds, or press T to restore it.'
+      ? 'Player bar hidden. Move the mouse to show it for 5 seconds, or press T to restore it.'
       : 'Player bar will stay visible.',
     'info'
   );
