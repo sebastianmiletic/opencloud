@@ -8,6 +8,7 @@ import { recordWatchSession } from './supabase.js';
 import { getWatchProgress, saveWatchProgress, syncWatchProgressItem, addToUserHistory } from './storage.js';
 import { invokeDesktop, isTauri, openExternal } from './desktop.js';
 import { connectionScoreForLatency } from './player-health.js';
+import { getSavedPlaybackDuration, getSavedPlaybackSeconds, isPlausiblePlaybackSample, mergePlaybackCheckpoint } from './playback-progress.js';
 
 /* DOM refs */
 const playerOverlay = document.getElementById('playerOverlay');
@@ -50,8 +51,19 @@ let _headerAutohide = false;
 let _headerHideTimer = null;
 let _lastHeaderToggleAt = Number.NEGATIVE_INFINITY;
 let _metadataRequestId = 0;
+let _playerFrameSessionToken = 0;
+let _activePlaybackFrameId = null;
+let _activePlaybackDuration = 0;
+let _activePlaybackFrameSeenAt = 0;
+let _lastPlaybackCheckpoint = null;
+let _lastCloudCheckpointAt = 0;
+let _resumeConfirmationKey = null;
+let _checkpointResolvers = [];
+let _sessionResumePoint = null;
 const _seasonCache = new Map();
 const PLAYER_HEADER_IDLE_MS = 5000;
+const PLAYER_CONTROL_CHANNEL = '__opencloud_player_control_v1__';
+const CLOUD_CHECKPOINT_INTERVAL_MS = 30000;
 
 function healthQuality(score) {
   return ['Unavailable', 'Poor', 'Fair', 'Good', 'Excellent'][Math.max(1, Math.min(5, score)) - 1];
@@ -196,23 +208,205 @@ function setCurrentProgress(data) {
   } catch (e) { console.error('[setCurrentProgress] failed', e); }
 }
 
+function currentPlaybackContext() {
+  if (!playerState.id || !playerState.type) return null;
+  return {
+    id: String(playerState.id),
+    type: playerState.type,
+    season: playerState.type === 'tv' ? Number(playerState.season) || 1 : null,
+    episode: playerState.type === 'tv' ? Number(playerState.episode) || 1 : null
+  };
+}
+
+function playbackContextKey(context = currentPlaybackContext()) {
+  if (!context) return '';
+  return context.type === 'tv'
+    ? `tv:${context.id}:s${context.season}:e${context.episode}`
+    : `movie:${context.id}`;
+}
+
+function getCurrentResumePoint() {
+  const context = currentPlaybackContext();
+  if (!context) return { seconds: 0, durationSeconds: 0 };
+  const progressItem = getCurrentProgress()[context.id];
+  return {
+    seconds: getSavedPlaybackSeconds(progressItem, context.type, context.season, context.episode),
+    durationSeconds: getSavedPlaybackDuration(progressItem, context.type, context.season, context.episode)
+  };
+}
+
+function sendResumeToProviderFrames() {
+  const sessionKey = playbackContextKey();
+  if (!playerFrame?.contentWindow || !sessionKey) return;
+  const resumePoint = _sessionResumePoint?.contextKey === sessionKey && _sessionResumePoint.active
+    ? _sessionResumePoint
+    : { seconds: 0, durationSeconds: 0 };
+  playerFrame.contentWindow.postMessage({
+    channel: PLAYER_CONTROL_CHANNEL,
+    type: 'resume',
+    seconds: resumePoint.seconds,
+    durationSeconds: resumePoint.durationSeconds,
+    sessionKey
+  }, '*');
+}
+
+function requestFreshPlaybackCheckpoint(timeoutMs = 120) {
+  const sessionKey = playbackContextKey();
+  if (!playerFrame?.contentWindow || !sessionKey) return Promise.resolve(false);
+  return new Promise(resolve => {
+    const finish = (saved) => {
+      _checkpointResolvers = _checkpointResolvers.filter(candidate => candidate !== finish);
+      resolve(saved);
+    };
+    _checkpointResolvers.push(finish);
+    playerFrame.contentWindow.postMessage({
+      channel: PLAYER_CONTROL_CHANNEL,
+      type: 'checkpoint',
+      sessionKey
+    }, '*');
+    setTimeout(() => finish(false), timeoutMs);
+  });
+}
+
+function scheduleResumeAttempts() {
+  const sessionToken = _playerFrameSessionToken;
+  [0, 300, 1000, 3000].forEach(delay => {
+    setTimeout(() => {
+      if (sessionToken === _playerFrameSessionToken && !playerOverlay?.classList.contains('hidden')) {
+        sendResumeToProviderFrames();
+      }
+    }, delay);
+  });
+}
+
+function formatPlaybackTime(seconds) {
+  const total = Math.max(0, Math.round(Number(seconds) || 0));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const remainder = total % 60;
+  return hours > 0
+    ? `${hours}:${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`
+    : `${minutes}:${String(remainder).padStart(2, '0')}`;
+}
+
+function isActivePlaybackSample(detail) {
+  if (detail?.sessionKey !== playbackContextKey()) return false;
+  if (!isPlausiblePlaybackSample(detail?.sample)) return false;
+  if (_sessionResumePoint?.active && _sessionResumePoint.contextKey === detail.sessionKey) {
+    if (Number(detail.sample.seconds) < _sessionResumePoint.seconds - 2) return false;
+  }
+  const now = Date.now();
+  const frameId = String(detail.frameId || 'provider-frame');
+  const duration = Number(detail.sample.durationSeconds);
+  const context = currentPlaybackContext();
+  const progressItem = context ? getCurrentProgress()[context.id] : null;
+  const expectedDuration = context
+    ? getSavedPlaybackDuration(progressItem, context.type, context.season, context.episode)
+    : 0;
+  if (expectedDuration >= 180) {
+    const allowedDifference = Math.max(30, expectedDuration * 0.08);
+    if (Math.abs(duration - expectedDuration) > allowedDifference) return false;
+  }
+  if (!_activePlaybackFrameId || _activePlaybackFrameId === frameId) {
+    _activePlaybackFrameId = frameId;
+  } else {
+    const activeFrameStale = now - _activePlaybackFrameSeenAt > 8000;
+    const clearlyLongerContent = duration > _activePlaybackDuration + 60;
+    if (!activeFrameStale && !clearlyLongerContent) return false;
+    _activePlaybackFrameId = frameId;
+  }
+  _activePlaybackDuration = duration;
+  _activePlaybackFrameSeenAt = now;
+  return true;
+}
+
+function persistPlaybackSample(detail, forceCloud = false) {
+  if (!isActivePlaybackSample(detail)) return false;
+  const context = currentPlaybackContext();
+  if (!context) return false;
+  const now = Date.now();
+  const progress = getCurrentProgress();
+  const merged = mergePlaybackCheckpoint(progress[context.id], context, {
+    seconds: detail.sample.seconds,
+    durationSeconds: detail.sample.durationSeconds,
+    updatedAt: new Date(now).toISOString()
+  });
+  progress[context.id] = merged;
+  setCurrentProgress(progress);
+  _lastPlaybackCheckpoint = { contextKey: playbackContextKey(context), detail };
+  if (_sessionResumePoint?.contextKey === _lastPlaybackCheckpoint.contextKey
+    && Number(detail.sample.seconds) >= _sessionResumePoint.seconds - 2) {
+    _sessionResumePoint.active = false;
+  }
+  const checkpointResolvers = _checkpointResolvers.splice(0);
+  checkpointResolvers.forEach(resolve => resolve(true));
+
+  const shouldSyncCloud = forceCloud || now - _lastCloudCheckpointAt >= CLOUD_CHECKPOINT_INTERVAL_MS;
+  if (shouldSyncCloud) {
+    _lastCloudCheckpointAt = now;
+    syncWatchProgressItem(
+      context.id,
+      context.type,
+      context.season,
+      context.episode,
+      merged.progress_seconds
+    ).catch(error => console.warn('[playback checkpoint sync]', error));
+  }
+  return true;
+}
+
+function flushPlaybackCheckpoint() {
+  const contextKey = playbackContextKey();
+  if (!_lastPlaybackCheckpoint || _lastPlaybackCheckpoint.contextKey !== contextKey) return false;
+  return persistPlaybackSample(_lastPlaybackCheckpoint.detail, true);
+}
+
+function handlePlayerFrameInput(detail) {
+  if (detail?.type === 'toggle-header') handlePlayerHeaderShortcut();
+  if (detail?.type === 'pointer-activity') showPlayerHeaderForMouseActivity();
+  if (detail?.type === 'bridge-ready') sendResumeToProviderFrames();
+  if (detail?.type === 'playback-progress') {
+    const forceCloud = ['pause', 'seeked', 'ended', 'pagehide'].includes(detail.eventName);
+    persistPlaybackSample(detail, forceCloud);
+  }
+  if (detail?.type === 'resume-applied') {
+    if (detail.sessionKey !== playbackContextKey()) return;
+    if (_sessionResumePoint?.contextKey === detail.sessionKey
+      && Number(detail.seconds) >= _sessionResumePoint.seconds - 2) {
+      _sessionResumePoint.active = false;
+    }
+    const key = `${playbackContextKey()}:${Math.round(Number(detail.seconds) || 0)}`;
+    if (Number(detail.seconds) >= 1 && key !== _resumeConfirmationKey) {
+      _resumeConfirmationKey = key;
+      showToast(`Resumed at ${formatPlaybackTime(detail.seconds)}`, 'info');
+    }
+  }
+}
+
 async function persistProgress(id, season, episode, extra = {}) {
   if (!id || season == null || episode == null) return;
   try {
     const sid = String(id);
     const progress = getCurrentProgress();
     const existing = progress[sid] || {};
+    const playbackSeconds = extra.playbackSeconds
+      ?? getSavedPlaybackSeconds(existing, 'tv', season, episode);
+    const durationSeconds = getSavedPlaybackDuration(existing, 'tv', season, episode);
     const merged = {
+      ...existing,
       season: parseInt(season),
       episode: parseInt(episode),
       updated_at: new Date().toISOString(),
-      elapsedMinutes: extra.elapsedMinutes ?? existing.elapsedMinutes ?? 0,
-      episodeRuntime: extra.episodeRuntime ?? existing.episodeRuntime ?? null,
+      playbackSeconds,
+      progress_seconds: Math.round(playbackSeconds),
+      durationSeconds,
+      elapsedMinutes: extra.elapsedMinutes ?? (playbackSeconds / 60),
+      episodeRuntime: extra.episodeRuntime ?? (durationSeconds > 0 ? durationSeconds / 60 : null),
       ...extra
     };
     progress[sid] = merged;
     setCurrentProgress(progress);
-    await syncWatchProgressItem(sid, 'tv', merged.season, merged.episode, merged.elapsedMinutes * 60);
+    await syncWatchProgressItem(sid, 'tv', merged.season, merged.episode, merged.progress_seconds);
     console.log('[persistProgress] synced', sid, 'S' + season, 'E' + episode);
   } catch (e) {
     console.error('[persistProgress] failed', e);
@@ -231,6 +425,10 @@ function startProgressInterval() {
   _progressInterval = setInterval(() => {
     const p = playerState;
     if (p.id && p.type === 'tv' && p.season != null && p.episode != null) {
+      if (_lastPlaybackCheckpoint?.contextKey === playbackContextKey()) {
+        _playerOpenedAt = Date.now();
+        return;
+      }
       const minutes = addSessionElapsed();
       if (minutes > 0) {
         const progress = getCurrentProgress();
@@ -256,11 +454,17 @@ function flushElapsedAndSave() {
   const p = playerState;
   if (!p.id || p.type !== 'tv') return;
   if (p.season == null || p.episode == null) return;
+  if (_lastPlaybackCheckpoint?.contextKey === playbackContextKey()) {
+    flushPlaybackCheckpoint();
+    _playerOpenedAt = Date.now();
+    return;
+  }
   const minutes = addSessionElapsed();
   const sid = String(p.id);
   const progress = getCurrentProgress();
   const existing = progress[sid] || {};
   progress[sid] = {
+    ...existing,
     season: parseInt(p.season),
     episode: parseInt(p.episode),
     updated_at: new Date().toISOString(),
@@ -307,7 +511,10 @@ function detachWatchActivityListeners() {
 }
 
 function onVisibilityChange() {
-  if (document.hidden) pauseWatch();
+  if (document.hidden) {
+    flushPlaybackCheckpoint();
+    pauseWatch();
+  }
   else resumeWatch();
 }
 
@@ -347,6 +554,7 @@ function attachIframeLoadListener() {
     _providerProbeFailures = 0;
     setPlayerHealth(score <= 2 ? 'slow' : 'ready', `${providerName(_currentProviderKey)} · ${healthQuality(score)}`, false, score, latency);
     startProviderHealthProbes();
+    scheduleResumeAttempts();
   };
   playerFrame.addEventListener('load', _iframeLoadHandler);
   _iframeErrorHandler = () => handleProviderFailure(`${providerName(_currentProviderKey)} failed to load`);
@@ -371,6 +579,7 @@ function stopFrameMonitoring() {
 
 /* beforeunload: always do a final save */
 window.addEventListener('beforeunload', () => {
+  flushPlaybackCheckpoint();
   flushElapsedAndSave();
   recordCurrentSession();
 });
@@ -504,8 +713,7 @@ export function initPlayer() {
   playerFullscreenBtn?.addEventListener('click', togglePlayerFullscreen);
   playerOverlay?.addEventListener('mousemove', showPlayerHeaderForMouseActivity);
   window.addEventListener('opencloud:player-frame-input', (event) => {
-    if (event.detail?.type === 'toggle-header') handlePlayerHeaderShortcut();
-    if (event.detail?.type === 'pointer-activity') showPlayerHeaderForMouseActivity();
+    handlePlayerFrameInput(event.detail);
   });
   window.addEventListener('offline', () => {
     if (!playerOverlay?.classList.contains('hidden')) setPlayerHealth('failed', `${providerName(_currentProviderKey)} · Offline`, true, 1);
@@ -557,6 +765,18 @@ function getPlayerSrc() {
 
 function loadPlayerIframe() {
   if (!playerFrame) return;
+  flushPlaybackCheckpoint();
+  _playerFrameSessionToken += 1;
+  _activePlaybackFrameId = null;
+  _activePlaybackDuration = 0;
+  _activePlaybackFrameSeenAt = 0;
+  const resumePoint = getCurrentResumePoint();
+  _sessionResumePoint = {
+    contextKey: playbackContextKey(),
+    seconds: resumePoint.seconds,
+    durationSeconds: resumePoint.durationSeconds,
+    active: resumePoint.seconds >= 1
+  };
   clearHealthTimer();
   stopProviderHealthProbes();
   if (!_currentProviderKey) resetProviderSession(playerState.type || 'movie');
@@ -565,6 +785,7 @@ function loadPlayerIframe() {
   _lastFrameScore = 1;
   setPlayerHealth('connecting', `Connecting to ${providerName(_currentProviderKey)}…`, false, 2);
   playerFrame.src = getPlayerSrc();
+  scheduleResumeAttempts();
   _healthTimer = setTimeout(() => {
     handleProviderFailure(`${providerName(_currentProviderKey)} is taking too long`);
   }, 12000);
@@ -575,7 +796,10 @@ export function closePlayer() {
   _metadataRequestId += 1;
   setPlayerHeaderAutohide(false, false);
   if (_isPlayerFullscreen) setPlayerFullscreen(false);
+  requestFreshPlaybackCheckpoint().catch(() => {});
+  flushPlaybackCheckpoint();
   flushElapsedAndSave();
+  _playerFrameSessionToken += 1;
   stopProgressInterval();
   stopFrameMonitoring();
   clearHealthTimer();
@@ -596,6 +820,9 @@ export function closePlayer() {
     _attemptedProviders.clear();
     _currentProviderKey = null;
     _metadataFailed = false;
+    _activePlaybackFrameId = null;
+    _lastPlaybackCheckpoint = null;
+    _sessionResumePoint = null;
     setPlayerState({ id: null, type: null, season: 1, episode: 1, tmdbData: null, epData: null, view: 'seasons' });
     unlockScroll();
   }, 150);
@@ -632,6 +859,12 @@ export async function openPlayer(id, type, season, episode) {
     epData: null,
     view: 'seasons'
   });
+  _activePlaybackFrameId = null;
+  _activePlaybackDuration = 0;
+  _activePlaybackFrameSeenAt = 0;
+  _lastPlaybackCheckpoint = null;
+  _lastCloudCheckpointAt = 0;
+  _resumeConfirmationKey = null;
   resetProviderSession(type);
   _metadataFailed = false;
 
@@ -745,6 +978,11 @@ function configureNextButton(tmdbData = playerState.tmdbData) {
 }
 
 function saveCurrentEpisodeElapsed() {
+  if (flushPlaybackCheckpoint()) {
+    _playerOpenedAt = Date.now();
+    resetWatchSession();
+    return;
+  }
   const minutesWatched = addSessionElapsed();
   const progress = getCurrentProgress();
   const existing = progress[String(playerState.id)];
@@ -755,11 +993,14 @@ function saveCurrentEpisodeElapsed() {
 
 async function switchEpisode(season, episode, knownName = '') {
   if (!playerState.id || playerState.type !== 'tv') return;
+  await requestFreshPlaybackCheckpoint();
   saveCurrentEpisodeElapsed();
   setPlayerState({ ...playerState, season: Number(season), episode: Number(episode) });
+  _lastPlaybackCheckpoint = null;
+  _resumeConfirmationKey = null;
   updatePlayerTitle(playerState.tmdbData?.title || 'Series', season, episode, knownName);
   configureNextButton();
-  persistProgress(playerState.id, season, episode, { elapsedMinutes: 0 }).catch(console.error);
+  persistProgress(playerState.id, season, episode).catch(console.error);
   loadPlayerIframe();
   window.dispatchEvent(new CustomEvent('watchStarted', { detail: { id: playerState.id, type: 'tv', season: Number(season), episode: Number(episode) } }));
   loadSeasonData(season).catch(handleSeasonLoadFailure);

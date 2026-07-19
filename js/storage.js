@@ -12,6 +12,7 @@ import { getCurrentAuthUser, getSupabaseClient } from './auth.js';
 import {
   setUserCollection, setUserHistory, setWatchProgress, setUserFolders
 } from './state.js';
+import { episodeProgressKey } from './playback-progress.js';
 
 /* Lazy imports to avoid circular deps */
 let _api = null;
@@ -37,6 +38,7 @@ let _cache = {
 };
 
 const LOCAL_PREFIX = 'oc_local_';
+const _progressSyncChains = new Map();
 
 function loadLocalCache() {
   try { _cache.collection = JSON.parse(localStorage.getItem(LOCAL_PREFIX + 'collection')) || []; } catch (e) { _cache.collection = []; }
@@ -58,6 +60,20 @@ function persistLocalCache() {
 
 function getUserId() {
   return getCurrentAuthUser()?.id || null;
+}
+
+async function syncProgressInOrder(userId, item) {
+  const key = `${userId}:${item.id}`;
+  const previous = _progressSyncChains.get(key) || Promise.resolve();
+  const current = previous
+    .catch(() => {})
+    .then(() => syncSaveProgress(userId, item));
+  _progressSyncChains.set(key, current);
+  try {
+    return await current;
+  } finally {
+    if (_progressSyncChains.get(key) === current) _progressSyncChains.delete(key);
+  }
 }
 
 /* ─── Init ─── */
@@ -134,7 +150,32 @@ export async function initStorage() {
   }
 
   if (progress && Object.keys(progress).length > 0) {
-    _cache.progress = progress;
+    const mergedProgress = { ..._cache.progress };
+    Object.entries(progress).forEach(([id, remote]) => {
+      const local = mergedProgress[id] || {};
+      const localTime = Date.parse(local.updated_at || '') || 0;
+      const remoteTime = Date.parse(remote.updated_at || '') || 0;
+      const newer = localTime > remoteTime ? local : remote;
+      const older = newer === local ? remote : local;
+      mergedProgress[id] = {
+        ...older,
+        ...newer,
+        episodes: {
+          ...(older.episodes || {}),
+          ...(newer.episodes || {})
+        }
+      };
+      if (localTime > remoteTime && local.mediaType) {
+        syncProgressInOrder(userId, {
+          id,
+          media_type: local.mediaType,
+          season: local.season ?? null,
+          episode: local.episode ?? null,
+          progress_seconds: Math.max(0, Math.round(Number(local.playbackSeconds ?? local.progress_seconds) || 0))
+        }).catch(error => console.warn('[Storage] local progress recovery sync failed:', error));
+      }
+    });
+    _cache.progress = mergedProgress;
   }
   if (settings) {
     _cache.settings = settings || { device: 'laptop', provider: 'videasy', autoPlay: true, folders: [] };
@@ -382,12 +423,53 @@ export async function saveWatchProgress(data) {
 }
 
 export async function syncWatchProgressItem(tmdbId, mediaType, season, episode, progressSeconds) {
-  _cache.progress[tmdbId] = { season, episode, progress_seconds: progressSeconds };
+  const sid = String(tmdbId);
+  const existing = _cache.progress[sid] || {};
+  const seconds = Math.max(0, Math.round(Number(progressSeconds) || 0));
+  const updatedAt = new Date().toISOString();
+  const episodeKey = mediaType === 'tv' ? episodeProgressKey(season, episode) : null;
+  const exactLocalSeconds = Number(
+    episodeKey
+      ? existing.episodes?.[episodeKey]?.playbackSeconds
+      : existing.playbackSeconds
+  );
+  const localSeconds = Number.isFinite(exactLocalSeconds) && Math.abs(exactLocalSeconds - seconds) < 1
+    ? exactLocalSeconds
+    : seconds;
+  const selectedDuration = Math.max(0, Number(
+    episodeKey
+      ? existing.episodes?.[episodeKey]?.durationSeconds
+      : existing.durationSeconds
+  ) || 0);
+  const next = {
+    ...existing,
+    mediaType,
+    season,
+    episode,
+    playbackSeconds: localSeconds,
+    progress_seconds: seconds,
+    durationSeconds: selectedDuration,
+    elapsedMinutes: mediaType === 'tv' ? localSeconds / 60 : existing.elapsedMinutes,
+    episodeRuntime: mediaType === 'tv' && selectedDuration > 0 ? selectedDuration / 60 : null,
+    updated_at: updatedAt
+  };
+  if (mediaType === 'tv') {
+    next.episodes = {
+      ...(existing.episodes || {}),
+      [episodeKey]: {
+        ...(existing.episodes?.[episodeKey] || {}),
+        playbackSeconds: localSeconds,
+        progress_seconds: seconds,
+        updated_at: updatedAt
+      }
+    };
+  }
+  _cache.progress[sid] = next;
   setWatchProgress(_cache.progress);
   persistLocalCache();
   const userId = getUserId();
   if (!userId) return true;
-  await syncSaveProgress(userId, { id: tmdbId, media_type: mediaType, season, episode, progress_seconds: progressSeconds });
+  await syncProgressInOrder(userId, { id: tmdbId, media_type: mediaType, season, episode, progress_seconds: seconds });
   return true;
 }
 

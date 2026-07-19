@@ -219,11 +219,25 @@ export async function fetchWatchProgress(userId) {
     if (error) throw error;
     const map = {};
     (data || []).forEach(row => {
-      map[row.tmdb_id] = {
+      const progress = {
+        mediaType: row.media_type,
         season: row.season,
         episode: row.episode,
-        progress_seconds: row.progress_seconds
+        playbackSeconds: row.progress_seconds,
+        progress_seconds: row.progress_seconds,
+        elapsedMinutes: row.media_type === 'tv' ? (Number(row.progress_seconds) || 0) / 60 : undefined,
+        updated_at: row.updated_at
       };
+      if (row.media_type === 'tv' && row.season != null && row.episode != null) {
+        progress.episodes = {
+          [`s${Number(row.season) || 1}e${Number(row.episode) || 1}`]: {
+            playbackSeconds: row.progress_seconds,
+            progress_seconds: row.progress_seconds,
+            updated_at: row.updated_at
+          }
+        };
+      }
+      map[row.tmdb_id] = progress;
     });
     return map;
   } catch (err) {

@@ -1,6 +1,8 @@
 (() => {
   const CHANNEL = '__opencloud_blocker_v1__';
   const PLAYER_INPUT_CHANNEL = '__opencloud_player_input_v1__';
+  const PLAYER_CONTROL_CHANNEL = '__opencloud_player_control_v1__';
+  const MIN_CONTENT_DURATION_SECONDS = 180;
   if (window.__openCloudNativeBlockerInstalled) return;
   window.__openCloudNativeBlockerInstalled = true;
 
@@ -56,10 +58,125 @@
     } catch (_) {}
   };
 
+  const frameId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  const instrumentedVideos = new WeakSet();
+  const trackedVideos = new Set();
+  const lastVideoReportAt = new WeakMap();
+  const appliedResumeTargets = new WeakMap();
+  let pendingResume = { seconds: 0, durationSeconds: 0, sessionKey: '' };
   let lastPointerActivityAt = 0;
-  const forwardPlayerInput = (type) => {
+
+  const forwardPlayerInput = (type, payload = {}) => {
     if (window.top === window) return;
-    try { window.parent.postMessage({ channel: PLAYER_INPUT_CHANNEL, type }, '*'); } catch (_) {}
+    try { window.parent.postMessage({ channel: PLAYER_INPUT_CHANNEL, type, frameId, ...payload }, '*'); } catch (_) {}
+  };
+
+  const videoSample = (video) => {
+    const rect = video.getBoundingClientRect?.();
+    return {
+      seconds: Number(video.currentTime),
+      durationSeconds: Number(video.duration),
+      paused: !!video.paused,
+      ended: !!video.ended,
+      readyState: Number(video.readyState) || 0,
+      width: Number(video.videoWidth) || 0,
+      height: Number(video.videoHeight) || 0,
+      area: Math.max(0, Number(rect?.width) || 0) * Math.max(0, Number(rect?.height) || 0)
+    };
+  };
+
+  const reportVideoProgress = (video, eventName, force = false) => {
+    if (window.top === window) return;
+    const now = Date.now();
+    if (!force && now - (lastVideoReportAt.get(video) || 0) < 1500) return;
+    const sample = videoSample(video);
+    if (!Number.isFinite(sample.seconds) || !Number.isFinite(sample.durationSeconds)) return;
+    lastVideoReportAt.set(video, now);
+    forwardPlayerInput('playback-progress', { eventName, sample, sessionKey: pendingResume.sessionKey });
+  };
+
+  const applyPendingResume = (video) => {
+    const duration = Number(video.duration);
+    const resumeSeconds = Number(pendingResume.seconds);
+    const expectedDuration = Number(pendingResume.durationSeconds);
+    if (!Number.isFinite(resumeSeconds) || resumeSeconds < 1) return;
+    if (!Number.isFinite(duration) || duration < MIN_CONTENT_DURATION_SECONDS) return;
+    if (Number.isFinite(expectedDuration) && expectedDuration >= MIN_CONTENT_DURATION_SECONDS) {
+      const allowedDifference = Math.max(30, expectedDuration * 0.08);
+      if (Math.abs(duration - expectedDuration) > allowedDifference) return;
+    } else if (duration < Math.max(600, resumeSeconds + 60)) {
+      // Cloud-only checkpoints do not know the duration. Be conservative so a
+      // pre-roll video cannot consume the resume seek before the feature starts.
+      return;
+    }
+    if (resumeSeconds > duration - 3) return;
+    const target = resumeSeconds;
+    if (target < 1 || appliedResumeTargets.get(video) === target) return;
+    try {
+      video.currentTime = target;
+      appliedResumeTargets.set(video, target);
+      forwardPlayerInput('resume-applied', { seconds: target, durationSeconds: duration, sessionKey: pendingResume.sessionKey });
+    } catch (_) {}
+  };
+
+  const instrumentVideo = (video) => {
+    if (!video || instrumentedVideos.has(video)) return;
+    instrumentedVideos.add(video);
+    trackedVideos.add(video);
+    ['loadedmetadata', 'durationchange', 'canplay'].forEach((eventName) => {
+      video.addEventListener(eventName, () => {
+        applyPendingResume(video);
+        reportVideoProgress(video, eventName, true);
+      }, true);
+    });
+    video.addEventListener('timeupdate', () => reportVideoProgress(video, 'timeupdate'), true);
+    ['playing', 'pause', 'seeked', 'ended'].forEach((eventName) => {
+      video.addEventListener(eventName, () => {
+        if (eventName === 'playing') applyPendingResume(video);
+        reportVideoProgress(video, eventName, true);
+      }, true);
+    });
+    video.addEventListener('emptied', () => appliedResumeTargets.delete(video), true);
+    applyPendingResume(video);
+  };
+
+  const scanForVideos = (root = document) => {
+    try {
+      if (root?.tagName === 'VIDEO') instrumentVideo(root);
+      root?.querySelectorAll?.('video').forEach(instrumentVideo);
+    } catch (_) {}
+  };
+
+  // Some providers create their media inside a closed shadow root. Those
+  // elements cannot be found by querySelectorAll, but every played element
+  // still passes through HTMLMediaElement.play().
+  if (typeof HTMLMediaElement !== 'undefined' && typeof HTMLMediaElement.prototype?.play === 'function') {
+    const originalMediaPlay = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = function (...args) {
+      if (this?.tagName === 'VIDEO') instrumentVideo(this);
+      return originalMediaPlay.apply(this, args);
+    };
+  }
+
+  const flushVideoProgress = () => {
+    try { trackedVideos.forEach(video => reportVideoProgress(video, 'pagehide', true)); } catch (_) {}
+  };
+
+  const broadcastPlayerControl = (type = 'resume') => {
+    if (!pendingResume.sessionKey) return;
+    try {
+      document.querySelectorAll('iframe').forEach((frame) => {
+        try {
+          frame.contentWindow?.postMessage({
+            channel: PLAYER_CONTROL_CHANNEL,
+            type,
+            seconds: pendingResume.seconds,
+            durationSeconds: pendingResume.durationSeconds,
+            sessionKey: pendingResume.sessionKey
+          }, '*');
+        } catch (_) {}
+      });
+    } catch (_) {}
   };
 
   window.addEventListener('keydown', (event) => {
@@ -85,13 +202,43 @@
     const data = event.data;
     if (!data) return;
 
+    if (data.channel === PLAYER_CONTROL_CHANNEL && event.source === window.parent) {
+      if (data.type === 'resume') {
+        const seconds = Number(data.seconds);
+        const durationSeconds = Number(data.durationSeconds);
+        pendingResume = {
+          seconds: Number.isFinite(seconds) && seconds > 0 ? seconds : 0,
+          durationSeconds: Number.isFinite(durationSeconds) && durationSeconds > 0 ? durationSeconds : 0,
+          sessionKey: String(data.sessionKey || '').slice(0, 160)
+        };
+        scanForVideos();
+        try { document.querySelectorAll('video').forEach(applyPendingResume); } catch (_) {}
+        broadcastPlayerControl();
+      } else if (data.type === 'checkpoint') {
+        pendingResume.sessionKey = String(data.sessionKey || pendingResume.sessionKey || '').slice(0, 160);
+        scanForVideos();
+        flushVideoProgress();
+        broadcastPlayerControl('checkpoint');
+      }
+      return;
+    }
+
     if (data.channel === PLAYER_INPUT_CHANNEL && event.source !== window) {
+      const detail = {
+        type: data.type,
+        frameId: String(data.frameId || '').slice(0, 100),
+        eventName: String(data.eventName || '').slice(0, 40),
+        sample: data.sample,
+        seconds: data.seconds,
+        durationSeconds: data.durationSeconds,
+        sessionKey: String(data.sessionKey || '').slice(0, 160)
+      };
       if (window.top === window) {
         window.dispatchEvent(new CustomEvent('opencloud:player-frame-input', {
-          detail: { type: data.type }
+          detail
         }));
       } else if (event.source !== window.parent) {
-        try { window.parent.postMessage({ channel: PLAYER_INPUT_CHANNEL, type: data.type }, '*'); } catch (_) {}
+        try { window.parent.postMessage({ channel: PLAYER_INPUT_CHANNEL, ...detail }, '*'); } catch (_) {}
       }
       return;
     }
@@ -164,17 +311,26 @@
   // confirmation of our own. The app's own save handler is installed on the
   // top frame after this listener and does not attempt to cancel unloading.
   window.addEventListener('beforeunload', (event) => {
+    flushVideoProgress();
     if (!policy.enabled || window.top === window) return;
     event.stopImmediatePropagation();
   }, true);
 
   document.addEventListener('DOMContentLoaded', () => {
+    scanForVideos();
+    forwardPlayerInput('bridge-ready');
     const observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
         for (const node of mutation.addedNodes) {
-          if (node?.tagName !== 'IFRAME') continue;
-          node.addEventListener('load', () => {
-            try { node.contentWindow?.postMessage({ channel: CHANNEL, type: 'policy', policy }, '*'); } catch (_) {}
+          scanForVideos(node);
+          const frames = [];
+          if (node?.tagName === 'IFRAME') frames.push(node);
+          try { node?.querySelectorAll?.('iframe').forEach(frame => frames.push(frame)); } catch (_) {}
+          frames.forEach((frame) => {
+            frame.addEventListener('load', () => {
+              try { frame.contentWindow?.postMessage({ channel: CHANNEL, type: 'policy', policy }, '*'); } catch (_) {}
+              broadcastPlayerControl();
+            });
           });
         }
       }
@@ -182,4 +338,5 @@
     observer.observe(document.documentElement, { childList: true, subtree: true });
     broadcastPolicy();
   }, { once: true });
+  window.addEventListener('pagehide', flushVideoProgress, true);
 })();

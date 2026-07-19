@@ -4,6 +4,12 @@ import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import { resolveUpNextEpisode } from '../js/series.js';
 import { connectionScoreForLatency } from '../js/player-health.js';
+import {
+  getSavedPlaybackDuration,
+  getSavedPlaybackSeconds,
+  isPlausiblePlaybackSample,
+  mergePlaybackCheckpoint
+} from '../js/playback-progress.js';
 
 const localValues = new Map();
 globalThis.localStorage = {
@@ -68,12 +74,57 @@ test('provider health maps reachability and latency onto five honest levels', ()
   assert.equal(connectionScoreForLatency(100, 200, false), 1);
 });
 
-test('native child-frame bridge forwards T and mouse activity to the app', () => {
+test('exact playback checkpoints stay isolated per episode', () => {
+  const contextOne = { id: '42', type: 'tv', season: 1, episode: 2 };
+  const first = mergePlaybackCheckpoint({}, contextOne, {
+    seconds: 413.7,
+    durationSeconds: 2712.4,
+    updatedAt: '2026-07-19T01:00:00.000Z'
+  });
+  const second = mergePlaybackCheckpoint(first, { ...contextOne, episode: 3 }, {
+    seconds: 12.3,
+    durationSeconds: 2630,
+    updatedAt: '2026-07-19T02:00:00.000Z'
+  });
+
+  assert.equal(getSavedPlaybackSeconds(second, 'tv', 1, 2), 413.7);
+  assert.equal(getSavedPlaybackDuration(second, 'tv', 1, 2), 2712.4);
+  assert.equal(getSavedPlaybackSeconds(second, 'tv', 1, 3), 12.3);
+  assert.equal(second.progress_seconds, 12);
+});
+
+test('movie checkpoints preserve sub-second local precision and reject short ad samples', () => {
+  const movie = mergePlaybackCheckpoint({}, { id: '99', type: 'movie' }, {
+    seconds: 3671.6,
+    durationSeconds: 7200.2
+  });
+  assert.equal(getSavedPlaybackSeconds(movie, 'movie'), 3671.6);
+  assert.equal(getSavedPlaybackDuration(movie, 'movie'), 7200.2);
+  assert.equal(isPlausiblePlaybackSample({ seconds: 15, durationSeconds: 30 }), false);
+  assert.equal(isPlausiblePlaybackSample({ seconds: 15, durationSeconds: 7200 }), true);
+});
+
+test('native child-frame bridge forwards controls and resumes the content video', () => {
   const listeners = {};
+  const documentListeners = {};
   const messages = [];
+  const videoListeners = {};
   class MockHTMLElement {}
   MockHTMLElement.prototype.click = () => {};
   const parent = { postMessage: message => messages.push(message) };
+  const video = {
+    tagName: 'VIDEO',
+    currentTime: 0,
+    duration: 3600,
+    paused: true,
+    ended: false,
+    readyState: 4,
+    videoWidth: 1920,
+    videoHeight: 1080,
+    addEventListener: (type, listener) => { videoListeners[type] = listener; },
+    getBoundingClientRect: () => ({ width: 1280, height: 720 }),
+    querySelectorAll: () => []
+  };
   const mockWindow = {
     top: {},
     parent,
@@ -83,8 +134,8 @@ test('native child-frame bridge forwards T and mouse activity to the app', () =>
     dispatchEvent: () => {}
   };
   const mockDocument = {
-    addEventListener: () => {},
-    querySelectorAll: () => [],
+    addEventListener: (type, listener) => { documentListeners[type] = listener; },
+    querySelectorAll: selector => selector === 'video' ? [video] : [],
     documentElement: {}
   };
 
@@ -100,6 +151,19 @@ test('native child-frame bridge forwards T and mouse activity to the app', () =>
       MutationObserver: class { observe() {} }
     }
   );
+
+  documentListeners.DOMContentLoaded();
+  listeners.message({
+    source: parent,
+    data: {
+      channel: '__opencloud_player_control_v1__',
+      type: 'resume',
+      seconds: 321.4,
+      durationSeconds: 3600,
+      sessionKey: 'movie:99'
+    }
+  });
+  videoListeners.timeupdate();
 
   let prevented = false;
   let stopped = false;
@@ -117,8 +181,11 @@ test('native child-frame bridge forwards T and mouse activity to the app', () =>
 
   assert.equal(prevented, true);
   assert.equal(stopped, true);
-  assert.deepEqual(
-    messages.map(message => message.type),
-    ['toggle-header', 'pointer-activity']
-  );
+  assert.equal(video.currentTime, 321.4);
+  assert.ok(messages.some(message => message.type === 'resume-applied' && message.sessionKey === 'movie:99'));
+  assert.ok(messages.some(message => message.type === 'playback-progress'
+    && message.sessionKey === 'movie:99'
+    && message.sample.seconds === 321.4));
+  assert.ok(messages.some(message => message.type === 'toggle-header'));
+  assert.ok(messages.some(message => message.type === 'pointer-activity'));
 });

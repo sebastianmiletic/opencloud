@@ -58,8 +58,12 @@ jobs:
           tagName: v__VERSION__
           releaseName: 'Open Cloud v__VERSION__'
           releaseBody: |
-            Open Cloud 3.2.3 keeps the transparent laptop player controls visible for five
-            seconds after mouse activity before automatically hiding them again.
+            Open Cloud 3.3.0 adds precise, automatic playback resume for movies and every
+            saved series episode across all embedded providers. Checkpoints are captured
+            during playback and immediately on pause, seek, episode changes, player close,
+            app backgrounding, and shutdown. Resume survives provider failover, rejects
+            short ad videos, retains offline per-episode history, and safely synchronizes
+            the latest whole-second checkpoint across signed-in devices.
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true
