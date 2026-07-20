@@ -403,12 +403,16 @@
         </button>
       </div>
       <div class="player-header-right">
-        <div class="player-health is-idle" id="playerHealth" role="status" aria-live="polite">
-          <span class="provider-signal" id="playerHealthSignal" aria-hidden="true">
-            <span></span><span></span><span></span><span></span><span></span>
-          </span>
-          <span class="player-health-score" id="playerHealthScore">1/5</span>
-          <span id="playerHealthText">Player idle</span>
+        <div class="player-provider-control" id="playerProviderControl">
+          <button class="player-health is-idle" id="playerHealth" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="playerProviderMenu">
+            <span class="provider-signal" id="playerHealthSignal" aria-hidden="true">
+              <span></span><span></span><span></span><span></span><span></span>
+            </span>
+            <span class="player-health-score" id="playerHealthScore">1/5</span>
+            <span id="playerHealthText" aria-live="polite">Player idle</span>
+            <i class="fas fa-chevron-down player-provider-chevron" aria-hidden="true"></i>
+          </button>
+          <div class="player-provider-menu hidden" id="playerProviderMenu" role="menu" aria-label="Choose playback provider"></div>
         </div>
         <button class="player-header-btn player-retry-btn hidden" id="playerRetryBtn" type="button" aria-label="Retry player" title="Retry player">
           <i class="fas fa-rotate-right" aria-hidden="true"></i>

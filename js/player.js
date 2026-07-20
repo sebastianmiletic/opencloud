@@ -20,9 +20,11 @@ const playerBackBtn = document.getElementById('playerBackBtn');
 const playerNextBtn = document.getElementById('playerNextBtn');
 const playerEpBtn = document.getElementById('playerEpBtn');
 const playerFullscreenBtn = document.getElementById('playerFullscreenBtn');
+const playerProviderControl = document.getElementById('playerProviderControl');
 const playerHealth = document.getElementById('playerHealth');
 const playerHealthText = document.getElementById('playerHealthText');
 const playerHealthScore = document.getElementById('playerHealthScore');
+const playerProviderMenu = document.getElementById('playerProviderMenu');
 const playerRetryBtn = document.getElementById('playerRetryBtn');
 const epPopoverOverlay = document.getElementById('epPopoverOverlay');
 const epPopoverList = document.getElementById('epPopoverList');
@@ -44,6 +46,7 @@ let _lastFrameScore = 1;
 let _currentProviderKey = null;
 let _providerCandidates = [];
 let _attemptedProviders = new Set();
+let _providerSwitchToken = 0;
 let _iframeErrorHandler = null;
 let _metadataFailed = false;
 let _isPlayerFullscreen = false;
@@ -96,7 +99,8 @@ function setPlayerHealth(state, text, retry = false, score = 1, latencyMs = null
   if (playerHealth) {
     playerHealth.className = `player-health is-${state} score-${normalizedScore}`;
     const latency = Number.isFinite(Number(latencyMs)) ? `, ${Math.round(Number(latencyMs))} milliseconds` : '';
-    playerHealth.setAttribute('aria-label', `${providerName(_currentProviderKey)} connection ${normalizedScore} out of 5, ${healthQuality(normalizedScore)}${latency}`);
+    playerHealth.setAttribute('aria-label', `${providerName(_currentProviderKey)} connection ${normalizedScore} out of 5, ${healthQuality(normalizedScore)}${latency}. Change provider`);
+    playerHealth.title = `Change provider. Current source: ${providerName(_currentProviderKey)}`;
   }
   if (playerHealthScore) playerHealthScore.textContent = `${normalizedScore}/5`;
   if (playerHealthText) playerHealthText.textContent = text;
@@ -115,7 +119,151 @@ function providerName(key) {
   return PROVIDERS[key]?.name || 'source';
 }
 
+function isProviderMenuOpen() {
+  return Boolean(playerProviderMenu && !playerProviderMenu.classList.contains('hidden'));
+}
+
+function providerMeta(provider) {
+  return [provider.quality, provider.speed, provider.subtitles ? 'Subtitles' : null]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+function renderProviderMenu() {
+  if (!playerProviderMenu) return;
+  playerProviderMenu.replaceChildren();
+
+  const heading = document.createElement('div');
+  heading.className = 'player-provider-menu-heading';
+  const headingText = document.createElement('span');
+  headingText.textContent = 'Playback source';
+  const headingHint = document.createElement('small');
+  headingHint.textContent = 'Your position is saved';
+  heading.append(headingText, headingHint);
+  playerProviderMenu.appendChild(heading);
+
+  _providerCandidates.forEach((key) => {
+    const provider = PROVIDERS[key];
+    if (!provider) return;
+    const selected = key === _currentProviderKey;
+    const option = document.createElement('button');
+    option.type = 'button';
+    option.className = 'player-provider-option';
+    option.dataset.provider = key;
+    option.setAttribute('role', 'menuitemradio');
+    option.setAttribute('aria-checked', String(selected));
+    option.setAttribute('aria-label', `${provider.name}${selected ? ', current provider' : ''}. ${providerMeta(provider) || 'Playback source'}`);
+
+    const check = document.createElement('span');
+    check.className = 'player-provider-option-check';
+    check.setAttribute('aria-hidden', 'true');
+    check.innerHTML = selected ? '<i class="fas fa-check"></i>' : '<i class="far fa-circle"></i>';
+
+    const copy = document.createElement('span');
+    copy.className = 'player-provider-option-copy';
+    const name = document.createElement('span');
+    name.className = 'player-provider-option-name';
+    name.textContent = provider.name;
+    const meta = document.createElement('span');
+    meta.className = 'player-provider-option-meta';
+    meta.textContent = providerMeta(provider) || 'Playback source';
+    copy.append(name, meta);
+    option.append(check, copy);
+
+    if (provider.rank) {
+      const rank = document.createElement('span');
+      rank.className = 'player-provider-option-rank';
+      rank.textContent = provider.rank;
+      option.appendChild(rank);
+    } else {
+      option.appendChild(document.createElement('span'));
+    }
+    playerProviderMenu.appendChild(option);
+  });
+}
+
+function closeProviderMenu(restoreFocus = false) {
+  if (!playerProviderMenu || !playerHealth) return;
+  playerProviderMenu.classList.add('hidden');
+  playerHealth.setAttribute('aria-expanded', 'false');
+  if (restoreFocus) playerHealth.focus();
+}
+
+function openProviderMenu(focusTarget = null) {
+  if (!playerProviderMenu || !playerHealth || !playerState.id) return;
+  renderProviderMenu();
+  playerProviderMenu.classList.remove('hidden');
+  playerHealth.setAttribute('aria-expanded', 'true');
+  if (!focusTarget) return;
+  requestAnimationFrame(() => {
+    const options = [...playerProviderMenu.querySelectorAll('.player-provider-option')];
+    const selectedIndex = Math.max(0, options.findIndex(option => option.dataset.provider === _currentProviderKey));
+    const index = focusTarget === 'last' ? options.length - 1 : selectedIndex;
+    options[Math.max(0, index)]?.focus();
+  });
+}
+
+function toggleProviderMenu() {
+  if (isProviderMenuOpen()) closeProviderMenu();
+  else openProviderMenu();
+}
+
+function handleProviderMenuKeydown(event) {
+  if (!playerProviderMenu) return;
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    event.stopPropagation();
+    closeProviderMenu(true);
+    return;
+  }
+  if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+  const options = [...playerProviderMenu.querySelectorAll('.player-provider-option')];
+  if (!options.length) return;
+  event.preventDefault();
+  const currentIndex = Math.max(0, options.indexOf(event.target.closest('.player-provider-option')));
+  let nextIndex = currentIndex;
+  if (event.key === 'ArrowDown') nextIndex = (currentIndex + 1) % options.length;
+  if (event.key === 'ArrowUp') nextIndex = (currentIndex - 1 + options.length) % options.length;
+  if (event.key === 'Home') nextIndex = 0;
+  if (event.key === 'End') nextIndex = options.length - 1;
+  options[nextIndex].focus();
+}
+
+async function switchPlayerProvider(providerKey) {
+  if (!PROVIDERS[providerKey] || !_providerCandidates.includes(providerKey)) return false;
+  if (providerKey === _currentProviderKey) {
+    closeProviderMenu(true);
+    return true;
+  }
+
+  const switchToken = ++_providerSwitchToken;
+  const contextKey = playbackContextKey();
+  const previousProvider = _currentProviderKey;
+  closeProviderMenu();
+  setPlayerHealth('switching', `Saving position for ${providerName(providerKey)}…`, false, 2);
+  await requestFreshPlaybackCheckpoint(240).catch(() => false);
+  flushPlaybackCheckpoint();
+
+  if (switchToken !== _providerSwitchToken
+    || contextKey !== playbackContextKey()
+    || previousProvider !== _currentProviderKey
+    || playerOverlay?.classList.contains('hidden')) return false;
+
+  _currentProviderKey = providerKey;
+  _providerProbeFailures = 0;
+  const resumeSeconds = getCurrentResumePoint().seconds;
+  loadPlayerIframe();
+  showToast(
+    resumeSeconds >= 1
+      ? `Switched to ${providerName(providerKey)}. Resuming at ${formatPlaybackTime(resumeSeconds)}.`
+      : `Switched to ${providerName(providerKey)}.`,
+    'info'
+  );
+  return true;
+}
+
 function resetProviderSession(type) {
+  closeProviderMenu();
   _providerCandidates = getProviderCandidates(type);
   _currentProviderKey = _providerCandidates[0] || getSettings().provider;
   _attemptedProviders = new Set();
@@ -266,6 +414,7 @@ function updatePlaybackHealth(detail) {
 
 function tryNextProvider(reason = 'The source did not respond') {
   clearHealthTimer();
+  closeProviderMenu();
   const nextKey = _providerCandidates.find(key => !_attemptedProviders.has(key));
   if (!nextKey) {
     setPlayerHealth('failed', 'No source responded', true, 1);
@@ -874,6 +1023,32 @@ export function initPlayer() {
     resetProviderSession(playerState.type || 'movie');
     loadPlayerIframe();
   });
+  playerHealth?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    toggleProviderMenu();
+  });
+  playerHealth?.addEventListener('keydown', (event) => {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    event.preventDefault();
+    openProviderMenu(event.key === 'ArrowUp' ? 'last' : 'selected');
+  });
+  playerProviderMenu?.addEventListener('click', (event) => {
+    const option = event.target.closest('.player-provider-option');
+    if (!option) return;
+    event.stopPropagation();
+    switchPlayerProvider(option.dataset.provider).catch(error => {
+      console.error('[provider switch]', error);
+      setPlayerHealth('failed', `${providerName(_currentProviderKey)} · Switch failed`, true, 1);
+      showToast('The playback source could not be changed.', 'error');
+    });
+  });
+  playerProviderMenu?.addEventListener('keydown', handleProviderMenuKeydown);
+  playerProviderControl?.addEventListener('focusout', (event) => {
+    if (!event.relatedTarget || !playerProviderControl.contains(event.relatedTarget)) closeProviderMenu();
+  });
+  document.addEventListener('click', (event) => {
+    if (isProviderMenuOpen() && !playerProviderControl?.contains(event.target)) closeProviderMenu();
+  });
   playerFullscreenBtn?.addEventListener('click', togglePlayerFullscreen);
   playerOverlay?.addEventListener('mousemove', showPlayerHeaderForMouseActivity);
   window.addEventListener('opencloud:player-frame-input', (event) => {
@@ -907,7 +1082,10 @@ export function initPlayer() {
       return;
     }
     if (e.key === 'Escape') {
-      if (_isPlayerFullscreen) {
+      if (isProviderMenuOpen()) {
+        e.preventDefault();
+        closeProviderMenu(true);
+      } else if (_isPlayerFullscreen) {
         e.preventDefault();
         setPlayerFullscreen(false);
       } else if (epPopoverOverlay && !epPopoverOverlay.classList.contains('hidden')) {
@@ -981,6 +1159,8 @@ function loadPlayerIframe() {
 
 export function closePlayer() {
   if (!playerOverlay) return;
+  _providerSwitchToken += 1;
+  closeProviderMenu();
   _metadataRequestId += 1;
   setPlayerHeaderAutohide(false, false);
   if (_isPlayerFullscreen) setPlayerFullscreen(false);
@@ -1020,6 +1200,8 @@ export function closePlayer() {
 export async function openPlayer(id, type, season, episode) {
   if (!playerOverlay || !playerFrame) return;
 
+  _providerSwitchToken += 1;
+  closeProviderMenu();
   _lastHeaderToggleAt = Number.NEGATIVE_INFINITY;
   setPlayerHeaderAutohide(getSettings().playerHeaderAutoHide === true, false);
 
@@ -1183,6 +1365,8 @@ function saveCurrentEpisodeElapsed() {
 
 async function switchEpisode(season, episode, knownName = '') {
   if (!playerState.id || playerState.type !== 'tv') return;
+  _providerSwitchToken += 1;
+  closeProviderMenu();
   await requestFreshPlaybackCheckpoint();
   saveCurrentEpisodeElapsed();
   setPlayerState({ ...playerState, season: Number(season), episode: Number(episode) });
@@ -1262,6 +1446,7 @@ function handleSeasonLoadFailure(error) {
 
 function openEpPopover() {
   if (!epPopoverOverlay) return;
+  closeProviderMenu();
   if (!playerState.tmdbData) {
     showToast('Series details are still loading…', 'info');
     return;

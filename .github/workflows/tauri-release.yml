@@ -58,12 +58,11 @@ jobs:
           tagName: v__VERSION__
           releaseName: 'Open Cloud v__VERSION__'
           releaseBody: |
-            Open Cloud 3.4.1 makes playback more resilient on slow and unstable connections.
-            Provider health now follows the real video buffer instead of only the embed page,
-            stalled playback gets a gentle recovery attempt before automatic failover, and
-            switching sources preserves the latest playback position. The player also preloads
-            video, preconnects the next fallback source, and performs less synchronous progress
-            bookkeeping to reduce lag during playback.
+            Open Cloud 3.4.2 adds an in-player provider picker. Select the connection
+            indicator to choose any compatible provider without leaving the movie or episode.
+            Open Cloud checkpoints the current playback position before switching and resumes
+            from that point on the new provider. The picker supports mouse, keyboard, TV remote
+            focus, screen readers, and compact layouts.
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true

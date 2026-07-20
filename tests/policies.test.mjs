@@ -87,6 +87,22 @@ test('provider health maps reachability and latency onto five honest levels', ()
   assert.equal(connectionScoreForLatency(100, 200, false), 1);
 });
 
+test('player provider picker is accessible and checkpoints before switching sources', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const playerSource = readFileSync(new URL('../js/player.js', import.meta.url), 'utf8');
+  assert.match(html, /id="playerHealth"[^>]*aria-haspopup="menu"[^>]*aria-expanded="false"/);
+  assert.match(html, /id="playerProviderMenu"[^>]*role="menu"[^>]*aria-label="Choose playback provider"/);
+
+  const switchStart = playerSource.indexOf('async function switchPlayerProvider(providerKey)');
+  const checkpoint = playerSource.indexOf('await requestFreshPlaybackCheckpoint', switchStart);
+  const providerChange = playerSource.indexOf('_currentProviderKey = providerKey', switchStart);
+  const reload = playerSource.indexOf('loadPlayerIframe()', providerChange);
+  assert.ok(switchStart >= 0);
+  assert.ok(checkpoint > switchStart);
+  assert.ok(providerChange > checkpoint);
+  assert.ok(reload > providerChange);
+});
+
 test('provider health uses actual video buffer depth and media failures', () => {
   assert.equal(connectionScoreForPlayback(45, 4, false, 0), 5);
   assert.equal(connectionScoreForPlayback(18, 4, false, 0), 4);
