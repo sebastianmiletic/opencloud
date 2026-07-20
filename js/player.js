@@ -7,7 +7,7 @@ import { showToast, lockScroll, unlockScroll } from './utils.js';
 import { recordWatchSession } from './supabase.js';
 import { getWatchProgress, saveWatchProgress, syncWatchProgressItem, addToUserHistory } from './storage.js';
 import { invokeDesktop, isTauri, openExternal } from './desktop.js';
-import { connectionScoreForLatency } from './player-health.js';
+import { connectionScoreForLatency, connectionScoreForPlayback, stallThresholdsForConnection } from './player-health.js';
 import { getSavedPlaybackDuration, getSavedPlaybackSeconds, isPlausiblePlaybackSample, mergePlaybackCheckpoint } from './playback-progress.js';
 
 /* DOM refs */
@@ -57,13 +57,22 @@ let _activePlaybackDuration = 0;
 let _activePlaybackFrameSeenAt = 0;
 let _lastPlaybackCheckpoint = null;
 let _lastCloudCheckpointAt = 0;
+let _lastLocalCheckpointAt = 0;
 let _resumeConfirmationKey = null;
 let _checkpointResolvers = [];
 let _sessionResumePoint = null;
+let _playbackWatchdogTimer = null;
+let _playbackBufferingSince = 0;
+let _playbackRecoverySent = false;
+let _playbackLastAdvancedAt = 0;
+let _playbackLastSeconds = null;
+let _playbackSignalsActive = false;
 const _seasonCache = new Map();
+const _preconnectedProviderOrigins = new Set();
 const PLAYER_HEADER_IDLE_MS = 5000;
 const PLAYER_CONTROL_CHANNEL = '__opencloud_player_control_v1__';
 const CLOUD_CHECKPOINT_INTERVAL_MS = 30000;
+const LOCAL_CHECKPOINT_INTERVAL_MS = 5000;
 
 function healthQuality(score) {
   return ['Unavailable', 'Poor', 'Fair', 'Good', 'Excellent'][Math.max(1, Math.min(5, score)) - 1];
@@ -114,6 +123,147 @@ function resetProviderSession(type) {
   _lastFrameScore = 1;
 }
 
+function clearPlaybackWatchdog() {
+  if (_playbackWatchdogTimer) clearTimeout(_playbackWatchdogTimer);
+  _playbackWatchdogTimer = null;
+}
+
+function resetPlaybackMonitoring() {
+  clearPlaybackWatchdog();
+  _playbackBufferingSince = 0;
+  _playbackRecoverySent = false;
+  _playbackLastAdvancedAt = 0;
+  _playbackLastSeconds = null;
+  _playbackSignalsActive = false;
+}
+
+function sendPlaybackRecovery() {
+  const sessionKey = playbackContextKey();
+  if (!playerFrame?.contentWindow || !sessionKey) return;
+  playerFrame.contentWindow.postMessage({
+    channel: PLAYER_CONTROL_CHANNEL,
+    type: 'recover',
+    sessionKey
+  }, '*');
+}
+
+function finishPlaybackStall(sample = null) {
+  const wasBuffering = _playbackBufferingSince > 0;
+  clearPlaybackWatchdog();
+  _playbackBufferingSince = 0;
+  _playbackRecoverySent = false;
+  if (!sample) return;
+  const score = adjustScoreForConnection(connectionScoreForPlayback(
+    sample.bufferedAheadSeconds,
+    sample.readyState,
+    false,
+    sample.mediaErrorCode
+  ));
+  _lastFrameScore = score;
+  setPlayerHealth(score <= 2 ? 'slow' : 'ready', `${providerName(_currentProviderKey)} · ${healthQuality(score)}`, false, score);
+  if (wasBuffering) console.info('[player health] playback recovered');
+}
+
+function evaluatePlaybackStall(providerKey, sessionKey) {
+  _playbackWatchdogTimer = null;
+  if (!_playbackBufferingSince
+    || providerKey !== _currentProviderKey
+    || sessionKey !== playbackContextKey()
+    || playerOverlay?.classList.contains('hidden')) return;
+
+  const thresholds = stallThresholdsForConnection(
+    navigator.connection || navigator.mozConnection || navigator.webkitConnection
+  );
+  const elapsed = Date.now() - _playbackBufferingSince;
+  if (!_playbackRecoverySent && elapsed >= thresholds.recoverAfterMs) {
+    _playbackRecoverySent = true;
+    sendPlaybackRecovery();
+    setPlayerHealth('buffering', `${providerName(providerKey)} · Recovering playback…`, false, 1);
+  }
+
+  if (elapsed >= thresholds.failoverAfterMs) {
+    const reason = `${providerName(providerKey)} kept buffering`;
+    clearPlaybackWatchdog();
+    if (getSettings().autoProviderFailover === true) {
+      requestFreshPlaybackCheckpoint(180).catch(() => false).finally(() => {
+        if (_playbackBufferingSince
+          && providerKey === _currentProviderKey
+          && sessionKey === playbackContextKey()) {
+          _playbackBufferingSince = 0;
+          tryNextProvider(reason);
+        }
+      });
+    } else {
+      _playbackBufferingSince = 0;
+      setPlayerHealth('slow', `${providerName(providerKey)} · Playback stalled`, true, 1);
+    }
+    return;
+  }
+
+  _playbackWatchdogTimer = setTimeout(
+    () => evaluatePlaybackStall(providerKey, sessionKey),
+    Math.min(1000, Math.max(250, thresholds.failoverAfterMs - elapsed))
+  );
+}
+
+function beginPlaybackStall(sample, eventName) {
+  if (sample.paused || sample.ended) return;
+  const now = Date.now();
+  if (!_playbackBufferingSince) {
+    const thresholds = stallThresholdsForConnection(
+      navigator.connection || navigator.mozConnection || navigator.webkitConnection
+    );
+    _playbackBufferingSince = Number(sample.mediaErrorCode) > 0
+      ? now - thresholds.failoverAfterMs + 2500
+      : now;
+    _playbackRecoverySent = false;
+  }
+  const label = Number(sample.mediaErrorCode) > 0 || eventName === 'error'
+    ? 'Playback error'
+    : 'Buffering';
+  setPlayerHealth('buffering', `${providerName(_currentProviderKey)} · ${label}…`, false, 1);
+  if (!_playbackWatchdogTimer) {
+    _playbackWatchdogTimer = setTimeout(
+      () => evaluatePlaybackStall(_currentProviderKey, playbackContextKey()),
+      500
+    );
+  }
+}
+
+function updatePlaybackHealth(detail) {
+  const sample = detail.sample || {};
+  const eventName = String(detail.eventName || '');
+  const now = Date.now();
+  const seconds = Number(sample.seconds);
+  const previousSeconds = _playbackLastSeconds;
+  const advanced = Number.isFinite(previousSeconds)
+    && Number.isFinite(seconds)
+    && (seconds > previousSeconds + 0.2 || seconds < previousSeconds - 1);
+
+  _playbackSignalsActive = true;
+  if (Number.isFinite(seconds)) _playbackLastSeconds = seconds;
+
+  if (sample.paused || sample.ended || eventName === 'pause' || eventName === 'ended') {
+    clearPlaybackWatchdog();
+    _playbackBufferingSince = 0;
+    _playbackRecoverySent = false;
+    return;
+  }
+
+  if (advanced || eventName === 'playing' || eventName === 'seeked') {
+    _playbackLastAdvancedAt = now;
+    finishPlaybackStall(sample);
+    return;
+  }
+
+  const explicitStall = ['waiting', 'stalled', 'error', 'abort'].includes(eventName)
+    || Number(sample.mediaErrorCode) > 0;
+  const stoppedAdvancing = _playbackLastAdvancedAt > 0
+    && now - _playbackLastAdvancedAt >= 3500
+    && ['heartbeat', 'recovery-attempt'].includes(eventName);
+  if (explicitStall || stoppedAdvancing) beginPlaybackStall(sample, eventName);
+}
+
 function tryNextProvider(reason = 'The source did not respond') {
   clearHealthTimer();
   const nextKey = _providerCandidates.find(key => !_attemptedProviders.has(key));
@@ -162,6 +312,12 @@ async function probeCurrentProvider() {
     const measuredScore = connectionScoreForLatency(result?.latencyMs, result?.status, result?.reachable);
     const statusRejectedProbe = Number(result?.status) >= 400 && Number(result?.status) < 500 && result?.reachable;
     const score = adjustScoreForConnection(statusRejectedProbe ? _lastFrameScore : measuredScore);
+    const playbackRecentlyAdvanced = _playbackSignalsActive
+      && Date.now() - _playbackLastAdvancedAt < 8000;
+    if (playbackRecentlyAdvanced) {
+      _providerProbeFailures = 0;
+      return;
+    }
     if (score === 1) _providerProbeFailures += 1;
     else _providerProbeFailures = 0;
 
@@ -170,11 +326,13 @@ async function probeCurrentProvider() {
       return;
     }
 
+    if (_playbackBufferingSince) return;
     const state = score <= 2 ? 'slow' : 'ready';
     setPlayerHealth(state, `${providerName(providerKey)} · ${healthQuality(score)}`, score <= 1, score, result?.latencyMs);
   } catch (error) {
     if (probeToken !== _providerProbeToken || providerKey !== _currentProviderKey) return;
     console.warn('[provider probe]', error);
+    if (_playbackSignalsActive && Date.now() - _playbackLastAdvancedAt < 8000) return;
     _providerProbeFailures += 1;
     if (_providerProbeFailures >= 2 && getSettings().autoProviderFailover === true) {
       tryNextProvider(`${providerName(providerKey)} stopped responding`);
@@ -325,14 +483,6 @@ function persistPlaybackSample(detail, forceCloud = false) {
   const context = currentPlaybackContext();
   if (!context) return false;
   const now = Date.now();
-  const progress = getCurrentProgress();
-  const merged = mergePlaybackCheckpoint(progress[context.id], context, {
-    seconds: detail.sample.seconds,
-    durationSeconds: detail.sample.durationSeconds,
-    updatedAt: new Date(now).toISOString()
-  });
-  progress[context.id] = merged;
-  setCurrentProgress(progress);
   _lastPlaybackCheckpoint = { contextKey: playbackContextKey(context), detail };
   if (_sessionResumePoint?.contextKey === _lastPlaybackCheckpoint.contextKey
     && Number(detail.sample.seconds) >= _sessionResumePoint.seconds - 2) {
@@ -340,6 +490,18 @@ function persistPlaybackSample(detail, forceCloud = false) {
   }
   const checkpointResolvers = _checkpointResolvers.splice(0);
   checkpointResolvers.forEach(resolve => resolve(true));
+
+  const shouldPersistLocal = forceCloud || now - _lastLocalCheckpointAt >= LOCAL_CHECKPOINT_INTERVAL_MS;
+  if (!shouldPersistLocal) return true;
+  _lastLocalCheckpointAt = now;
+  const progress = { ...getCurrentProgress() };
+  const merged = mergePlaybackCheckpoint(progress[context.id], context, {
+    seconds: detail.sample.seconds,
+    durationSeconds: detail.sample.durationSeconds,
+    updatedAt: new Date(now).toISOString()
+  });
+  progress[context.id] = merged;
+  setCurrentProgress(progress);
 
   const shouldSyncCloud = forceCloud || now - _lastCloudCheckpointAt >= CLOUD_CHECKPOINT_INTERVAL_MS;
   if (shouldSyncCloud) {
@@ -367,7 +529,7 @@ function handlePlayerFrameInput(detail) {
   if (detail?.type === 'bridge-ready') sendResumeToProviderFrames();
   if (detail?.type === 'playback-progress') {
     const forceCloud = ['pause', 'seeked', 'ended', 'pagehide'].includes(detail.eventName);
-    persistPlaybackSample(detail, forceCloud);
+    if (persistPlaybackSample(detail, forceCloud)) updatePlaybackHealth(detail);
   }
   if (detail?.type === 'resume-applied') {
     if (detail.sessionKey !== playbackContextKey()) return;
@@ -552,7 +714,9 @@ function attachIframeLoadListener() {
     const score = adjustScoreForConnection(connectionScoreForLatency(latency));
     _lastFrameScore = score;
     _providerProbeFailures = 0;
-    setPlayerHealth(score <= 2 ? 'slow' : 'ready', `${providerName(_currentProviderKey)} · ${healthQuality(score)}`, false, score, latency);
+    if (!_playbackSignalsActive && !_playbackBufferingSince) {
+      setPlayerHealth(score <= 2 ? 'slow' : 'ready', `${providerName(_currentProviderKey)} · ${healthQuality(score)}`, false, score, latency);
+    }
     startProviderHealthProbes();
     scheduleResumeAttempts();
   };
@@ -755,12 +919,25 @@ export function initPlayer() {
   });
 }
 
-function getPlayerSrc() {
+function getPlayerSrc(providerKey = _currentProviderKey) {
   const p = playerState;
   if (p.type === 'movie') {
-    return getProviderUrlFor(_currentProviderKey, 'movie', p.id);
+    return getProviderUrlFor(providerKey, 'movie', p.id);
   }
-  return getProviderUrlFor(_currentProviderKey, 'tv', p.id, p.season, p.episode);
+  return getProviderUrlFor(providerKey, 'tv', p.id, p.season, p.episode);
+}
+
+function preconnectProvider(url) {
+  try {
+    const origin = new URL(url).origin;
+    if (_preconnectedProviderOrigins.has(origin)) return;
+    _preconnectedProviderOrigins.add(origin);
+    const link = document.createElement('link');
+    link.rel = 'preconnect';
+    link.href = origin;
+    link.crossOrigin = 'anonymous';
+    document.head.appendChild(link);
+  } catch (_) {}
 }
 
 function loadPlayerIframe() {
@@ -770,6 +947,7 @@ function loadPlayerIframe() {
   _activePlaybackFrameId = null;
   _activePlaybackDuration = 0;
   _activePlaybackFrameSeenAt = 0;
+  resetPlaybackMonitoring();
   const resumePoint = getCurrentResumePoint();
   _sessionResumePoint = {
     contextKey: playbackContextKey(),
@@ -784,11 +962,21 @@ function loadPlayerIframe() {
   _frameLoadStartedAt = performance.now();
   _lastFrameScore = 1;
   setPlayerHealth('connecting', `Connecting to ${providerName(_currentProviderKey)}…`, false, 2);
-  playerFrame.src = getPlayerSrc();
+  const playerSrc = getPlayerSrc();
+  preconnectProvider(playerSrc);
+  if (getSettings().autoProviderFailover === true) {
+    const nextProvider = _providerCandidates.find(key => key !== _currentProviderKey && !_attemptedProviders.has(key));
+    if (nextProvider) preconnectProvider(getPlayerSrc(nextProvider));
+  }
+  playerFrame.loading = 'eager';
+  playerFrame.setAttribute('fetchpriority', 'high');
+  playerFrame.src = playerSrc;
   scheduleResumeAttempts();
+  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  const initialLoadTimeoutMs = stallThresholdsForConnection(connection).failoverAfterMs === 20000 ? 20000 : 12000;
   _healthTimer = setTimeout(() => {
     handleProviderFailure(`${providerName(_currentProviderKey)} is taking too long`);
-  }, 12000);
+  }, initialLoadTimeoutMs);
 }
 
 export function closePlayer() {
@@ -803,6 +991,7 @@ export function closePlayer() {
   stopProgressInterval();
   stopFrameMonitoring();
   clearHealthTimer();
+  resetPlaybackMonitoring();
   stopProviderHealthProbes();
   recordCurrentSession();
   detachWatchActivityListeners();
@@ -864,6 +1053,7 @@ export async function openPlayer(id, type, season, episode) {
   _activePlaybackFrameSeenAt = 0;
   _lastPlaybackCheckpoint = null;
   _lastCloudCheckpointAt = 0;
+  _lastLocalCheckpointAt = 0;
   _resumeConfirmationKey = null;
   resetProviderSession(type);
   _metadataFailed = false;

@@ -2497,9 +2497,11 @@ body.device-laptop .player-overlay.player-header-autohide .player-health {
 
 .player-health.is-connecting,
 .player-health.is-switching { color: oklch(0.78 0.13 75); }
-.player-health.is-connecting .provider-signal { animation: healthPulse 1.2s ease-in-out infinite; }
+.player-health.is-connecting .provider-signal,
+.player-health.is-buffering .provider-signal { animation: healthPulse 1.2s ease-in-out infinite; }
 .player-health.is-ready { color: oklch(0.76 0.14 145); }
-.player-health.is-slow { color: oklch(0.78 0.13 75); }
+.player-health.is-slow,
+.player-health.is-buffering { color: oklch(0.78 0.13 75); }
 .player-health.is-failed { color: oklch(0.67 0.2 28); }
 
 @keyframes healthPulse {

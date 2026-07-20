@@ -3,7 +3,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import { resolveUpNextEpisode } from '../js/series.js';
-import { connectionScoreForLatency } from '../js/player-health.js';
+import {
+  connectionScoreForLatency,
+  connectionScoreForPlayback,
+  stallThresholdsForConnection
+} from '../js/player-health.js';
 import { getProviderUrlFor, PROVIDERS } from '../js/config.js';
 import {
   getSavedPlaybackDuration,
@@ -83,6 +87,26 @@ test('provider health maps reachability and latency onto five honest levels', ()
   assert.equal(connectionScoreForLatency(100, 200, false), 1);
 });
 
+test('provider health uses actual video buffer depth and media failures', () => {
+  assert.equal(connectionScoreForPlayback(45, 4, false, 0), 5);
+  assert.equal(connectionScoreForPlayback(18, 4, false, 0), 4);
+  assert.equal(connectionScoreForPlayback(7, 3, false, 0), 3);
+  assert.equal(connectionScoreForPlayback(1, 2, false, 0), 2);
+  assert.equal(connectionScoreForPlayback(60, 4, true, 0), 1);
+  assert.equal(connectionScoreForPlayback(60, 4, false, 2), 1);
+});
+
+test('stall recovery gives weak connections time to refill before failover', () => {
+  assert.deepEqual(stallThresholdsForConnection({ effectiveType: '4g', downlink: 20 }), {
+    recoverAfterMs: 4000,
+    failoverAfterMs: 14000
+  });
+  assert.deepEqual(stallThresholdsForConnection({ effectiveType: '3g', downlink: 2 }), {
+    recoverAfterMs: 5000,
+    failoverAfterMs: 20000
+  });
+});
+
 test('Plasma is marked new and generates exact movie and TV embed URLs', () => {
   assert.equal(PROVIDERS.vsembed.name, 'Plasma');
   assert.equal(PROVIDERS.vsembed.rank, 'New');
@@ -125,6 +149,7 @@ test('native child-frame bridge forwards controls and resumes the content video'
   const documentListeners = {};
   const messages = [];
   const videoListeners = {};
+  let recoveryPlayCalls = 0;
   class MockHTMLElement {}
   MockHTMLElement.prototype.click = () => {};
   const parent = { postMessage: message => messages.push(message) };
@@ -135,9 +160,21 @@ test('native child-frame bridge forwards controls and resumes the content video'
     paused: true,
     ended: false,
     readyState: 4,
+    networkState: 1,
+    buffered: {
+      length: 1,
+      start: () => 0,
+      end: () => 360
+    },
+    error: null,
     videoWidth: 1920,
     videoHeight: 1080,
     addEventListener: (type, listener) => { videoListeners[type] = listener; },
+    setAttribute: () => {},
+    play: () => {
+      recoveryPlayCalls += 1;
+      return Promise.resolve();
+    },
     getBoundingClientRect: () => ({ width: 1280, height: 720 }),
     querySelectorAll: () => []
   };
@@ -180,6 +217,16 @@ test('native child-frame bridge forwards controls and resumes the content video'
     }
   });
   videoListeners.timeupdate();
+  video.paused = false;
+  videoListeners.waiting();
+  listeners.message({
+    source: parent,
+    data: {
+      channel: '__opencloud_player_control_v1__',
+      type: 'recover',
+      sessionKey: 'movie:99'
+    }
+  });
 
   let prevented = false;
   let stopped = false;
@@ -201,7 +248,10 @@ test('native child-frame bridge forwards controls and resumes the content video'
   assert.ok(messages.some(message => message.type === 'resume-applied' && message.sessionKey === 'movie:99'));
   assert.ok(messages.some(message => message.type === 'playback-progress'
     && message.sessionKey === 'movie:99'
-    && message.sample.seconds === 321.4));
+    && message.sample.seconds === 321.4
+    && Math.abs(message.sample.bufferedAheadSeconds - 38.6) < 0.01));
+  assert.ok(messages.some(message => message.type === 'playback-progress' && message.eventName === 'waiting'));
+  assert.equal(recoveryPlayCalls, 1);
   assert.ok(messages.some(message => message.type === 'toggle-header'));
   assert.ok(messages.some(message => message.type === 'pointer-activity'));
 });

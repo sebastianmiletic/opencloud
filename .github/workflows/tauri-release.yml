@@ -58,11 +58,12 @@ jobs:
           tagName: v__VERSION__
           releaseName: 'Open Cloud v__VERSION__'
           releaseBody: |
-            Open Cloud 3.4.0 adds Plasma, a new movie and series provider powered by
-            VSEmbed, with the same health monitoring, failover, blocker, fullscreen, and
-            resume support as every other source. The home screen now has one clearer
-            Continue Watching row that resumes unfinished episodes or advances completed
-            episodes automatically, with less duplicated loading work.
+            Open Cloud 3.4.1 makes playback more resilient on slow and unstable connections.
+            Provider health now follows the real video buffer instead of only the embed page,
+            stalled playback gets a gentle recovery attempt before automatic failover, and
+            switching sources preserves the latest playback position. The player also preloads
+            video, preconnects the next fallback source, and performs less synchronous progress
+            bookkeeping to reduce lag during playback.
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true

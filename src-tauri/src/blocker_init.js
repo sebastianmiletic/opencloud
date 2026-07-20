@@ -73,12 +73,27 @@
 
   const videoSample = (video) => {
     const rect = video.getBoundingClientRect?.();
+    const currentTime = Number(video.currentTime);
+    let bufferedAheadSeconds = 0;
+    try {
+      for (let index = 0; index < video.buffered.length; index += 1) {
+        const start = Number(video.buffered.start(index));
+        const end = Number(video.buffered.end(index));
+        if (currentTime >= start - 0.25 && currentTime <= end + 0.25) {
+          bufferedAheadSeconds = Math.max(0, end - currentTime);
+          break;
+        }
+      }
+    } catch (_) {}
     return {
-      seconds: Number(video.currentTime),
+      seconds: currentTime,
       durationSeconds: Number(video.duration),
       paused: !!video.paused,
       ended: !!video.ended,
       readyState: Number(video.readyState) || 0,
+      networkState: Number(video.networkState) || 0,
+      bufferedAheadSeconds,
+      mediaErrorCode: Number(video.error?.code) || 0,
       width: Number(video.videoWidth) || 0,
       height: Number(video.videoHeight) || 0,
       area: Math.max(0, Number(rect?.width) || 0) * Math.max(0, Number(rect?.height) || 0)
@@ -123,6 +138,10 @@
     if (!video || instrumentedVideos.has(video)) return;
     instrumentedVideos.add(video);
     trackedVideos.add(video);
+    try {
+      video.preload = 'auto';
+      video.setAttribute?.('preload', 'auto');
+    } catch (_) {}
     ['loadedmetadata', 'durationchange', 'canplay'].forEach((eventName) => {
       video.addEventListener(eventName, () => {
         applyPendingResume(video);
@@ -136,8 +155,35 @@
         reportVideoProgress(video, eventName, true);
       }, true);
     });
+    ['waiting', 'stalled', 'error', 'abort'].forEach((eventName) => {
+      video.addEventListener(eventName, () => reportVideoProgress(video, eventName, true), true);
+    });
     video.addEventListener('emptied', () => appliedResumeTargets.delete(video), true);
     applyPendingResume(video);
+  };
+
+  const recoverVideo = (video) => {
+    if (!video || video.ended || Number(video.duration) < MIN_CONTENT_DURATION_SECONDS) return;
+    try {
+      video.preload = 'auto';
+      video.setAttribute?.('preload', 'auto');
+      if (video.error) {
+        const target = Number(video.currentTime) || Number(pendingResume.seconds) || 0;
+        const resumeAfterLoad = () => {
+          try {
+            if (target > 0 && Number(video.duration) > target + 2) video.currentTime = target;
+            video.play?.().catch?.(() => {});
+          } catch (_) {}
+        };
+        video.addEventListener('canplay', resumeAfterLoad, { once: true, capture: true });
+        video.load?.();
+      } else if (!video.paused) {
+        const target = Number(video.currentTime);
+        if (Number.isFinite(target) && target > 0) video.currentTime = target;
+        video.play?.().catch?.(() => {});
+      }
+      reportVideoProgress(video, 'recovery-attempt', true);
+    } catch (_) {}
   };
 
   const scanForVideos = (root = document) => {
@@ -219,6 +265,11 @@
         scanForVideos();
         flushVideoProgress();
         broadcastPlayerControl('checkpoint');
+      } else if (data.type === 'recover') {
+        pendingResume.sessionKey = String(data.sessionKey || pendingResume.sessionKey || '').slice(0, 160);
+        scanForVideos();
+        try { trackedVideos.forEach(recoverVideo); } catch (_) {}
+        broadcastPlayerControl('recover');
       }
       return;
     }
@@ -319,6 +370,15 @@
   document.addEventListener('DOMContentLoaded', () => {
     scanForVideos();
     forwardPlayerInput('bridge-ready');
+    if (typeof setInterval === 'function') {
+      setInterval(() => {
+        try {
+          trackedVideos.forEach((video) => {
+            if (!video.paused && !video.ended) reportVideoProgress(video, 'heartbeat', true);
+          });
+        } catch (_) {}
+      }, 2000);
+    }
     const observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
         for (const node of mutation.addedNodes) {

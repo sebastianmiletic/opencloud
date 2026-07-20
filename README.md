@@ -7,7 +7,7 @@ A black-and-white themed Tauri desktop streaming tracker with TMDB/OMDB integrat
 ## How to Download & Install
 
 <p align="center">
-  <a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud_3.4.0_universal.dmg"><img src="https://img.shields.io/badge/Download-macOS%20(.dmg)-black?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS"></a>&nbsp;&nbsp;<a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud_3.4.0_x64-setup.exe"><img src="https://img.shields.io/badge/Download-Windows%20(.exe)-black?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows"></a>
+  <a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud_3.4.1_universal.dmg"><img src="https://img.shields.io/badge/Download-macOS%20(.dmg)-black?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS"></a>&nbsp;&nbsp;<a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud_3.4.1_x64-setup.exe"><img src="https://img.shields.io/badge/Download-Windows%20(.exe)-black?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows"></a>
 </p>
 
 <p align="center">
@@ -23,7 +23,7 @@ A black-and-white themed Tauri desktop streaming tracker with TMDB/OMDB integrat
 ### macOS (Recommended — DMG)
 
 1. **Download the DMG**
-   - Click the **macOS (.dmg)** button above, or go to the [Releases page](https://github.com/sebastianmiletic/opencloud/releases/latest) and download `OpenCloud_3.4.0_universal.dmg`
+   - Click the **macOS (.dmg)** button above, or go to the [Releases page](https://github.com/sebastianmiletic/opencloud/releases/latest) and download `OpenCloud_3.4.1_universal.dmg`
 
 2. **Install the app**
    - Open the downloaded `OpenCloud.dmg`
@@ -43,7 +43,7 @@ A black-and-white themed Tauri desktop streaming tracker with TMDB/OMDB integrat
 ### Windows (Recommended — EXE)
 
 1. **Download the Installer**
-   - Click the **Windows (.exe)** button above, or go to the [Releases page](https://github.com/sebastianmiletic/opencloud/releases/latest) and download `OpenCloud_3.4.0_x64-setup.exe`
+   - Click the **Windows (.exe)** button above, or go to the [Releases page](https://github.com/sebastianmiletic/opencloud/releases/latest) and download `OpenCloud_3.4.1_x64-setup.exe`
 
 2. **Run the installer**
    - Double-click the downloaded `OpenCloud.exe`
