@@ -1,0 +1,53 @@
+name: Build Windows hotfix
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    env:
+      RUST_BACKTRACE: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - name: Build signed Windows installer
+        run: npm run tauri:build:win
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      - name: Verify the application is a Windows GUI executable
+        shell: pwsh
+        run: |
+          $app = Resolve-Path "src-tauri/target/x86_64-pc-windows-msvc/release/opencloud.exe"
+          $bytes = [System.IO.File]::ReadAllBytes($app)
+          $peOffset = [BitConverter]::ToInt32($bytes, 0x3c)
+          $optionalHeader = $peOffset + 24
+          $subsystem = [BitConverter]::ToUInt16($bytes, $optionalHeader + 68)
+          Write-Host "Executable: $app"
+          Write-Host "PE subsystem: $subsystem (2 = Windows GUI, 3 = Windows console)"
+          if ($subsystem -ne 2) {
+            throw "Expected Windows GUI subsystem (2), got $subsystem"
+          }
+      - name: Upload Windows release files
+        uses: actions/upload-artifact@v4
+        with:
+          name: opencloud-windows-v3.4.2
+          if-no-files-found: error
+          path: |
+            src-tauri/target/x86_64-pc-windows-msvc/release/opencloud.exe
+            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/OpenCloud_3.4.2_x64-setup.exe
+            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/OpenCloud_3.4.2_x64-setup.exe.sig
