@@ -1,7 +1,26 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(19);
+select plan(21);
+
+select is(
+  has_function_privilege('anon', 'public.handle_new_user()', 'EXECUTE'),
+  false,
+  'anonymous clients cannot invoke the auth trigger function'
+);
+select ok(
+  not exists (
+    select 1
+    from pg_policies
+    where schemaname = 'public'
+      and tablename in (
+        'profiles', 'collections', 'watch_history', 'watch_progress',
+        'user_settings', 'watch_sessions', 'app_installations'
+      )
+      and ('public' = any(roles) or 'anon' = any(roles))
+  ),
+  'application RLS policies apply explicitly to authenticated users only'
+);
 
 insert into auth.users(
   id, aud, role, email, encrypted_password, email_confirmed_at,
