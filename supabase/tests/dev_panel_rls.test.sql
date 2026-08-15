@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(21);
+select plan(24);
 
 select is(
   has_function_privilege('anon', 'public.handle_new_user()', 'EXECUTE'),
@@ -38,6 +38,37 @@ select is(
   '11111111-1111-4111-8111-111111111111'::uuid,
   'owner is privately provisioned from a confirmed email'
 );
+
+update auth.users
+set is_anonymous = true
+where id = '22222222-2222-4222-8222-222222222222';
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '22222222-2222-4222-8222-222222222222', true);
+select is(
+  public.account_is_active(),
+  false,
+  'anonymous auth users are not active OpenCloud accounts'
+);
+select is(
+  public.get_my_access()->>'state',
+  'signed_out',
+  'anonymous auth users receive no application session access'
+);
+select throws_ok(
+  $$select public.heartbeat_installation(
+    'cccccccc-cccc-4ccc-8ccc-cccccccccccc'::uuid,
+    '3.5.0', 'macos', 'aarch64'
+  )$$,
+  '42501',
+  'Active account required',
+  'anonymous auth users cannot register installations'
+);
+
+reset role;
+update auth.users
+set is_anonymous = false
+where id = '22222222-2222-4222-8222-222222222222';
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '22222222-2222-4222-8222-222222222222', true);
