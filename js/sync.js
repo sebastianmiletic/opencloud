@@ -306,11 +306,13 @@ export async function getMyAccess() {
 }
 
 export async function heartbeatInstallation(installation) {
-  return callRpc('heartbeat_installation', {
+  return callRpc('heartbeat_app_activity', {
     p_install_id: installation.installId,
+    p_session_id: installation.sessionId,
     p_app_version: installation.appVersion,
     p_platform: installation.platform,
-    p_architecture: installation.architecture
+    p_architecture: installation.architecture,
+    p_device_kind: installation.deviceKind
   });
 }
 
@@ -333,6 +335,14 @@ export async function fetchDevUserDetail(userId) {
 
 export async function suspendDevUser(userId, reason = '') {
   return callRpc('dev_suspend_user', { p_user_id: userId, p_reason: reason });
+}
+
+export async function banDevUser(userId, reason = '') {
+  return callRpc('dev_ban_user', { p_user_id: userId, p_reason: reason });
+}
+
+export async function forceSignOutDevUser(userId) {
+  return callRpc('dev_force_sign_out', { p_user_id: userId });
 }
 
 export async function restoreDevUser(userId) {

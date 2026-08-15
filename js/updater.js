@@ -15,6 +15,7 @@ function elements() {
     subtitle: document.getElementById('updateModalSubtitle'),
     message: document.getElementById('updateModalMsg'),
     install: document.getElementById('updateModalInstallBtn'),
+    later: document.getElementById('updateModalLaterBtn'),
     upToDate: document.getElementById('updateModalUpToDate')
   };
 }
@@ -26,6 +27,7 @@ function setCheckingUI() {
   if (ui.subtitle) ui.subtitle.textContent = 'Contacting the signed release channel';
   if (ui.message) ui.message.textContent = 'Checking…';
   if (ui.install) ui.install.style.display = 'none';
+  if (ui.later) ui.later.style.display = 'none';
   if (ui.upToDate) ui.upToDate.style.display = 'none';
 }
 
@@ -40,6 +42,7 @@ function showAvailableUpdate(update) {
     ui.install.disabled = false;
     ui.install.innerHTML = '<i class="fas fa-rotate-right" style="margin-right:0.4rem;"></i>Install and Restart';
   }
+  if (ui.later) ui.later.style.display = 'block';
   if (ui.upToDate) ui.upToDate.style.display = 'none';
   requestAnimationFrame(() => ui.install?.focus({ preventScroll: true }));
 }
@@ -55,6 +58,7 @@ async function checkForUpdate({ interactive = false } = {}) {
       if (ui.subtitle) ui.subtitle.textContent = 'No newer signed release is available';
       if (ui.message) ui.message.textContent = 'You already have the latest version installed.';
       if (ui.upToDate) ui.upToDate.style.display = 'block';
+      if (ui.later) ui.later.style.display = 'none';
       return null;
     }
     showAvailableUpdate(availableUpdate);
@@ -118,6 +122,7 @@ export function initUpdater(button, accountDropdown) {
     ui.close?.addEventListener('click', () => { if (!installing) ui.modal?.classList.add('hidden'); });
     ui.modal?.querySelector('.modal-overlay')?.addEventListener('click', () => { if (!installing) ui.modal?.classList.add('hidden'); });
     ui.install?.addEventListener('click', installUpdate);
+    ui.later?.addEventListener('click', () => ui.modal?.classList.add('hidden'));
 
     listenNativeEvent('opencloud:update-progress', (progress) => {
       downloadedBytes += Number(progress?.chunkLength) || 0;

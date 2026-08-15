@@ -4537,7 +4537,7 @@ body.device-phone .player-header-btn span {
 
 .dev-summary {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   border-bottom: 1px solid var(--border-color);
 }
 
@@ -4625,7 +4625,7 @@ body.device-phone .player-header-btn span {
 
 .dev-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 430px);
   min-height: 490px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
@@ -4749,6 +4749,13 @@ body.device-phone .player-header-btn span {
   color: oklch(0.7 0.12 25);
 }
 
+.dev-status.banned {
+  color: #ef6f68;
+  color: oklch(0.67 0.17 25);
+}
+
+.dev-status.banned::before { background: currentColor; }
+
 .dev-status.suspended::before {
   background: currentColor;
 }
@@ -4866,6 +4873,32 @@ body.device-phone .player-header-btn span {
   list-style: none;
 }
 
+.dev-detail-section .dev-detail-list {
+  max-height: 13rem;
+  overflow-y: auto;
+}
+
+.dev-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--border-color);
+}
+
+.dev-stat-grid > div {
+  min-width: 0;
+  padding: 0.65rem;
+  background: var(--bg-secondary);
+}
+
+.dev-stat-grid span,
+.dev-stat-grid strong { display: block; }
+.dev-stat-grid span { color: var(--text-muted); font-size: 0.65rem; }
+.dev-stat-grid strong { margin-top: 0.2rem; color: var(--text-primary); font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+
 .dev-detail-list li {
   display: grid;
   gap: 0.15rem;
@@ -4894,6 +4927,22 @@ body.device-phone .player-header-btn span {
   color: oklch(0.7 0.12 25);
   border-color: currentColor;
 }
+
+.dev-access-actions .warning { color: #d6a85f; border-color: currentColor; }
+
+.dev-action-confirm {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  padding: 0.65rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+}
+
+.dev-action-confirm p { grid-column: 1 / -1; max-width: none; white-space: normal; }
+
+.update-modal-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.6rem; }
 
 .dev-privacy {
   max-width: 90ch;

@@ -11,6 +11,11 @@ const migration = readFileSync(
   new URL('../supabase/migrations/202608140001_owner_dev_panel.sql', import.meta.url),
   'utf8'
 );
+const activityMigration = readFileSync(
+  new URL('../supabase/migrations/202608150003_dev_activity_and_controls.sql', import.meta.url),
+  'utf8'
+);
+const updaterSource = readFileSync(new URL('../js/updater.js', import.meta.url), 'utf8');
 
 test('legacy client-side admin activation is removed', () => {
   assert.doesNotMatch(html, /activationKey|activateBtn|adminTabBtn/);
@@ -23,7 +28,8 @@ test('legacy client-side admin activation is removed', () => {
 test('Dev workspace is hidden by default and identifies its private data boundary', () => {
   assert.match(html, /class="dropdown-item hidden"[^>]*id="devPanelBtn"/);
   assert.match(html, /id="devView"[^>]*class="dev-view hidden"/);
-  assert.match(html, /does not collect passwords, authentication tokens, IP addresses, hardware fingerprints, or viewing activity/);
+  assert.match(html, /does not expose passwords, authentication tokens, IP addresses, or hardware fingerprints/);
+  assert.match(html, /Owner-only analytics include app version, device layout/);
 });
 
 test('Dev user content is rendered through text nodes rather than HTML interpolation', () => {
@@ -38,16 +44,41 @@ test('installation identity is random, stable, and contains only runtime metadat
     getItem: key => values.get(key) ?? null,
     setItem: (key, value) => values.set(key, String(value))
   };
+  globalThis.sessionStorage = {
+    getItem: key => values.get(`session:${key}`) ?? null,
+    setItem: (key, value) => values.set(`session:${key}`, String(value))
+  };
   const env = { APP_VERSION: '3.5.0', APP_PLATFORM: 'macos', APP_ARCHITECTURE: 'aarch64' };
   const first = getInstallationIdentity(env);
   const second = getInstallationIdentity(env);
   assert.equal(first.installId, second.installId);
   assert.equal(validInstallationId(first.installId), true);
   assert.deepEqual(
-    { appVersion: first.appVersion, platform: first.platform, architecture: first.architecture },
-    { appVersion: '3.5.0', platform: 'macos', architecture: 'aarch64' }
+    { appVersion: first.appVersion, platform: first.platform, architecture: first.architecture, deviceKind: first.deviceKind },
+    { appVersion: '3.5.0', platform: 'macos', architecture: 'aarch64', deviceKind: 'laptop' }
   );
-  assert.deepEqual(Object.keys(first).sort(), ['appVersion', 'architecture', 'installId', 'platform']);
+  assert.equal(first.sessionId, second.sessionId);
+  assert.equal(validInstallationId(first.sessionId), true);
+  assert.deepEqual(Object.keys(first).sort(), ['appVersion', 'architecture', 'deviceKind', 'installId', 'platform', 'sessionId']);
+});
+
+test('owner-only activity and separate controls remain behind restricted RPCs', () => {
+  assert.match(activityMigration, /perform private\.assert_dev_owner\(\)/);
+  assert.match(activityMigration, /dev_force_sign_out/);
+  assert.match(activityMigration, /dev_suspend_user/);
+  assert.match(activityMigration, /dev_ban_user/);
+  assert.match(activityMigration, /dev_restore_user/);
+  assert.match(activityMigration, /appActiveSeconds/);
+  assert.match(activityMigration, /recentViewing/);
+  assert.match(activityMigration, /recentSessions/);
+  assert.doesNotMatch(activityMigration, /encrypted_password|last_sign_in_ip|raw_app_meta_data/);
+});
+
+test('desktop updater checks at launch and waits for explicit installation approval', () => {
+  assert.match(updaterSource, /startLaunchCheck\(\)/);
+  assert.match(updaterSource, /checkForUpdate\(\{ interactive: false \}\)/);
+  assert.match(updaterSource, /addEventListener\('click', installUpdate\)/);
+  assert.match(html, /id="updateModalLaterBtn">Later</);
 });
 
 test('online presence expires after two minutes', () => {

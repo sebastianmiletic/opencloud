@@ -58,12 +58,13 @@ jobs:
           tagName: v__VERSION__
           releaseName: 'Open Cloud v__VERSION__'
           releaseBody: |
-            Open Cloud 3.5.0 adds a server-authorized owner Dev workspace for account,
-            signed-in installation, version, platform, and live-presence monitoring. The owner
-            can suspend an account with forced sign-out and restore it later without deleting
-            user data. Profile emails are no longer publicly enumerable, authorization is
-            enforced in Supabase, and passwords, tokens, IP addresses, hardware fingerprints,
-            and viewing activity are excluded from the Dev data contract.
+            Open Cloud 3.6.0 expands the server-authorized owner Dev workspace with app version,
+            platform, architecture, device layout, active app time, watch time, watch frequency,
+            and recent viewing details. Force sign-out, suspension, banning, and restoration are
+            now separate audited actions with server-enforced owner protection and immediate
+            session revocation where applicable. Desktop launches check the signed update channel
+            and prompt users to install and restart or defer with Later. Passwords, authentication
+            tokens, IP addresses, and hardware fingerprints are never exposed in Dev.
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true

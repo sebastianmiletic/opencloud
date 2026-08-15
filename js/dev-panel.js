@@ -2,9 +2,11 @@
 
 import { clearRevokedSession } from './auth.js';
 import {
+  banDevUser,
   fetchDevSummary,
   fetchDevUserDetail,
   fetchDevUsers,
+  forceSignOutDevUser,
   getMyAccess,
   heartbeatInstallation,
   restoreDevUser,
@@ -26,6 +28,12 @@ let pageOffset = 0;
 let totalUsers = 0;
 let searchTimer = null;
 
+function currentDeviceKind() {
+  if (document.body.classList.contains('device-tv')) return 'tv';
+  if (document.body.classList.contains('device-phone')) return 'phone';
+  return 'laptop';
+}
+
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -41,8 +49,8 @@ function showAccessGate(kind, reason = '') {
     retry.addEventListener('click', () => location.reload());
   }
 
-  if (kind === 'suspended') {
-    title.textContent = 'Account suspended';
+  if (kind === 'suspended' || kind === 'banned') {
+    title.textContent = kind === 'banned' ? 'Account banned' : 'Account suspended';
     message.textContent = reason || 'This account no longer has access to OpenCloud. Contact the owner if you believe this is a mistake.';
     retry.textContent = 'Return to sign in';
   } else {
@@ -89,14 +97,14 @@ function configureOwnerAccess(allowed) {
 async function runAuthorizationCycle() {
   try {
     const access = await checkAccessWithRetries();
-    if (access.state === 'suspended') {
+    if (access.state === 'suspended' || access.state === 'banned') {
       configureOwnerAccess(false);
       await clearRevokedSession();
-      showAccessGate('suspended', access.reason);
+      showAccessGate(access.state, access.reason);
       return false;
     }
     configureOwnerAccess(access.isOwner);
-    await heartbeatInstallation(getInstallationIdentity(window.ENV || {}));
+    await heartbeatInstallation(getInstallationIdentity(window.ENV || {}, currentDeviceKind()));
     hideAccessGate();
     return true;
   } catch (error) {
@@ -136,6 +144,7 @@ function formatDate(value, includeTime = true) {
 }
 
 function statusFor(user) {
+  if (user.access_state === 'banned') return { label: 'Banned', className: 'banned' };
   if (user.access_state === 'suspended') return { label: 'Suspended', className: 'suspended' };
   if (user.is_online || isRecentlyOnline(user.last_seen_at)) return { label: 'Online', className: 'online' };
   return { label: 'Offline', className: 'offline' };
@@ -206,7 +215,7 @@ function renderUsers() {
 
     const clientCell = document.createElement('td');
     appendText(clientCell, 'span', 'dev-client', user.latest_version || 'No client');
-    appendText(clientCell.querySelector('.dev-client'), 'small', '', [user.latest_platform, user.latest_architecture].filter(Boolean).join(' · ') || 'No installation');
+    appendText(clientCell.querySelector('.dev-client'), 'small', '', [user.latest_platform, user.latest_architecture, user.latest_device_kind].filter(Boolean).join(' · ') || 'No installation');
     row.appendChild(clientCell);
 
     const actionCell = document.createElement('td');
@@ -253,6 +262,94 @@ function makeDetailList(items) {
   return list;
 }
 
+function formatDuration(seconds) {
+  const total = Math.max(0, Number(seconds) || 0);
+  if (total < 60) return `${Math.round(total)} sec`;
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.round((total % 3600) / 60);
+  return hours ? `${hours} hr ${minutes} min` : `${minutes} min`;
+}
+
+function viewingLabel(item) {
+  const episode = item.mediaType === 'tv' && item.season != null
+    ? ` · S${item.season} E${item.episode || 1}`
+    : '';
+  return `${item.title || 'Untitled'}${episode}`;
+}
+
+function auditLabel(action) {
+  return ({
+    force_sign_out: 'Forced sign-out',
+    suspend: 'Access suspended',
+    ban: 'Account banned',
+    restore: 'Access restored'
+  })[action] || 'Access changed';
+}
+
+function appendStatGrid(parent, stats) {
+  const grid = document.createElement('div');
+  grid.className = 'dev-stat-grid';
+  [
+    ['App time', formatDuration(stats.appActiveSeconds)],
+    ['App sessions', stats.appSessions || 0],
+    ['Watch time', formatDuration(stats.watchSeconds)],
+    ['Watch sessions', stats.watchSessions || 0],
+    ['Titles watched', stats.watchedTitles || 0],
+    ['Active days', stats.watchDays || 0]
+  ].forEach(([label, value]) => {
+    const item = document.createElement('div');
+    appendText(item, 'span', '', label);
+    appendText(item, 'strong', '', value);
+    grid.appendChild(item);
+  });
+  parent.appendChild(grid);
+}
+
+function appendConfirmedAction(parent, { label, confirmLabel, warning, className = '', run, success }) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = `btn btn-secondary ${className}`.trim();
+  button.textContent = label;
+  parent.appendChild(button);
+
+  const confirmation = document.createElement('div');
+  confirmation.className = 'dev-action-confirm hidden';
+  appendText(confirmation, 'p', 'dev-user-email', warning);
+  const confirm = document.createElement('button');
+  confirm.type = 'button';
+  confirm.className = `btn btn-secondary ${className}`.trim();
+  confirm.textContent = confirmLabel;
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'btn btn-secondary';
+  cancel.textContent = 'Cancel';
+  confirmation.append(confirm, cancel);
+  parent.appendChild(confirmation);
+
+  button.addEventListener('click', () => {
+    button.classList.add('hidden');
+    confirmation.classList.remove('hidden');
+    confirm.focus();
+  });
+  cancel.addEventListener('click', () => {
+    confirmation.classList.add('hidden');
+    button.classList.remove('hidden');
+    button.focus();
+  });
+  confirm.addEventListener('click', async () => {
+    confirm.disabled = true;
+    try {
+      await run();
+      showToast(success, 'success');
+      await refreshDevData(selectedUserId);
+    } catch (error) {
+      console.error(`[Dev] ${label} failed:`, error);
+      showToast(error?.message || `${label} failed`, 'error');
+      confirm.disabled = false;
+    }
+  });
+}
+
 function renderDetail(user, detail) {
   const container = document.getElementById('devDetail');
   if (!container || user.id !== selectedUserId) return;
@@ -265,12 +362,38 @@ function renderDetail(user, detail) {
   appendText(header, 'p', '', `Joined ${formatDate(user.joined_at, false)}`);
   container.appendChild(header);
 
+  const activity = document.createElement('section');
+  activity.className = 'dev-detail-section';
+  appendText(activity, 'h3', '', 'Activity overview');
+  appendStatGrid(activity, detail.stats || {});
+  container.appendChild(activity);
+
+  const viewing = document.createElement('section');
+  viewing.className = 'dev-detail-section';
+  appendText(viewing, 'h3', '', 'Recent viewing');
+  const viewingItems = (detail.recentViewing || []).map(item => ({
+    primary: viewingLabel(item),
+    secondary: `${formatDate(item.watchedAt)}${item.durationSeconds ? ` · ${formatDuration(item.durationSeconds)}` : ''}`
+  }));
+  viewing.appendChild(makeDetailList(viewingItems.length ? viewingItems : [{ primary: 'No viewing history recorded' }]));
+  container.appendChild(viewing);
+
+  const sessions = document.createElement('section');
+  sessions.className = 'dev-detail-section';
+  appendText(sessions, 'h3', '', 'Recent watch sessions');
+  const sessionItems = (detail.recentSessions || []).map(item => ({
+    primary: viewingLabel(item),
+    secondary: `${formatDate(item.startedAt)} · ${formatDuration(item.durationSeconds)}`
+  }));
+  sessions.appendChild(makeDetailList(sessionItems.length ? sessionItems : [{ primary: 'No watch sessions recorded' }]));
+  container.appendChild(sessions);
+
   const installations = document.createElement('section');
   installations.className = 'dev-detail-section';
   appendText(installations, 'h3', '', 'Installations');
   const installationItems = (detail.installations || []).map(install => ({
-    primary: `${install.appVersion || 'Unknown'} · ${install.platform || 'Unknown'} · ${install.architecture || 'Unknown'}`,
-    secondary: `${install.isOnline ? 'Online' : 'Last seen'} ${formatDate(install.lastSeenAt)}`
+    primary: `OpenCloud ${install.appVersion || 'Unknown'} · ${install.deviceKind || 'Unknown device'}`,
+    secondary: `${install.platform || 'Unknown'} · ${install.architecture || 'Unknown'} · ${install.isOnline ? 'Online since' : 'Last seen'} ${formatDate(install.lastSeenAt)}`
   }));
   installations.appendChild(makeDetailList(installationItems.length ? installationItems : [{ primary: 'No signed-in installations yet' }]));
   container.appendChild(installations);
@@ -279,7 +402,7 @@ function renderDetail(user, detail) {
   audit.className = 'dev-detail-section';
   appendText(audit, 'h3', '', 'Access history');
   const auditItems = (detail.audit || []).map(entry => ({
-    primary: entry.action === 'suspend' ? 'Access suspended' : 'Access restored',
+    primary: auditLabel(entry.action),
     secondary: `${formatDate(entry.createdAt)}${entry.reason ? ` · ${entry.reason}` : ''}`
   }));
   audit.appendChild(makeDetailList(auditItems.length ? auditItems : [{ primary: 'No access changes' }]));
@@ -292,79 +415,35 @@ function renderDetail(user, detail) {
   actionArea.className = 'dev-access-actions';
 
   if (user.is_owner) {
-    appendText(access, 'p', 'dev-user-email', 'This is the sole owner account and cannot be suspended from OpenCloud.');
-  } else if (user.access_state === 'suspended') {
-    appendText(access, 'p', 'dev-user-email', user.access_reason || 'No suspension reason provided.');
-    const restore = document.createElement('button');
-    restore.type = 'button';
-    restore.className = 'btn btn-secondary';
-    restore.textContent = 'Restore access';
-    actionArea.appendChild(restore);
-    const confirmation = document.createElement('div');
-    confirmation.className = 'dev-access-actions hidden';
-    appendText(confirmation, 'p', 'dev-user-email', 'Restore sign-in and cloud access for this account?');
-    const confirm = document.createElement('button');
-    confirm.type = 'button';
-    confirm.className = 'btn btn-primary';
-    confirm.textContent = 'Confirm restoration';
-    const cancel = document.createElement('button');
-    cancel.type = 'button';
-    cancel.className = 'btn btn-secondary';
-    cancel.textContent = 'Cancel';
-    confirmation.append(confirm, cancel);
-    actionArea.appendChild(confirmation);
-    restore.addEventListener('click', () => { restore.classList.add('hidden'); confirmation.classList.remove('hidden'); confirm.focus(); });
-    cancel.addEventListener('click', () => { confirmation.classList.add('hidden'); restore.classList.remove('hidden'); restore.focus(); });
-    confirm.addEventListener('click', async () => {
-      confirm.disabled = true;
-      try {
-        await restoreDevUser(user.id);
-        showToast('Access restored', 'success');
-        await refreshDevData(user.id);
-      } catch (error) {
-        console.error('[Dev] Restore failed:', error);
-        showToast('Failed to restore access', 'error');
-        confirm.disabled = false;
-      }
+    appendText(access, 'p', 'dev-user-email', 'This is the sole owner account. Remote sign-out, suspension, and banning are blocked by the server.');
+  } else if (user.access_state === 'suspended' || user.access_state === 'banned') {
+    appendText(access, 'p', 'dev-user-email', `${user.access_state === 'banned' ? 'Ban' : 'Suspension'} reason: ${user.access_reason || 'No reason provided.'}`);
+    appendConfirmedAction(actionArea, {
+      label: 'Restore access', confirmLabel: 'Confirm restoration',
+      warning: 'Allow this account to sign in and use cloud data again?',
+      run: () => restoreDevUser(user.id), success: 'Access restored'
     });
   } else {
     const reason = document.createElement('textarea');
     reason.className = 'dev-reason-input';
     reason.maxLength = 500;
-    reason.placeholder = 'Suspension reason (optional)';
-    reason.setAttribute('aria-label', 'Suspension reason');
+    reason.placeholder = 'Reason for suspension or ban (optional)';
+    reason.setAttribute('aria-label', 'Reason for suspension or ban');
     actionArea.appendChild(reason);
-    const suspend = document.createElement('button');
-    suspend.type = 'button';
-    suspend.className = 'btn btn-secondary danger';
-    suspend.textContent = 'Suspend and sign out';
-    actionArea.appendChild(suspend);
-    const confirmation = document.createElement('div');
-    confirmation.className = 'dev-access-actions hidden';
-    appendText(confirmation, 'p', 'dev-user-email', 'This immediately blocks cloud access and signs the account out. User data is preserved.');
-    const confirm = document.createElement('button');
-    confirm.type = 'button';
-    confirm.className = 'btn btn-secondary danger';
-    confirm.textContent = 'Confirm suspension';
-    const cancel = document.createElement('button');
-    cancel.type = 'button';
-    cancel.className = 'btn btn-secondary';
-    cancel.textContent = 'Cancel';
-    confirmation.append(confirm, cancel);
-    actionArea.appendChild(confirmation);
-    suspend.addEventListener('click', () => { suspend.classList.add('hidden'); confirmation.classList.remove('hidden'); confirm.focus(); });
-    cancel.addEventListener('click', () => { confirmation.classList.add('hidden'); suspend.classList.remove('hidden'); suspend.focus(); });
-    confirm.addEventListener('click', async () => {
-      confirm.disabled = true;
-      try {
-        await suspendDevUser(user.id, reason.value.trim());
-        showToast('Account suspended and signed out', 'success');
-        await refreshDevData(user.id);
-      } catch (error) {
-        console.error('[Dev] Suspension failed:', error);
-        showToast(error?.message || 'Failed to suspend access', 'error');
-        confirm.disabled = false;
-      }
+    appendConfirmedAction(actionArea, {
+      label: 'Force sign out', confirmLabel: 'Sign out now',
+      warning: 'End all current sessions. The account can sign in again immediately.',
+      run: () => forceSignOutDevUser(user.id), success: 'User signed out'
+    });
+    appendConfirmedAction(actionArea, {
+      label: 'Suspend access', confirmLabel: 'Confirm suspension', className: 'warning',
+      warning: 'Block access and end all sessions. User data is preserved until you restore access.',
+      run: () => suspendDevUser(user.id, reason.value.trim()), success: 'Account suspended'
+    });
+    appendConfirmedAction(actionArea, {
+      label: 'Ban account', confirmLabel: 'Confirm ban', className: 'danger',
+      warning: 'Ban this account and end all sessions. User data is preserved until you restore access.',
+      run: () => banDevUser(user.id, reason.value.trim()), success: 'Account banned'
     });
   }
 
@@ -411,6 +490,7 @@ async function refreshDevData(reselectId = selectedUserId) {
     setText('devOnlineUsers', summary?.onlineUsers || 0);
     setText('devOnlineInstallations', summary?.onlineInstallations || 0);
     setText('devSuspended', summary?.suspended || 0);
+    setText('devBanned', summary?.banned || 0);
     setText('devUpdatedAt', `Updated ${formatDate(summary?.generatedAt || new Date().toISOString())}`);
     currentUsers = Array.isArray(userPage?.users) ? userPage.users : [];
     totalUsers = Number(userPage?.total) || 0;
