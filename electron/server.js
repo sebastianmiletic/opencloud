@@ -2,6 +2,7 @@ const http = require('http');
 const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
+const packageJson = require('../package.json');
 
 const MIME_TYPES = {
   '.css': 'text/css; charset=utf-8',
@@ -54,7 +55,10 @@ function makeEnvScript(env) {
   TMDB_BEARER_TOKEN: ${escapeJs(env.TMDB_BEARER_TOKEN)},
   OMDB_API_KEY: ${escapeJs(env.OMDB_API_KEY)},
   SUPABASE_URL: ${escapeJs(env.SUPABASE_URL)},
-  SUPABASE_ANON_KEY: ${escapeJs(env.SUPABASE_ANON_KEY)}
+  SUPABASE_ANON_KEY: ${escapeJs(env.SUPABASE_ANON_KEY)},
+  APP_VERSION: ${escapeJs(packageJson.version)},
+  APP_PLATFORM: ${escapeJs(process.platform)},
+  APP_ARCHITECTURE: ${escapeJs(process.arch)}
 };`;
 }
 

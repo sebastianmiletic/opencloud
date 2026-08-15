@@ -25,9 +25,9 @@ The Electron preload exports supported localStorage values to
 imports missing keys once and writes a `.imported` marker only after the browser
 storage transaction succeeds.
 
-Supabase session tokens and the local `oc_is_admin` flag are deliberately not
-migrated. Users may need to sign in again, and admin status is revalidated from
-Supabase.
+Supabase session tokens are deliberately not imported from Electron. Users may
+need to sign in again. Dev access is always revalidated from Supabase and has no
+client-side activation flag.
 
 ## Blocker architecture
 
@@ -66,7 +66,9 @@ Test on macOS Apple Silicon, a universal/Intel build, Windows 10, and Windows 11
 - [ ] Collection add/remove, folders, sorting, and Supabase synchronization
 - [ ] History, continue watching, episode progress, and watch statistics
 - [ ] Profile avatar/color/name, email/password changes, and account deletion
-- [ ] Admin list, refresh, ban/unban, kick, wipe, and per-user statistics
+- [ ] Owner-only Dev list, presence, installation details, suspend/sign-out, restore, and audit history
+- [ ] Non-owner direct Dev access is denied and profile emails cannot be enumerated
+- [ ] Offline launch shows the connection-required authorization gate
 - [ ] All seven providers: movie, TV, next episode, episode picker, subtitles,
       autoplay, fullscreen, and close/reopen
 - [ ] Blocker enabled/disabled and each rule combination

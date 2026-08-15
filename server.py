@@ -5,6 +5,7 @@ import os
 import socket
 import socketserver
 import time
+import json
 
 PORT        = 8765
 
@@ -24,6 +25,8 @@ def load_env():
     return env
 
 ENV = load_env()
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'package.json'), 'r') as package_file:
+    APP_VERSION = json.load(package_file).get('version', 'unknown')
 
 class Handler(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):
@@ -41,7 +44,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
   TMDB_BEARER_TOKEN: '{ENV.get('TMDB_BEARER_TOKEN', '')}',
   OMDB_API_KEY: '{ENV.get('OMDB_API_KEY', '')}',
   SUPABASE_URL: '{ENV.get('SUPABASE_URL', '')}',
-  SUPABASE_ANON_KEY: '{ENV.get('SUPABASE_ANON_KEY', '')}'
+  SUPABASE_ANON_KEY: '{ENV.get('SUPABASE_ANON_KEY', '')}',
+  APP_VERSION: '{APP_VERSION}',
+  APP_PLATFORM: 'web',
+  APP_ARCHITECTURE: 'browser'
 }};"""
             self.wfile.write(js.encode('utf-8'))
             return

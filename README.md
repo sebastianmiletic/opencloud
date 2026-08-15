@@ -7,7 +7,7 @@ A black-and-white themed Tauri desktop streaming tracker with TMDB/OMDB integrat
 ## How to Download & Install
 
 <p align="center">
-  <a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud_3.4.2_universal.dmg"><img src="https://img.shields.io/badge/Download-macOS%20(.dmg)-black?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS"></a>&nbsp;&nbsp;<a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud_3.4.2_x64-setup.exe"><img src="https://img.shields.io/badge/Download-Windows%20(.exe)-black?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows"></a>
+  <a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud_3.5.0_universal.dmg"><img src="https://img.shields.io/badge/Download-macOS%20(.dmg)-black?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS"></a>&nbsp;&nbsp;<a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud_3.5.0_x64-setup.exe"><img src="https://img.shields.io/badge/Download-Windows%20(.exe)-black?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows"></a>
 </p>
 
 <p align="center">
@@ -23,7 +23,7 @@ A black-and-white themed Tauri desktop streaming tracker with TMDB/OMDB integrat
 ### macOS (Recommended — DMG)
 
 1. **Download the DMG**
-   - Click the **macOS (.dmg)** button above, or go to the [Releases page](https://github.com/sebastianmiletic/opencloud/releases/latest) and download `OpenCloud_3.4.2_universal.dmg`
+   - Click the **macOS (.dmg)** button above, or go to the [Releases page](https://github.com/sebastianmiletic/opencloud/releases/latest) and download `OpenCloud_3.5.0_universal.dmg`
 
 2. **Install the app**
    - Open the downloaded `OpenCloud.dmg`
@@ -43,7 +43,7 @@ A black-and-white themed Tauri desktop streaming tracker with TMDB/OMDB integrat
 ### Windows (Recommended — EXE)
 
 1. **Download the Installer**
-   - Click the **Windows (.exe)** button above, or go to the [Releases page](https://github.com/sebastianmiletic/opencloud/releases/latest) and download `OpenCloud_3.4.2_x64-setup.exe`
+   - Click the **Windows (.exe)** button above, or go to the [Releases page](https://github.com/sebastianmiletic/opencloud/releases/latest) and download `OpenCloud_3.5.0_x64-setup.exe`
 
 2. **Run the installer**
    - Double-click the downloaded `OpenCloud.exe`
@@ -136,9 +136,10 @@ Open Cloud/
 │   ├── ui.js           # Home, search, item modals, collection, history
 │   ├── player.js       # Inline iframe player, episode picker, progress, history tracking
 │   ├── config.js       # API keys, providers, settings sync
-│   ├── settings.js     # Settings modal logic (general / sources / blocker / stats / account / admin)
+│   ├── settings.js     # Settings modal logic (general / themes / sources / blocker / stats / account)
+│   ├── dev-panel.js    # Owner-only Dev workspace, presence, and access enforcement
 │   ├── storage.js      # Supabase-backed storage with in-memory caching
-│   ├── sync.js         # Supabase database CRUD (collections, history, progress, admin)
+│   ├── sync.js         # Supabase database CRUD and authenticated RPC calls
 │   ├── state.js        # Central reactive state module
 │   ├── hero.js         # Hero carousel auto-slide + click handling
 │   ├── blocker.js      # Blocker settings UI and native policy synchronization
@@ -178,22 +179,17 @@ Open Cloud/
 - **One Account Per Email** — Strictly enforced
 - **Usernames** — Choose a display name during signup
 - **Account Actions** — Change password, change email, delete account
-- **Admin Dashboard** — Full user management panel for admin accounts
-  - See all users, last seen time, status
-  - Kick users
-  - Ban/unban users with reason
-  - Wipe all user data
-  - View per-user stats (collection, history, progress counts)
-- **Admin Activation** — Users can activate admin access via an activation key in Settings > General
-- **Ban System** — Banned users are prevented from signing in with a suspension message
+- **Owner Dev Workspace** — Server-authorized account, installation, version, platform, and live-presence overview
+- **Access Control** — Reversible suspension, forced sign-out, and an immutable access audit trail
+- **Private Profiles** — Users can read only their own profile; owner views use restricted database functions
+- **Online Authorization** — Signed-in clients revalidate access and report minimal installation presence
 
 ### Settings Tabs
-- **General** — Device layout (laptop / TV / phone), auto-play toggle, activation key input
+- **General** — Device layout (laptop / TV / phone), auto-play toggle
 - **Video Sources** — Pick from 8 providers with available capability information
 - **Blocker** — Toggle protection, configure rules, view block logs
 - **Stats** — Watch heatmap, hours watched, movies/episodes count, current streak
 - **Account** — Avatar upload, color presets, display name, email, password, account deletion
-- **Admin** *(admin only)* — User management panel (activated via activation key)
 
 ### Updates
 - **Manual Update Check** — Click "Check for Updates" in the account dropdown
@@ -224,11 +220,12 @@ If you want to use your own Supabase project instead of the bundled one:
 1. Create a free project at [supabase.com](https://supabase.com)
 2. Go to **Authentication > Providers > Email** and enable it
 3. Turn **Confirm email** OFF
-4. Run the SQL from `docs/supabase_schema.sql` in the SQL Editor
-5. Copy your project URL and anon key into `.env`
-6. Restart the app
+4. Run `docs/supabase_schema.sql`, then every migration in `supabase/migrations/` in filename order
+5. Provision the sole Dev owner from the SQL Editor with `select private.provision_dev_owner('<owner email>');`
+6. Copy your project URL and anon key into `.env`
+7. Restart the app
 
-**Admin access** can be activated by any user who enters the correct activation key in **Settings > General**.
+The owner email is production configuration. Do not commit it, a service-role key, or a user ID to the repository.
 
 ---
 

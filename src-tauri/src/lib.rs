@@ -25,6 +25,9 @@ struct PublicConfig {
     omdb_api_key: &'static str,
     supabase_url: &'static str,
     supabase_anon_key: &'static str,
+    app_version: &'static str,
+    app_platform: &'static str,
+    app_architecture: &'static str,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -293,6 +296,9 @@ fn get_public_config() -> PublicConfig {
         omdb_api_key: option_env!("OMDB_API_KEY").unwrap_or(""),
         supabase_url: option_env!("SUPABASE_URL").unwrap_or(""),
         supabase_anon_key: option_env!("SUPABASE_ANON_KEY").unwrap_or(""),
+        app_version: env!("CARGO_PKG_VERSION"),
+        app_platform: std::env::consts::OS,
+        app_architecture: std::env::consts::ARCH,
     }
 }
 

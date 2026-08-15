@@ -77,9 +77,9 @@ alter table user_settings enable row level security;
 
 -- RLS Policies
 
--- Profiles: users can read all profiles (needed for admin)
-create policy "Profiles are viewable by everyone" on profiles
-  for select using (true);
+-- Profiles: users can read only their own profile
+create policy "Users can read own profile" on profiles
+  for select using (auth.uid() = id);
 
 -- Profiles: users can update their own profile
 create policy "Users can update own profile" on profiles
@@ -110,14 +110,24 @@ create policy "Users can manage own settings" on user_settings
 
 This allows instant signup without email verification.
 
-## Admin User
+## Owner Dev Workspace
 
-Users can activate admin access by entering the activation key in **Settings > General**.
+After creating the base tables, run every SQL file under `supabase/migrations/`
+in filename order. From the Supabase SQL Editor, privately provision the sole
+owner account:
+
+```sql
+select private.provision_dev_owner('<owner email>');
+```
+
+Do not put the actual owner email, user ID, or a service-role key in GitHub.
+Authorization is enforced in PostgreSQL for every Dev operation; the client-side
+menu is only a presentation detail.
 
 ## What Changed
 
 - **Auth**: Email/password login with persistent sessions
 - **Data Sync**: Collections, history, watch progress, and settings all save to Supabase
-- **Admin Panel**: Shows total users, active users today, and a list of all users with their stats
+- **Dev Workspace**: Owner-only accounts, signed-in installations, presence, suspension, restoration, and audit history
 - **Sign Out**: Added to account dropdown
 - **Blank Fields**: Auth modal inputs have no placeholder text

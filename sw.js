@@ -1,5 +1,5 @@
 /** Open Cloud Service Worker — auto-update from GitHub raw */
-const CACHE_NAME = 'openccloud-v1';
+const CACHE_NAME = 'openccloud-v3.5.0';
 const GITHUB_RAW = 'https://raw.githubusercontent.com/sebastianmiletic/opencloud/main/';
 
 /* Only static files that exist in the repo (env.js is server-generated) */
@@ -10,6 +10,8 @@ const FILES_TO_CACHE = [
   '/beta.css',
   '/js/main.js',
   '/js/auth.js',
+  '/js/dev-panel.js',
+  '/js/dev-panel-policy.js',
   '/js/api.js',
   '/js/ui.js',
   '/js/player.js',
@@ -43,7 +45,11 @@ self.addEventListener('install', (event) => {
 
 /* Activate: claim clients immediately */
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil((async () => {
+    const names = await caches.keys();
+    await Promise.all(names.filter(name => name !== CACHE_NAME).map(name => caches.delete(name)));
+    await self.clients.claim();
+  })());
 });
 
 /*

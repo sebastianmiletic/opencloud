@@ -5,12 +5,10 @@ import { showToast } from './utils.js';
 import { initBlockerUI } from './blocker.js';
 import { getCurrentUser, getLocalProfile, saveLocalProfile } from './storage.js';
 import { getWatchSessions, aggregateStats } from './supabase.js';
-import { isAdmin, setAdmin, getCurrentAuthUser, getUserEmail, updatePassword, updateEmail, deleteAccount, signOut, getSupabaseClient } from './auth.js';
-import { fetchAllUsers, fetchTotalUserCount, fetchUserStats, banUser, unbanUser, deleteUserData, getActiveSessions, kickUser, createProfile } from './sync.js';
+import { getUserEmail, updatePassword, updateEmail, deleteAccount } from './auth.js';
 
 let settings = getSettings();
 let currentSettingsTab = 'general';
-let adminRefreshTimer = null;
 const providerHealthScores = new Map();
 
 const PRESET_COLORS = [
@@ -168,9 +166,6 @@ function switchSettingsTab(tab) {
   document.querySelectorAll('.settings-tab-btn').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
   document.querySelectorAll('.settings-tab-panel').forEach(p => p.classList.toggle('hidden', p.dataset.panel !== tab));
 
-  if (tab === 'admin') {
-    renderAdminTab();
-  }
   if (tab === 'stats') {
     renderStatsTab();
   }
@@ -225,49 +220,6 @@ export function openSettingsModal() {
   if (autoFailover) autoFailover.checked = settings.autoProviderFailover === true;
   if (roundedUI) roundedUI.checked = settings.roundedUI === true;
   renderThemeOptions();
-
-  // Show/hide admin tab — must be declared before activation handler
-  const adminTabBtn = document.getElementById('adminTabBtn');
-  if (adminTabBtn) {
-    if (isAdmin()) {
-      adminTabBtn.classList.remove('hidden');
-    } else {
-      adminTabBtn.classList.add('hidden');
-    }
-  }
-
-  // Activation key
-  const activationInput = document.getElementById('activationKey');
-  const activateBtn = document.getElementById('activateBtn');
-  if (activationInput && activateBtn) {
-    activateBtn.onclick = async () => {
-      const val = activationInput.value.trim();
-      if (val === '1234') {
-        const user = getCurrentAuthUser();
-        if (!user) { showToast('Not signed in', 'error'); return; }
-        const sb = getSupabaseClient();
-        if (!sb) { showToast('Auth client not ready', 'error'); return; }
-        try {
-          // Ensure profile row exists first (needed for checkSession users)
-          const { data: existing } = await sb.from('profiles').select('id').eq('id', user.id);
-          if (!existing || existing.length === 0) {
-            await createProfile(user.id, user.email || '', user.user_metadata?.username || '');
-          }
-          const { error } = await sb.from('profiles').update({ is_admin: true }).eq('id', user.id);
-          if (error) throw error;
-          setAdmin(true);
-          showToast('Admin access granted', 'success');
-          adminTabBtn?.classList.remove('hidden');
-          switchSettingsTab('admin');
-        } catch (err) {
-          console.error('[Activation] admin update failed:', err);
-          showToast('Activation failed: ' + (err?.message || err?.error_description || 'check console'), 'error');
-        }
-      } else {
-        showToast('Invalid activation key', 'error');
-      }
-    };
-  }
 
   // Always re-render provider cards so they're fresh when the Sources tab is shown
   renderProviderCards();
@@ -462,131 +414,4 @@ function renderDayBars(dayOfWeek) {
         <div class="stats-bar-value">${hours}h</div>
       </div>`;
   }).join('');
-}
-
-/* ───── Admin Tab ───── */
-
-async function renderAdminTab() {
-  const totalUsersEl = document.getElementById('adminTotalUsers');
-  const activeTodayEl = document.getElementById('adminActiveToday');
-  const activeNowEl = document.getElementById('adminActiveNow');
-  const bannedCountEl = document.getElementById('adminBannedCount');
-  const userListEl = document.getElementById('adminUserList');
-  const refreshBtn = document.getElementById('adminRefreshBtn');
-
-  // Set up manual refresh
-  const handler = async () => { await renderAdminTab(); showToast('Refreshed', 'success'); };
-  if (refreshBtn) refreshBtn.onclick = handler;
-
-  if (totalUsersEl) totalUsersEl.textContent = '...';
-  if (activeTodayEl) activeTodayEl.textContent = '...';
-  if (activeNowEl) activeNowEl.textContent = '...';
-  if (bannedCountEl) bannedCountEl.textContent = '...';
-
-  try {
-    const [users, sessions] = await Promise.all([fetchAllUsers(), getActiveSessions(15)]);
-    console.log('[Admin] fetched users:', users.length, 'sessions:', sessions.length);
-
-    if (totalUsersEl) totalUsersEl.textContent = users.length;
-    if (bannedCountEl) bannedCountEl.textContent = users.filter(u => u.is_banned).length;
-
-    if (activeTodayEl) {
-      const today = new Date().toISOString().slice(0, 10);
-      const activeToday = sessions.filter(s => s.started_at?.startsWith(today)).length;
-      activeTodayEl.textContent = activeToday;
-    }
-
-    if (activeNowEl) activeNowEl.textContent = sessions.length;
-
-    if (userListEl) {
-      if (!users.length) {
-        userListEl.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:1.5rem;">No users found</td></tr>';
-        return;
-      }
-
-      const currentAuthId = getCurrentAuthUser()?.id;
-
-      userListEl.innerHTML = users.map(user => {
-        const date = user.created_at ? new Date(user.created_at).toLocaleDateString() : 'Unknown';
-        const lastSeen = user.last_seen_at ? new Date(user.last_seen_at).toLocaleString() : 'Never';
-        const isAdminClass = user.is_admin ? 'admin-badge' : '';
-        const status = user.is_banned ? '<span style="color:#ef4444;font-weight:600;">BANNED</span>' : '<span style="color:#10b981;font-weight:600;">Active</span>';
-        const isSelf = user.id === currentAuthId;
-        const actions = isSelf ? '<span style="font-size:0.75rem;color:var(--text-muted);">You</span>' : `
-          <div style="display:flex;gap:0.35rem;flex-wrap:wrap;">
-            <button class="btn btn-secondary admin-action-btn" data-action="view" data-user-id="${user.id}" style="font-size:0.7rem;padding:0.3rem 0.6rem;"
-><i class="fas fa-eye"></i> Stats</button>
-            <button class="btn btn-secondary admin-action-btn" data-action="kick" data-user-id="${user.id}" style="font-size:0.7rem;padding:0.3rem 0.6rem;"
-><i class="fas fa-ban"></i> Kick</button>
-            ${user.is_banned
-              ? `<button class="btn btn-primary admin-action-btn" data-action="unban" data-user-id="${user.id}" style="font-size:0.7rem;padding:0.3rem 0.6rem;"
-><i class="fas fa-undo"></i> Unban</button>`
-              : `<button class="btn btn-secondary admin-action-btn" data-action="ban" data-user-id="${user.id}" style="font-size:0.7rem;padding:0.3rem 0.6rem;background:#ef4444;color:#fff;border-color:#ef4444;"
-><i class="fas fa-ban"></i> Ban</button>`
-            }
-            <button class="btn btn-secondary admin-action-btn" data-action="delete" data-user-id="${user.id}" style="font-size:0.7rem;padding:0.3rem 0.6rem;background:#7f1d1d;color:#fff;border-color:#7f1d1d;"
-><i class="fas fa-trash"></i> Wipe</button>
-          </div>`;
-        return `
-          <tr data-user-id="${user.id}">
-            <td style="padding:0.6rem 0.4rem;">
-              <div style="display:flex;align-items:center;gap:0.5rem;">
-                <div class="dropdown-avatar" style="width:28px;height:28px;font-size:0.75rem;">${(user.username || user.email || 'U').charAt(0).toUpperCase()}</div>
-                <div style="font-weight:600;font-size:0.85rem;">${user.username || user.email?.split('@')[0] || 'Unknown'} ${user.is_admin ? '<span style="font-size:0.6rem;color:#f59e0b;background:rgba(245,158,11,0.15);padding:0.1rem 0.35rem;border-radius:3px;font-weight:700;">ADMIN</span>' : ''}</div>
-              </div>
-            </td>
-            <td style="font-size:0.8rem;color:var(--text-secondary);padding:0.6rem 0.4rem;">${user.email || ''}</td>
-            <td style="font-size:0.75rem;color:var(--text-muted);padding:0.6rem 0.4rem;">${date}</td>
-            <td style="font-size:0.75rem;color:var(--text-muted);padding:0.6rem 0.4rem;">${lastSeen}</td>
-            <td style="padding:0.6rem 0.4rem;">${status}</td>
-            <td style="padding:0.6rem 0.4rem;min-width:220px;">${actions}</td>
-          </tr>`;
-      }).join('');
-
-      userListEl.querySelectorAll('.admin-action-btn').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-          e.stopPropagation();
-          const action = btn.dataset.action;
-          const userId = btn.dataset.userId;
-          if (action === 'view') {
-            const stats = await fetchUserStats(userId);
-            if (stats) {
-              showToast(`Collection: ${stats.collectionCount} \u00b7 History: ${stats.historyCount} \u00b7 Progress: ${stats.progressCount}`, 'info');
-            }
-          } else if (action === 'ban') {
-            const reason = prompt('Ban reason (optional):');
-            const ok = await banUser(userId, reason || '');
-            if (ok) { showToast('User banned', 'info'); renderAdminTab(); }
-            else showToast('Failed to ban user', 'error');
-          } else if (action === 'unban') {
-            const ok = await unbanUser(userId);
-            if (ok) { showToast('User unbanned', 'success'); renderAdminTab(); }
-            else showToast('Failed to unban user', 'error');
-          } else if (action === 'kick') {
-            const ok = await kickUser(userId);
-            if (ok) { showToast('User kicked', 'info'); renderAdminTab(); }
-            else showToast('Failed to kick user', 'error');
-          } else if (action === 'delete') {
-            const ok = await deleteUserData(userId);
-            if (ok) { showToast('User data wiped', 'info'); renderAdminTab(); }
-            else showToast('Failed to wipe user data', 'error');
-          } else if (action === 'delete-account') {
-            const confirmed = confirm('WARNING: This permanently deletes the user AND all their auth data. Proceed?');
-            if (confirmed) {
-              await deleteUserData(userId);
-              const sb = getSupabaseClient();
-              if (sb) {
-                try { await sb.auth.admin.deleteUser(userId); } catch (e) { console.error('Delete auth user failed:', e); }
-              }
-              showToast('Account deleted', 'info');
-              renderAdminTab();
-            }
-          }
-        });
-      });
-    }
-  } catch (err) {
-    console.error('[Admin] Failed to load admin data:', err);
-    if (userListEl) userListEl.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:1.5rem;">Failed to load users</td></tr>';
-  }
 }

@@ -1,4 +1,5 @@
 import { defineConfig, loadEnv } from 'vite';
+import packageJson from './package.json' with { type: 'json' };
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
@@ -6,7 +7,10 @@ export default defineConfig(({ mode }) => {
     TMDB_BEARER_TOKEN: env.TMDB_BEARER_TOKEN || '',
     OMDB_API_KEY: env.OMDB_API_KEY || '',
     SUPABASE_URL: env.SUPABASE_URL || '',
-    SUPABASE_ANON_KEY: env.SUPABASE_ANON_KEY || ''
+    SUPABASE_ANON_KEY: env.SUPABASE_ANON_KEY || '',
+    APP_VERSION: packageJson.version,
+    APP_PLATFORM: 'web',
+    APP_ARCHITECTURE: 'browser'
   };
 
   return {

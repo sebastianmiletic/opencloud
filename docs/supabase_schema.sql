@@ -83,7 +83,7 @@ alter table watch_progress enable row level security;
 alter table user_settings enable row level security;
 alter table watch_sessions enable row level security;
 
-create policy "Profiles are viewable by everyone" on profiles for select using (true);
+create policy "Users can read own profile" on profiles for select using (auth.uid() = id);
 create policy "Users can insert own profile" on profiles for insert with check (auth.uid() = id);
 create policy "Users can update own profile" on profiles for update using (auth.uid() = id);
 create policy "Users can manage own collections" on collections for all using (auth.uid() = user_id);

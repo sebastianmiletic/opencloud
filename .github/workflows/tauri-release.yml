@@ -58,11 +58,12 @@ jobs:
           tagName: v__VERSION__
           releaseName: 'Open Cloud v__VERSION__'
           releaseBody: |
-            Open Cloud 3.4.2 adds an in-player provider picker. Select the connection
-            indicator to choose any compatible provider without leaving the movie or episode.
-            Open Cloud checkpoints the current playback position before switching and resumes
-            from that point on the new provider. The picker supports mouse, keyboard, TV remote
-            focus, screen readers, and compact layouts.
+            Open Cloud 3.5.0 adds a server-authorized owner Dev workspace for account,
+            signed-in installation, version, platform, and live-presence monitoring. The owner
+            can suspend an account with forced sign-out and restore it later without deleting
+            user data. Profile emails are no longer publicly enumerable, authorization is
+            enforced in Supabase, and passwords, tokens, IP addresses, hardware fingerprints,
+            and viewing activity are excluded from the Dev data contract.
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true

@@ -11,9 +11,10 @@ import {
 } from './ui.js';
 import { showToast, lockScroll, unlockScroll } from './utils.js';
 import { applyAppearanceSettings, hydrateSettingsFromCloud } from './config.js';
-import { initSupabase, isSupabaseReachable, checkSession, signIn, signUp, getUserDisplayName, signOut, saveLocalIdentity, getLocalIdentity, setLocalUser } from './auth.js';
+import { initSupabase, isSupabaseReachable, checkSession, signIn, signUp, getUserDisplayName, signOut } from './auth.js';
 import { initUpdater } from './updater.js';
 import { initAccessibility } from './accessibility.js';
+import { initDevPanel, initializeSignedInRuntime, showConnectionRequired, stopSignedInRuntime } from './dev-panel.js';
 
 /* Global error handler */
 window.onerror = (msg, url, line) => {
@@ -92,7 +93,8 @@ function initAuthModal() {
     if (!email || !password) return;
     const { user, error } = await signIn(email, password);
     if (user && !error) {
-      saveLocalIdentity(user);
+      const authorized = await initializeSignedInRuntime();
+      if (!authorized) return;
       authModal.classList.add('hidden');
       unlockScroll();
       updateAuthUI(user);
@@ -112,7 +114,8 @@ function initAuthModal() {
     if (password.length < 6) { showToast('Password must be at least 6 characters', 'error'); return; }
     const { user, error } = await signUp(email, password, username);
     if (user && !error) {
-      saveLocalIdentity(user);
+      const authorized = await initializeSignedInRuntime();
+      if (!authorized) return;
       authModal.classList.add('hidden');
       unlockScroll();
       updateAuthUI(user);
@@ -169,6 +172,7 @@ async function initAppContent() {
   document.getElementById('signOutBtn')?.addEventListener('click', async (e) => {
     e.stopPropagation();
     accountDropdown?.classList.add('hidden');
+    stopSignedInRuntime();
     await signOut();
     location.reload();
   });
@@ -301,31 +305,32 @@ async function initApp() {
     if (supabaseReachable) {
       hasSupabase = initSupabase();
     } else {
-      console.warn('[Main] Supabase is unreachable — skipping auth client creation');
-      // Clear any stale Supabase localStorage keys
-      clearSupabaseSession();
+      console.warn('[Main] Supabase is unreachable — authorization is required');
+      showConnectionRequired();
     }
     initAuthModal();
+    initDevPanel();
+
+    if (!hasSupabase) {
+      initSettings();
+      return;
+    }
 
     let user = null;
     if (hasSupabase) {
       user = await checkSession();
     }
 
-    // If no Supabase session, check for a saved local identity so the user
-    // never has to sign in again on this device.
-    if (!user) {
-      const localIdentity = getLocalIdentity();
-      if (localIdentity) {
-        setLocalUser(localIdentity);
-        user = localIdentity;
-      }
-    }
-
     if (!user) {
       showAuthModal();
       initSettings(); // still init settings so nothing crashes later
       window._appLoaded = true;
+      return;
+    }
+
+    const authorized = await initializeSignedInRuntime();
+    if (!authorized) {
+      initSettings();
       return;
     }
 

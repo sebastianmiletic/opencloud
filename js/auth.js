@@ -1,54 +1,12 @@
 /** Supabase Authentication Module */
 import { showToast } from './utils.js';
-import { createProfile, isUserAdmin } from './sync.js';
+import { createProfile, getMyAccess } from './sync.js';
 
 const SUPABASE_URL = (typeof window !== 'undefined' && window.ENV?.SUPABASE_URL) ? window.ENV.SUPABASE_URL : '';
 const SUPABASE_ANON_KEY = (typeof window !== 'undefined' && window.ENV?.SUPABASE_ANON_KEY) ? window.ENV.SUPABASE_ANON_KEY : '';
 
 let supabaseClient = null;
 let currentUser = null;
-let _isAdmin = false;
-let _localUser = null;
-
-const LOCAL_IDENTITY_KEY = 'oc_local_identity';
-
-export function saveLocalIdentity(user) {
-  if (!user) return;
-  try {
-    const identity = {
-      id: user.id,
-      email: user.email || '',
-      username: user.user_metadata?.username || user.user_metadata?.display_name || '',
-      display_name: user.user_metadata?.display_name || user.user_metadata?.username || user.email?.split('@')[0] || 'User',
-      user_metadata: user.user_metadata || {},
-      created_at: new Date().toISOString()
-    };
-    localStorage.setItem(LOCAL_IDENTITY_KEY, JSON.stringify(identity));
-  } catch (e) {}
-}
-
-export function getLocalIdentity() {
-  try {
-    const raw = localStorage.getItem(LOCAL_IDENTITY_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch (e) {}
-  return null;
-}
-
-export function clearLocalIdentity() {
-  try { localStorage.removeItem(LOCAL_IDENTITY_KEY); } catch (e) {}
-}
-
-export function setLocalUser(user) {
-  _localUser = user;
-}
-
-function getStoredAdmin() {
-  try { return localStorage.getItem('oc_is_admin') === 'true'; } catch (e) { return false; }
-}
-function setStoredAdmin(v) {
-  try { localStorage.setItem('oc_is_admin', v ? 'true' : 'false'); } catch (e) {}
-}
 
 export function initSupabase() {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
@@ -61,17 +19,14 @@ export function initSupabase() {
   }
   supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: {
-      autoRefreshToken: false,
-      persistSession: false,
+      autoRefreshToken: true,
+      persistSession: true,
       detectSessionInUrl: false
     }
   });
-  // Restore admin from localStorage immediately
-  _isAdmin = getStoredAdmin();
   return true;
 }
 
-/* Clear all Supabase session data from localStorage without hitting the network */
 function clearSupabaseSessionLocal() {
   try {
     const keys = [];
@@ -107,8 +62,7 @@ export async function checkSession() {
   // If the project is paused/deleted, skip straight to local identity.
   const reachable = await isSupabaseReachable();
   if (!reachable) {
-    console.warn('[Auth] Supabase is unreachable — using local mode');
-    clearSupabaseSessionLocal();
+    console.warn('[Auth] Supabase is unreachable');
     return null;
   }
 
@@ -117,16 +71,17 @@ export async function checkSession() {
     if (error) throw error;
     if (session?.user) {
       currentUser = session.user;
-      // Try server first, fall back to localStorage
-      const serverAdmin = await isUserAdmin(currentUser.id);
-      _isAdmin = serverAdmin || getStoredAdmin();
-      setStoredAdmin(_isAdmin);
+      const access = await getMyAccess();
+      if (access?.state === 'suspended') {
+        await supabaseClient.auth.signOut({ scope: 'global' });
+        currentUser = null;
+        return null;
+      }
       return session.user;
     }
     return null;
   } catch (err) {
     console.error('[Auth] Session check failed:', err);
-    clearSupabaseSessionLocal();
     return null;
   }
 }
@@ -167,8 +122,13 @@ export async function signUp(email, password, username) {
     if (data.user) {
       try {
         await createProfile(data.user.id, email, username.trim());
-        _isAdmin = await isUserAdmin(data.user.id);
+        const access = await getMyAccess();
+        if (access?.state === 'suspended') {
+          await supabaseClient.auth.signOut({ scope: 'global' });
+          throw new Error('Account suspended');
+        }
       } catch (profileErr) {
+        if (profileErr?.message === 'Account suspended') throw profileErr;
         console.warn('[Auth] Profile creation failed (non-critical):', profileErr);
       }
     }
@@ -193,18 +153,12 @@ export async function signIn(email, password) {
     });
     if (error) throw error;
     currentUser = data.user;
-    // Check ban status — use .limit(1) instead of .single() to avoid crash on missing row
     if (data.user) {
-      const { data: profileRows, error: profileErr } = await supabaseClient
-        .from('profiles')
-        .select('is_banned, ban_reason')
-        .eq('id', data.user.id)
-        .limit(1);
-      const profile = profileRows?.[0];
-      if (!profileErr && profile?.is_banned) {
-        await supabaseClient.auth.signOut();
+      const access = await getMyAccess();
+      if (access?.state === 'suspended') {
+        await supabaseClient.auth.signOut({ scope: 'global' });
         currentUser = null;
-        showToast(`Account suspended: ${profile.ban_reason || 'Contact support'}`, 'error');
+        showToast(`Account suspended: ${access.reason || 'Contact support'}`, 'error');
         return { user: null, error: new Error('Account suspended') };
       }
       // Ensure profile exists (creates row if missing)
@@ -213,9 +167,6 @@ export async function signIn(email, password) {
       } catch (e) {
         console.warn('[Auth] createProfile on signIn failed:', e);
       }
-      const serverAdmin = await isUserAdmin(data.user.id);
-      _isAdmin = serverAdmin || getStoredAdmin();
-      setStoredAdmin(_isAdmin);
       // Update last_seen_at
       await supabaseClient.from('profiles').update({ last_seen_at: new Date().toISOString() }).eq('id', data.user.id);
     }
@@ -232,19 +183,27 @@ export async function signOut() {
   if (!supabaseClient) return;
   try {
     await supabaseClient.auth.signOut();
-    currentUser = null;
-    _isAdmin = false;
-    setStoredAdmin(false);
-    clearLocalIdentity();
-    _localUser = null;
     showToast('Signed out', 'info');
   } catch (err) {
     console.error('[Auth] Signout failed:', err);
+  } finally {
+    currentUser = null;
+    clearSupabaseSessionLocal();
+  }
+}
+
+export async function clearRevokedSession() {
+  try {
+    await supabaseClient?.auth.signOut({ scope: 'local' });
+  } catch (err) {
+    console.warn('[Auth] Could not notify Supabase while clearing a revoked session:', err);
+  } finally {
+    currentUser = null;
+    clearSupabaseSessionLocal();
   }
 }
 
 export function getCurrentAuthUser() {
-  if (_localUser) return _localUser;
   return currentUser;
 }
 
@@ -267,15 +226,6 @@ export function getUserEmail() {
   const user = getCurrentAuthUser();
   if (!user) return '';
   return user.email || '';
-}
-
-export function isAdmin() {
-  return _isAdmin;
-}
-
-export function setAdmin(value) {
-  _isAdmin = !!value;
-  setStoredAdmin(_isAdmin);
 }
 
 export async function updatePassword(newPassword) {
@@ -328,8 +278,6 @@ export async function deleteAccount() {
     // Sign out locally
     await supabaseClient.auth.signOut();
     currentUser = null;
-    _isAdmin = false;
-    setStoredAdmin(false);
     showToast('Account deleted', 'info');
     return { error: null };
   } catch (err) {

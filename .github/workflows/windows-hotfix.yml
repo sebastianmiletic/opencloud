@@ -45,9 +45,9 @@ jobs:
       - name: Upload Windows release files
         uses: actions/upload-artifact@v4
         with:
-          name: opencloud-windows-v3.4.2
+          name: opencloud-windows-v3.5.0
           if-no-files-found: error
           path: |
             src-tauri/target/x86_64-pc-windows-msvc/release/opencloud.exe
-            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/OpenCloud_3.4.2_x64-setup.exe
-            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/OpenCloud_3.4.2_x64-setup.exe.sig
+            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/OpenCloud_3.5.0_x64-setup.exe
+            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/OpenCloud_3.5.0_x64-setup.exe.sig

@@ -291,74 +291,52 @@ export async function fetchUserSettings(userId) {
   }
 }
 
-/* ─── Admin ─── */
+/* ─── Account access and owner Dev RPCs ─── */
 
-export async function isUserAdmin(userId) {
+async function callRpc(name, params = {}) {
   const sb = getClient();
-  if (!sb || !userId) return false;
-  try {
-    const { data, error } = await sb
-      .from('profiles')
-      .select('is_admin')
-      .eq('id', userId)
-      .limit(1);
-    if (error) throw error;
-    return !!(data && data[0]?.is_admin);
-  } catch (err) {
-    console.error('[Sync] admin check failed:', err);
-    return false;
-  }
+  if (!sb) throw new Error('Authentication client is unavailable');
+  const { data, error } = await sb.rpc(name, params);
+  if (error) throw error;
+  return data;
 }
 
-export async function fetchAllUsers() {
-  const sb = getClient();
-  if (!sb) return [];
-  try {
-    const { data, error } = await sb
-      .from('profiles')
-      .select('id, email, username, is_admin, is_banned, ban_reason, last_seen_at, created_at')
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    return data || [];
-  } catch (err) {
-    console.error('[Sync] fetch users failed:', err);
-    return [];
-  }
+export async function getMyAccess() {
+  return callRpc('get_my_access');
 }
 
-export async function fetchUserStats(userId) {
-  const sb = getClient();
-  if (!sb || !userId) return null;
-  try {
-    const [colRes, histRes, progRes] = await Promise.all([
-      sb.from('collections').select('id', { count: 'exact' }).eq('user_id', userId),
-      sb.from('watch_history').select('id', { count: 'exact' }).eq('user_id', userId),
-      sb.from('watch_progress').select('id', { count: 'exact' }).eq('user_id', userId)
-    ]);
-    return {
-      collectionCount: colRes.count || 0,
-      historyCount: histRes.count || 0,
-      progressCount: progRes.count || 0
-    };
-  } catch (err) {
-    console.error('[Sync] fetch user stats failed:', err);
-    return null;
-  }
+export async function heartbeatInstallation(installation) {
+  return callRpc('heartbeat_installation', {
+    p_install_id: installation.installId,
+    p_app_version: installation.appVersion,
+    p_platform: installation.platform,
+    p_architecture: installation.architecture
+  });
 }
 
-export async function fetchTotalUserCount() {
-  const sb = getClient();
-  if (!sb) return 0;
-  try {
-    const { count, error } = await sb
-      .from('profiles')
-      .select('id', { count: 'exact', head: true });
-    if (error) throw error;
-    return count || 0;
-  } catch (err) {
-    console.error('[Sync] fetch total users failed:', err);
-    return 0;
-  }
+export async function fetchDevSummary() {
+  return callRpc('dev_summary');
+}
+
+export async function fetchDevUsers({ query = '', status = 'all', limit = 100, offset = 0 } = {}) {
+  return callRpc('dev_list_users', {
+    p_query: query,
+    p_status: status,
+    p_limit: limit,
+    p_offset: offset
+  });
+}
+
+export async function fetchDevUserDetail(userId) {
+  return callRpc('dev_user_detail', { p_user_id: userId });
+}
+
+export async function suspendDevUser(userId, reason = '') {
+  return callRpc('dev_suspend_user', { p_user_id: userId, p_reason: reason });
+}
+
+export async function restoreDevUser(userId) {
+  return callRpc('dev_restore_user', { p_user_id: userId });
 }
 
 export async function fetchUserCollection(userId) {
@@ -519,7 +497,6 @@ export async function createProfile(userId, email, username) {
         id: userId,
         email,
         username: username || email.split('@')[0],
-        is_admin: false,
         created_at: new Date().toISOString()
       });
       if (error) throw error;
@@ -527,27 +504,6 @@ export async function createProfile(userId, email, username) {
     return true;
   } catch (err) {
     console.error('[Sync] create profile failed:', err);
-    return false;
-  }
-}
-
-export async function activateAdmin(userId) {
-  const sb = getClient();
-  if (!sb || !userId) return false;
-  try {
-    // Check if row exists
-    const { data: existing } = await sb.from('profiles').select('id').eq('id', userId).limit(1);
-    if (!existing || existing.length === 0) {
-      // No row exists — we can't update what doesn't exist. Need to create it first.
-      // But we don't have email/username here, so this function alone can't create it.
-      console.error('[Sync] activateAdmin: no profile row for user', userId);
-      return false;
-    }
-    const { error } = await sb.from('profiles').update({ is_admin: true }).eq('id', userId);
-    if (error) throw error;
-    return true;
-  } catch (err) {
-    console.error('[Sync] activate admin failed:', err);
     return false;
   }
 }
@@ -562,86 +518,5 @@ export async function updateProfile(userId, updates) {
   } catch (err) {
     console.error('[Sync] update profile failed:', err);
     return false;
-  }
-}
-
-/* ─── Admin: Ban / Kick / Restore ─── */
-
-export async function banUser(userId, reason = '') {
-  const sb = getClient();
-  if (!sb || !userId) return false;
-  try {
-    const { error } = await sb.from('profiles')
-      .update({ is_banned: true, ban_reason: reason })
-      .eq('id', userId);
-    if (error) throw error;
-    return true;
-  } catch (err) {
-    console.error('[Sync] ban user failed:', err);
-    return false;
-  }
-}
-
-export async function unbanUser(userId) {
-  const sb = getClient();
-  if (!sb || !userId) return false;
-  try {
-    const { error } = await sb.from('profiles')
-      .update({ is_banned: false, ban_reason: '' })
-      .eq('id', userId);
-    if (error) throw error;
-    return true;
-  } catch (err) {
-    console.error('[Sync] unban user failed:', err);
-    return false;
-  }
-}
-
-export async function deleteUserData(userId) {
-  const sb = getClient();
-  if (!sb || !userId) return false;
-  try {
-    await Promise.all([
-      sb.from('collections').delete().eq('user_id', userId),
-      sb.from('watch_history').delete().eq('user_id', userId),
-      sb.from('watch_progress').delete().eq('user_id', userId),
-      sb.from('watch_sessions').delete().eq('user_id', userId),
-      sb.from('user_settings').delete().eq('user_id', userId)
-    ]);
-    return true;
-  } catch (err) {
-    console.error('[Sync] delete user data failed:', err);
-    return false;
-  }
-}
-
-export async function kickUser(userId) {
-  const sb = getClient();
-  if (!sb || !userId) return false;
-  try {
-    // Mark user as having a null last_seen_at so they appear offline
-    // Clients will check periodically and log out if they detect a ban
-    await updateProfile(userId, { last_seen_at: null });
-    return true;
-  } catch (err) {
-    console.error('[Sync] kick user failed:', err);
-    return false;
-  }
-}
-
-export async function getActiveSessions(minutes = 15) {
-  const sb = getClient();
-  if (!sb) return [];
-  try {
-    const { data, error } = await sb
-      .from('watch_sessions')
-      .select('user_id, started_at, title')
-      .gte('started_at', new Date(Date.now() - minutes * 60000).toISOString())
-      .order('started_at', { ascending: false });
-    if (error) throw error;
-    return data || [];
-  } catch (err) {
-    console.error('[Sync] get active sessions failed:', err);
-    return [];
   }
 }

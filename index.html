@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Open Cloud</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Cpath fill='%23fff' d='M403.9 221.8c-5.5-57.9-54.9-103.2-114.3-103.2-46.5 0-86.6 27.6-105.2 67.3-5.5-1.1-11.2-1.7-17-1.7-47.5 0-86 38.5-86 86 0 5 .5 9.9 1.3 14.7C34.8 299.3 0 340.8 0 390c0 56.6 45.9 102.4 102.4 102.4h307.2C466.1 492.4 512 446.5 512 390c0-45.6-30.1-84.2-71.6-97.1 1.4-7.2 2.1-14.6 2.1-22.2 0-21.7-6.7-41.9-18.1-58.6l-20.7 9.7z'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="styles.css?v=24">
+  <link rel="stylesheet" href="styles.css?v=25">
 </head>
 <body>
   <a class="skip-link" href="#mainContent">Skip to content</a>
@@ -110,6 +110,11 @@
                 <i class="fas fa-sliders dropdown-item-icon"></i>
                 <span>Settings</span>
                 <i class="fas fa-chevron-right dropdown-item-arrow"></i>
+              </button>
+              <button class="dropdown-item hidden" id="devPanelBtn">
+                <i class="fas fa-terminal dropdown-item-icon"></i>
+                <span>Dev</span>
+                <span class="dropdown-badge">OWNER</span>
               </button>
               <button class="dropdown-item" id="updateCheckBtn">
                 <i class="fas fa-bell dropdown-item-icon"></i>
@@ -344,7 +349,102 @@
         </div>
       </section>
 
+      <section id="devView" class="dev-view hidden" aria-labelledby="devTitle">
+        <header class="dev-header">
+          <div>
+            <button type="button" class="dev-back" id="devBackBtn">
+              <i class="fas fa-arrow-left" aria-hidden="true"></i>
+              <span>Back to OpenCloud</span>
+            </button>
+            <p class="dev-eyebrow">Owner workspace</p>
+            <h1 id="devTitle">Dev</h1>
+            <p class="dev-description">Accounts, signed-in installations, presence, and access control.</p>
+          </div>
+          <div class="dev-header-actions">
+            <span class="dev-updated" id="devUpdatedAt" aria-live="polite">Not refreshed</span>
+            <button type="button" class="btn btn-secondary" id="devRefreshBtn">
+              <i class="fas fa-rotate" aria-hidden="true"></i>
+              Refresh
+            </button>
+          </div>
+        </header>
+
+        <div class="dev-summary" aria-label="Account summary">
+          <div><span>Accounts</span><strong id="devAccounts">0</strong></div>
+          <div><span>Installations</span><strong id="devInstallations">0</strong></div>
+          <div><span>Online users</span><strong id="devOnlineUsers">0</strong></div>
+          <div><span>Online installs</span><strong id="devOnlineInstallations">0</strong></div>
+          <div><span>Suspended</span><strong id="devSuspended">0</strong></div>
+        </div>
+
+        <div class="dev-toolbar">
+          <label class="dev-search">
+            <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+            <span class="sr-only">Search users</span>
+            <input type="search" id="devSearch" placeholder="Search username or email" autocomplete="off">
+          </label>
+          <label class="dev-filter">
+            <span class="sr-only">Filter by status</span>
+            <select id="devStatusFilter">
+              <option value="all">All accounts</option>
+              <option value="online">Online</option>
+              <option value="offline">Offline</option>
+              <option value="suspended">Suspended</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="dev-workspace">
+          <div class="dev-table-wrap">
+            <table class="dev-table">
+              <thead>
+                <tr>
+                  <th scope="col">User</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Last seen</th>
+                  <th scope="col">Installations</th>
+                  <th scope="col">Latest client</th>
+                  <th scope="col"><span class="sr-only">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody id="devUserList">
+                <tr><td colspan="6" class="dev-table-state">Open Dev to load accounts.</td></tr>
+              </tbody>
+            </table>
+            <div class="dev-pagination">
+              <span id="devPaginationText">0 accounts</span>
+              <div>
+                <button type="button" class="btn btn-secondary" id="devPreviousBtn" disabled>Previous</button>
+                <button type="button" class="btn btn-secondary" id="devNextBtn" disabled>Next</button>
+              </div>
+            </div>
+          </div>
+
+          <aside class="dev-detail" id="devDetail" aria-live="polite">
+            <div class="dev-detail-empty">
+              <i class="fas fa-user-shield" aria-hidden="true"></i>
+              <h2>Select an account</h2>
+              <p>Review installation activity and manage access without exposing passwords or viewing history.</p>
+            </div>
+          </aside>
+        </div>
+
+        <p class="dev-privacy">
+          OpenCloud records a random installation ID, platform, architecture, app version, and last-seen time for signed-in administration. It does not collect passwords, authentication tokens, IP addresses, hardware fingerprints, or viewing activity here.
+        </p>
+      </section>
+
     </main>
+  </div>
+
+  <div id="accessGate" class="access-gate hidden" role="dialog" aria-modal="true" aria-labelledby="accessGateTitle">
+    <div class="access-gate-panel">
+      <div class="access-gate-icon"><i class="fas fa-cloud" aria-hidden="true"></i></div>
+      <p class="access-gate-label">OpenCloud authorization</p>
+      <h1 id="accessGateTitle">Connection required</h1>
+      <p id="accessGateMessage">OpenCloud needs an online account check to continue.</p>
+      <button type="button" class="btn btn-primary" id="accessRetryBtn">Try again</button>
+    </div>
   </div>
 
   <!-- OVERLAYS: moved outside app-container so position:fixed works relative to viewport -->
@@ -569,7 +669,6 @@
           <button type="button" class="settings-tab-btn" data-tab="blocker">Blocker</button>
           <button type="button" class="settings-tab-btn" data-tab="stats">Stats</button>
           <button type="button" class="settings-tab-btn" data-tab="account">Account</button>
-          <button type="button" class="settings-tab-btn hidden" data-tab="admin" id="adminTabBtn">Admin</button>
         </div>
         <form id="settingsForm">
           <div class="settings-tab-panel" data-panel="general">
@@ -585,13 +684,6 @@
             <div class="form-group" style="display:flex;align-items:center;gap:0.75rem;">
               <input type="checkbox" id="settingsAutoPlay" checked style="width:auto;">
               <label for="settingsAutoPlay" style="margin-bottom:0;">Auto-play videos when opening player</label>
-            </div>
-            <hr style="border:none;border-top:1px solid var(--border-color);margin:1.25rem 0;">
-            <div class="form-group">
-              <label for="activationKey">Activation Key</label>
-              <input type="password" id="activationKey" placeholder="Enter activation key" autocomplete="off">
-              <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.25rem;">Unlock additional features.</p>
-              <button type="button" class="btn btn-secondary" id="activateBtn" style="margin-top:0.5rem;">Activate</button>
             </div>
           </div>
           <div class="settings-tab-panel hidden" data-panel="themes">
@@ -777,47 +869,6 @@
               </div>
             </div>
           </div>
-          <div class="settings-tab-panel hidden" data-panel="admin">
-            <div class="admin-dashboard" id="adminDashboard">
-              <div class="stats-grid admin-stats-grid">
-                <div class="stats-card">
-                  <div class="stats-card-label">Total Users</div>
-                  <div class="stats-card-value" id="adminTotalUsers">0</div>
-                </div>
-                <div class="stats-card">
-                  <div class="stats-card-label">Active Now</div>
-                  <div class="stats-card-value" id="adminActiveNow">0</div>
-                </div>
-                <div class="stats-card">
-                  <div class="stats-card-label">Active Today</div>
-                  <div class="stats-card-value" id="adminActiveToday">0</div>
-                </div>
-                <div class="stats-card">
-                  <div class="stats-card-label">Banned</div>
-                  <div class="stats-card-value" id="adminBannedCount">0</div>
-                </div>
-              </div>
-              <div class="admin-actions-bar">
-                <button class="btn btn-secondary admin-refresh-btn" id="adminRefreshBtn"><i class="fas fa-rotate"></i> Refresh</button>
-              </div>
-              <div class="stats-section">
-                <h4>User Management</h4>
-                <div class="admin-table-wrap" id="adminUserListWrap">
-                  <table class="admin-table">
-                    <thead><tr>
-                      <th>User</th>
-                      <th>Email</th>
-                      <th>Joined</th>
-                      <th>Last Seen</th>
-                      <th>Status</th>
-                      <th>Actions</th>
-                    </tr></thead>
-                    <tbody id="adminUserList"><tr><td colspan="6" style="text-align:center;padding:1.5rem;">Loading users...</td></tr></tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </div>
           <div class="form-actions">
             <button type="button" class="btn btn-secondary" id="settingsCancel">Cancel</button>
             <button type="submit" class="btn btn-primary">Save Settings</button>
@@ -829,7 +880,7 @@
 
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/bootstrap.js?v=27"></script>
+  <script type="module" src="js/bootstrap.js?v=28"></script>
 
   <div id="updateModal" class="modal update-modal hidden" role="dialog" aria-modal="true" aria-labelledby="updateModalTitle" aria-describedby="updateModalMsg">
     <div class="modal-overlay"></div>

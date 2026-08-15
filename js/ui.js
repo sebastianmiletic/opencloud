@@ -206,6 +206,7 @@ export function initNav() {
 }
 
 function toggleView(tab) {
+  document.getElementById('devView')?.classList.add('hidden');
   homeView?.classList.toggle('hidden', tab !== 'home');
   collectionView?.classList.toggle('hidden', tab !== 'collection');
   historyView?.classList.toggle('hidden', tab !== 'history');
