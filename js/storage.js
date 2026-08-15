@@ -1,18 +1,19 @@
 /** Storage Module — Supabase-backed with in-memory state */
 import {
-  fetchCollection, addToCollection as syncAddCollection, removeFromCollection as syncRemoveCollection,
-  fetchWatchHistory, addWatchHistory as syncAddHistory, removeWatchHistory as syncRemoveHistory,
+  fetchCollection, syncCollection, addToCollection as syncAddCollection, removeFromCollection as syncRemoveCollection,
+  fetchWatchHistory, syncWatchHistory, addWatchHistory as syncAddHistory, removeWatchHistory as syncRemoveHistory,
   fetchWatchProgress, saveWatchProgress as syncSaveProgress,
   fetchUserSettings, saveUserSettings as syncSaveSettings,
   fetchFolders, saveFolders as syncSaveFolders,
   fetchWatchSessions, recordWatchSession as syncRecordSession,
-  updateProfile
+  updateProfile, fetchDataTombstones, syncDataTombstones, clearDataTombstone, backupMyUserData
 } from './sync.js';
-import { getCurrentAuthUser, getSupabaseClient } from './auth.js';
+import { getCurrentAuthUser } from './auth.js';
 import {
   setUserCollection, setUserHistory, setWatchProgress, setUserFolders
 } from './state.js';
 import { episodeProgressKey } from './playback-progress.js';
+import { mergeDataItems, mergeProgressMaps, mergeTombstones, newerThanTombstone } from './data-merge.js';
 
 /* Lazy imports to avoid circular deps */
 let _api = null;
@@ -34,28 +35,77 @@ let _cache = {
   progress: {},
   folders: [],
   settings: null,
-  profile: null
+  profile: null,
+  tombstones: []
 };
 
 const LOCAL_PREFIX = 'oc_local_';
+const ACCOUNT_PREFIX = 'oc_user_';
 const _progressSyncChains = new Map();
+let _activeLocalPrefix = null;
+let _pendingLegacyMigrationKey = null;
 
-function loadLocalCache() {
-  try { _cache.collection = JSON.parse(localStorage.getItem(LOCAL_PREFIX + 'collection')) || []; } catch (e) { _cache.collection = []; }
-  try { _cache.history = JSON.parse(localStorage.getItem(LOCAL_PREFIX + 'history')) || []; } catch (e) { _cache.history = []; }
-  try { _cache.progress = JSON.parse(localStorage.getItem(LOCAL_PREFIX + 'progress')) || {}; } catch (e) { _cache.progress = {}; }
-  try { _cache.folders = JSON.parse(localStorage.getItem(LOCAL_PREFIX + 'folders')) || []; } catch (e) { _cache.folders = []; }
-  try { _cache.settings = JSON.parse(localStorage.getItem(LOCAL_PREFIX + 'settings')) || null; } catch (e) { _cache.settings = null; }
+function readLocalJson(key, fallback) {
+  try {
+    const value = JSON.parse(localStorage.getItem(key));
+    return value ?? fallback;
+  } catch (e) {
+    return fallback;
+  }
+}
+
+function loadLocalCache(userId) {
+  _activeLocalPrefix = userId ? `${ACCOUNT_PREFIX}${userId}_` : null;
+  _pendingLegacyMigrationKey = null;
+  if (!_activeLocalPrefix) {
+    _cache = { collection: [], history: [], progress: {}, folders: [], settings: null, profile: null, tombstones: [] };
+    return;
+  }
+
+  _cache.collection = readLocalJson(_activeLocalPrefix + 'collection', []);
+  _cache.history = readLocalJson(_activeLocalPrefix + 'history', []);
+  _cache.progress = readLocalJson(_activeLocalPrefix + 'progress', {});
+  _cache.folders = readLocalJson(_activeLocalPrefix + 'folders', []);
+  _cache.settings = readLocalJson(_activeLocalPrefix + 'settings', null);
+  _cache.tombstones = readLocalJson(_activeLocalPrefix + 'tombstones', []);
+
+  // One-time import of the old unscoped cache, but only for the account that created it.
+  const migrationKey = _activeLocalPrefix + 'legacy_imported_v1';
+  const legacyIdentity = readLocalJson(LOCAL_PREFIX + 'identity', null);
+  if (!localStorage.getItem(migrationKey) && legacyIdentity?.id === userId) {
+    _cache.collection = mergeDataItems(
+      _cache.collection,
+      readLocalJson(LOCAL_PREFIX + 'collection', []),
+      { timestampField: 'added_at', dataType: 'collection', tombstones: _cache.tombstones }
+    );
+    _cache.history = mergeDataItems(
+      _cache.history,
+      readLocalJson(LOCAL_PREFIX + 'history', []),
+      { timestampField: 'watched_at', dataType: 'history', tombstones: _cache.tombstones }
+    );
+    _cache.progress = { ...readLocalJson(LOCAL_PREFIX + 'progress', {}), ..._cache.progress };
+    _cache.folders = [...new Set([...readLocalJson(LOCAL_PREFIX + 'folders', []), ..._cache.folders])];
+    _cache.settings = _cache.settings || readLocalJson(LOCAL_PREFIX + 'settings', null);
+    _pendingLegacyMigrationKey = migrationKey;
+  }
 }
 
 function persistLocalCache() {
+  if (!_activeLocalPrefix) return;
   try {
-    localStorage.setItem(LOCAL_PREFIX + 'collection', JSON.stringify(_cache.collection));
-    localStorage.setItem(LOCAL_PREFIX + 'history', JSON.stringify(_cache.history));
-    localStorage.setItem(LOCAL_PREFIX + 'progress', JSON.stringify(_cache.progress));
-    localStorage.setItem(LOCAL_PREFIX + 'folders', JSON.stringify(_cache.folders));
-    if (_cache.settings) localStorage.setItem(LOCAL_PREFIX + 'settings', JSON.stringify(_cache.settings));
-  } catch (e) {}
+    localStorage.setItem(_activeLocalPrefix + 'collection', JSON.stringify(_cache.collection));
+    localStorage.setItem(_activeLocalPrefix + 'history', JSON.stringify(_cache.history));
+    localStorage.setItem(_activeLocalPrefix + 'progress', JSON.stringify(_cache.progress));
+    localStorage.setItem(_activeLocalPrefix + 'folders', JSON.stringify(_cache.folders));
+    localStorage.setItem(_activeLocalPrefix + 'tombstones', JSON.stringify(_cache.tombstones));
+    if (_cache.settings) localStorage.setItem(_activeLocalPrefix + 'settings', JSON.stringify(_cache.settings));
+    if (_pendingLegacyMigrationKey) {
+      localStorage.setItem(_pendingLegacyMigrationKey, new Date().toISOString());
+      _pendingLegacyMigrationKey = null;
+    }
+  } catch (e) {
+    console.warn('[Storage] local cache persistence failed:', e);
+  }
 }
 
 function getUserId() {
@@ -78,10 +128,9 @@ async function syncProgressInOrder(userId, item) {
 
 /* ─── Init ─── */
 export async function initStorage() {
-  // Always start with local data so the app works offline / in local mode
-  loadLocalCache();
-
   const userId = getUserId();
+  // Personal caches are account-scoped so signing between accounts cannot mix data.
+  loadLocalCache(userId);
   if (!userId) {
     setUserCollection(_cache.collection);
     setUserHistory(_cache.history);
@@ -92,91 +141,69 @@ export async function initStorage() {
 
   const results = await Promise.allSettled([
     fetchCollection(userId),
-    fetchWatchHistory(userId, 200),
+    fetchWatchHistory(userId),
     fetchWatchProgress(userId),
-    fetchUserSettings(userId)
+    fetchUserSettings(userId),
+    fetchDataTombstones(userId),
+    backupMyUserData()
   ]);
 
-  const [collectionRes, historyRes, progressRes, settingsRes] = results;
+  const [collectionRes, historyRes, progressRes, settingsRes, tombstonesRes] = results;
 
   const collection = collectionRes.status === 'fulfilled' ? collectionRes.value : [];
   const history    = historyRes.status    === 'fulfilled' ? historyRes.value    : [];
   const progress   = progressRes.status   === 'fulfilled' ? progressRes.value   : {};
-  const settings   = settingsRes.status   === 'fulfilled' ? settingsRes.value   : {};
+  const settings   = settingsRes.status   === 'fulfilled' ? settingsRes.value   : null;
+  const remoteTombstones = tombstonesRes.status === 'fulfilled' ? tombstonesRes.value : [];
 
-  // If Supabase returned data, use it (it may be fresher from another device).
-  // Otherwise keep the local cache.
-  if (collection?.length > 0) {
-    _cache.collection = (collection || []).filter(item => item && item.id && item.title && item.title !== 'Unknown');
-  }
+  _cache.tombstones = mergeTombstones(_cache.tombstones, remoteTombstones);
+  _cache.collection = mergeDataItems(_cache.collection, collection, {
+    timestampField: 'added_at', dataType: 'collection', tombstones: _cache.tombstones
+  }).filter(item => item.title && item.title !== 'Unknown');
+  _cache.history = mergeDataItems(_cache.history, history, {
+    timestampField: 'watched_at', dataType: 'history', tombstones: _cache.tombstones
+  }).filter(item => !!item.id);
 
-  // Merge Supabase history with local cache, preserving rich metadata.
-  // Local cache has full poster/rating/year from TMDB; Supabase may strip these.
-  const localHistoryMap = new Map();
-  (_cache.history || []).forEach(h => {
-    if (h?.id) localHistoryMap.set(`${h.id}::${h.media_type}`, h);
+  // Repair either side from the union. These operations never clear a table first.
+  await Promise.allSettled([
+    syncDataTombstones(userId, _cache.tombstones),
+    syncCollection(userId, _cache.collection),
+    syncWatchHistory(userId, _cache.history)
+  ]);
+
+  // A later explicit re-add supersedes and clears an older deletion marker.
+  const staleTombstones = _cache.tombstones.filter(tombstone => {
+    const items = tombstone.data_type === 'collection' ? _cache.collection : _cache.history;
+    const field = tombstone.data_type === 'collection' ? 'added_at' : 'watched_at';
+    const item = items.find(candidate => Number(candidate.id) === Number(tombstone.tmdb_id)
+      && candidate.media_type === tombstone.media_type);
+    return item && newerThanTombstone(item, field, tombstone);
   });
-
-  if (history?.length > 0) {
-    const merged = [];
-    const seen = new Set();
-    (history || []).forEach(h => {
-      const key = `${h.id}::${h.media_type}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-      const local = localHistoryMap.get(key);
-      if (local) {
-        // Keep the richer metadata from local cache, but use the latest watched_at
-        const localDate = new Date(local.watched_at || 0);
-        const remoteDate = new Date(h.watched_at || 0);
-        merged.push({
-          ...local,
-          watched_at: remoteDate > localDate ? h.watched_at : local.watched_at,
-          season: h.season ?? local.season ?? null,
-          episode: h.episode ?? local.episode ?? null,
-          duration_watched: h.duration_watched || local.duration_watched || 0,
-          // Explicitly keep local poster/rating/year if Supabase stripped them
-          poster_path: local.poster_path || h.poster_path || null,
-          vote_average: local.vote_average != null ? local.vote_average : (h.vote_average != null ? h.vote_average : null),
-          year: local.year || h.year || null,
-          title: local.title || h.title || 'Unknown'
-        });
-      } else {
-        // Item from another device — add it even if metadata is thin
-        merged.push(h);
-      }
-    });
-    _cache.history = merged.filter(h => !!h.id);
+  await Promise.allSettled(staleTombstones.map(tombstone => clearDataTombstone(
+    userId, tombstone.data_type, tombstone.tmdb_id, tombstone.media_type
+  )));
+  if (staleTombstones.length) {
+    const staleKeys = new Set(staleTombstones.map(t => `${t.data_type}:${t.tmdb_id}:${t.media_type}`));
+    _cache.tombstones = _cache.tombstones.filter(t => !staleKeys.has(`${t.data_type}:${t.tmdb_id}:${t.media_type}`));
   }
 
-  if (progress && Object.keys(progress).length > 0) {
-    const mergedProgress = { ..._cache.progress };
-    Object.entries(progress).forEach(([id, remote]) => {
-      const local = mergedProgress[id] || {};
-      const localTime = Date.parse(local.updated_at || '') || 0;
-      const remoteTime = Date.parse(remote.updated_at || '') || 0;
-      const newer = localTime > remoteTime ? local : remote;
-      const older = newer === local ? remote : local;
-      mergedProgress[id] = {
-        ...older,
-        ...newer,
-        episodes: {
-          ...(older.episodes || {}),
-          ...(newer.episodes || {})
-        }
-      };
-      if (localTime > remoteTime && local.mediaType) {
-        syncProgressInOrder(userId, {
-          id,
-          media_type: local.mediaType,
-          season: local.season ?? null,
-          episode: local.episode ?? null,
-          progress_seconds: Math.max(0, Math.round(Number(local.playbackSeconds ?? local.progress_seconds) || 0))
-        }).catch(error => console.warn('[Storage] local progress recovery sync failed:', error));
-      }
+  _cache.progress = mergeProgressMaps(_cache.progress, progress);
+  await Promise.allSettled(Object.entries(_cache.progress).map(([id, item]) => {
+    const mediaType = item.mediaType || item.media_type
+      || _cache.history.find(entry => String(entry.id) === String(id))?.media_type
+      || _cache.collection.find(entry => String(entry.id) === String(id))?.media_type;
+    if (!mediaType) return Promise.resolve(false);
+    item.mediaType = mediaType;
+    return syncProgressInOrder(userId, {
+      id,
+      media_type: mediaType,
+      season: item.season ?? null,
+      episode: item.episode ?? null,
+      progress_seconds: Math.max(0, Math.round(Number(item.playbackSeconds ?? item.progress_seconds) || 0)),
+      duration_seconds: Math.max(0, Math.round(Number(item.durationSeconds) || 0)),
+      episodes: item.episodes || {}
     });
-    _cache.progress = mergedProgress;
-  }
+  }));
   if (settings) {
     _cache.settings = settings || { device: 'laptop', provider: 'videasy', autoPlay: true, folders: [] };
     _cache.folders = settings?.folders || [];
@@ -199,6 +226,9 @@ export async function saveUserCollection(items) {
   _cache.collection = items;
   setUserCollection(items);
   persistLocalCache();
+  const userId = getUserId();
+  if (userId) return syncCollection(userId, items);
+  return true;
 }
 
 export async function addToUserCollection(item) {
@@ -214,6 +244,8 @@ export async function addToUserCollection(item) {
     added_at: item.added_at || new Date().toISOString(),
     folder: item.folder || null
   };
+  _cache.tombstones = _cache.tombstones.filter(t => !(t.data_type === 'collection'
+    && Number(t.tmdb_id) === Number(normalized.id) && t.media_type === normalized.media_type));
   // Optimistic update — memory + state first, guaranteed instant
   const exists = _cache.collection.findIndex(i => i.id === normalized.id && i.media_type === normalized.media_type);
   if (exists >= 0) _cache.collection[exists] = normalized;
@@ -233,6 +265,10 @@ export async function addToUserCollection(item) {
 export async function removeFromUserCollection(tmdbId, mediaType) {
   const userId = getUserId();
   if (!userId) return false;
+  const deletedAt = new Date().toISOString();
+  _cache.tombstones = mergeTombstones(_cache.tombstones, [{
+    data_type: 'collection', tmdb_id: tmdbId, media_type: mediaType, deleted_at: deletedAt
+  }]);
   // Optimistic — remove from local immediately
   _cache.collection = _cache.collection.filter(i => !(i.id === tmdbId && i.media_type === mediaType));
   setUserCollection([..._cache.collection]);
@@ -240,7 +276,7 @@ export async function removeFromUserCollection(tmdbId, mediaType) {
 
   // Supabase in background
   try {
-    await syncRemoveCollection(userId, tmdbId);
+    await syncRemoveCollection(userId, tmdbId, mediaType);
   } catch (err) {
     console.error('[Storage] removeFromUserCollection Supabase failed:', err);
   }
@@ -258,47 +294,8 @@ export async function saveUserHistory(items) {
   _cache.history = items;
   setUserHistory(items);
   persistLocalCache();
-  // Bulk save to Supabase (clear then re-insert)
-  const supabase = getSupabaseClient();
-  if (!supabase) return false;
-  try {
-    await supabase.from('watch_history').delete().eq('user_id', userId);
-    const batch = items.slice(0, 50).map(item => ({
-      user_id: userId,
-      tmdb_id: Number(item.id) || 0,
-      media_type: item.media_type,
-      title: item.title,
-      season: item.season || null,
-      episode: item.episode || null,
-      duration_watched: item.duration_watched || 0,
-      poster_path: item.poster_path || null,
-      vote_average: item.vote_average != null ? item.vote_average : null,
-      year: item.year || null,
-      watched_at: item.watched_at || new Date().toISOString()
-    }));
-    if (batch.length) {
-      const { error } = await supabase.from('watch_history').insert(batch);
-      if (error) {
-        console.warn('[saveUserHistory] Full batch failed, retrying core columns:', error.message);
-        const coreBatch = items.slice(0, 50).map(item => ({
-          user_id: userId,
-          tmdb_id: Number(item.id) || 0,
-          media_type: item.media_type,
-          title: item.title,
-          season: item.season || null,
-          episode: item.episode || null,
-          duration_watched: item.duration_watched || 0,
-          watched_at: item.watched_at || new Date().toISOString()
-        }));
-        const { error: coreError } = await supabase.from('watch_history').insert(coreBatch);
-        if (coreError) throw coreError;
-      }
-    }
-    return true;
-  } catch (e) {
-    console.error('[saveUserHistory] Supabase save failed:', e);
-    return false;
-  }
+  if (!userId) return false;
+  return syncWatchHistory(userId, items);
 }
 
 export async function addToUserHistory(item) {
@@ -316,10 +313,11 @@ export async function addToUserHistory(item) {
     year: item.year || (item.release_date || item.first_air_date || '').slice(0, 4) || null,
     watched_at: new Date().toISOString()
   };
-  // Deduplicate and cap — instant
+  _cache.tombstones = _cache.tombstones.filter(t => !(t.data_type === 'history'
+    && Number(t.tmdb_id) === Number(entry.id) && t.media_type === entry.media_type));
+  // Deduplicate without truncating the user's history.
   _cache.history = _cache.history.filter(h => !(h.id === entry.id && h.media_type === entry.media_type));
   _cache.history.unshift(entry);
-  if (_cache.history.length > 200) _cache.history = _cache.history.slice(0, 200);
   setUserHistory([..._cache.history]);
   persistLocalCache();
 
@@ -335,6 +333,10 @@ export async function addToUserHistory(item) {
 export async function removeFromUserHistory(tmdbId, mediaType) {
   const userId = getUserId();
   if (!userId) return false;
+  const deletedAt = new Date().toISOString();
+  _cache.tombstones = mergeTombstones(_cache.tombstones, [{
+    data_type: 'history', tmdb_id: tmdbId, media_type: mediaType, deleted_at: deletedAt
+  }]);
   _cache.history = _cache.history.filter(h => !(h.id === tmdbId && h.media_type === mediaType));
   setUserHistory([..._cache.history]);
 
@@ -344,7 +346,7 @@ export async function removeFromUserHistory(tmdbId, mediaType) {
   persistLocalCache();
 
   try {
-    await syncRemoveHistory(userId, tmdbId);
+    await syncRemoveHistory(userId, tmdbId, mediaType);
     await syncSaveProgress(userId, { id: tmdbId, media_type: mediaType, progress_seconds: 0 });
   } catch (err) {
     console.error('[Storage] removeFromUserHistory Supabase failed:', err);
@@ -469,7 +471,11 @@ export async function syncWatchProgressItem(tmdbId, mediaType, season, episode, 
   persistLocalCache();
   const userId = getUserId();
   if (!userId) return true;
-  await syncProgressInOrder(userId, { id: tmdbId, media_type: mediaType, season, episode, progress_seconds: seconds });
+  await syncProgressInOrder(userId, {
+    id: tmdbId, media_type: mediaType, season, episode, progress_seconds: seconds,
+    duration_seconds: Math.max(0, Math.round(Number(next.durationSeconds) || 0)),
+    episodes: next.episodes || {}
+  });
   return true;
 }
 

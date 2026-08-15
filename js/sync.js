@@ -39,9 +39,11 @@ export async function syncCollection(userId, items) {
       year: item.year || null,
       poster_path: item.poster_path || null,
       vote_average: item.vote_average || 0,
-      added_at: item.added_at || new Date().toISOString()
+      added_at: item.added_at || new Date().toISOString(),
+      folder: item.folder || null
     }));
-    const { error } = await sb.from('collections').upsert(rows, { onConflict: 'user_id,tmdb_id' });
+    if (!rows.length) return true;
+    const { error } = await sb.from('collections').upsert(rows, { onConflict: 'user_id,tmdb_id,media_type' });
     if (error) throw error;
     return true;
   } catch (err) {
@@ -67,7 +69,8 @@ export async function fetchCollection(userId) {
       year: row.year,
       poster_path: row.poster_path,
       vote_average: row.vote_average,
-      added_at: row.added_at
+      added_at: row.added_at,
+      folder: row.folder || null
     }));
   } catch (err) {
     console.error('[Sync] fetch collection failed:', err);
@@ -79,6 +82,7 @@ export async function addToCollection(userId, item) {
   const sb = getClient();
   if (!sb || !userId) return false;
   try {
+    await clearDataTombstone(userId, 'collection', item.id, item.media_type);
     const { error } = await sb.from('collections').upsert({
       user_id: userId,
       tmdb_id: item.id,
@@ -87,8 +91,9 @@ export async function addToCollection(userId, item) {
       year: item.year || null,
       poster_path: item.poster_path || null,
       vote_average: item.vote_average || 0,
-      added_at: item.added_at || new Date().toISOString()
-    }, { onConflict: 'user_id,tmdb_id' });
+      added_at: item.added_at || new Date().toISOString(),
+      folder: item.folder || null
+    }, { onConflict: 'user_id,tmdb_id,media_type' });
     if (error) throw error;
     return true;
   } catch (err) {
@@ -97,11 +102,14 @@ export async function addToCollection(userId, item) {
   }
 }
 
-export async function removeFromCollection(userId, tmdbId) {
+export async function removeFromCollection(userId, tmdbId, mediaType) {
   const sb = getClient();
   if (!sb || !userId) return false;
   try {
-    const { error } = await sb.from('collections').delete().eq('user_id', userId).eq('tmdb_id', tmdbId);
+    const recorded = await recordDataTombstone(userId, 'collection', tmdbId, mediaType);
+    if (!recorded) throw new Error('Could not record collection deletion');
+    const { error } = await sb.from('collections').delete()
+      .eq('user_id', userId).eq('tmdb_id', tmdbId).eq('media_type', mediaType);
     if (error) throw error;
     return true;
   } catch (err) {
@@ -116,11 +124,8 @@ export async function addWatchHistory(userId, item) {
   const sb = getClient();
   if (!sb || !userId) return false;
   try {
-    // Delete any existing entry first to avoid duplicates
-    await sb.from('watch_history').delete().eq('user_id', userId).eq('tmdb_id', item.id);
-    
-    // Try insert with full metadata first
-    const { error } = await sb.from('watch_history').insert({
+    await clearDataTombstone(userId, 'history', item.id, item.media_type);
+    const row = {
       user_id: userId,
       tmdb_id: item.id,
       media_type: item.media_type,
@@ -131,24 +136,11 @@ export async function addWatchHistory(userId, item) {
       poster_path: item.poster_path || null,
       vote_average: item.vote_average || 0,
       year: item.year || null,
-      watched_at: new Date().toISOString()
-    });
-    
-    // If insert failed (likely missing columns), fallback to core columns only
-    if (error) {
-      console.warn('[Sync] Full history insert failed, retrying with core columns:', error.message);
-      const { error: coreError } = await sb.from('watch_history').insert({
-        user_id: userId,
-        tmdb_id: item.id,
-        media_type: item.media_type,
-        title: item.title,
-        season: item.season || null,
-        episode: item.episode || null,
-        duration_watched: item.duration_watched || 0,
-        watched_at: new Date().toISOString()
-      });
-      if (coreError) throw coreError;
-    }
+      watched_at: item.watched_at || new Date().toISOString()
+    };
+    const { error } = await sb.from('watch_history')
+      .upsert(row, { onConflict: 'user_id,tmdb_id,media_type' });
+    if (error) throw error;
     return true;
   } catch (err) {
     console.error('[Sync] add watch history failed:', err);
@@ -156,16 +148,45 @@ export async function addWatchHistory(userId, item) {
   }
 }
 
-export async function fetchWatchHistory(userId, limit = 100) {
+export async function syncWatchHistory(userId, items) {
+  const sb = getClient();
+  if (!sb || !userId) return false;
+  const rows = (items || []).map(item => ({
+    user_id: userId,
+    tmdb_id: Number(item.id),
+    media_type: item.media_type,
+    title: item.title || 'Unknown',
+    season: item.season ?? null,
+    episode: item.episode ?? null,
+    duration_watched: Number(item.duration_watched) || 0,
+    poster_path: item.poster_path || null,
+    vote_average: item.vote_average || 0,
+    year: item.year || null,
+    watched_at: item.watched_at || new Date().toISOString()
+  })).filter(row => row.tmdb_id && row.media_type);
+  if (!rows.length) return true;
+  try {
+    const { error } = await sb.from('watch_history')
+      .upsert(rows, { onConflict: 'user_id,tmdb_id,media_type' });
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.error('[Sync] history batch failed:', err);
+    return false;
+  }
+}
+
+export async function fetchWatchHistory(userId, limit = null) {
   const sb = getClient();
   if (!sb || !userId) return [];
   try {
-    const { data, error } = await sb
+    let query = sb
       .from('watch_history')
       .select('*')
       .eq('user_id', userId)
-      .order('watched_at', { ascending: false })
-      .limit(limit);
+      .order('watched_at', { ascending: false });
+    if (Number.isFinite(limit) && limit > 0) query = query.limit(limit);
+    const { data, error } = await query;
     if (error) throw error;
     return (data || []).map(row => ({
       id: row.tmdb_id,
@@ -185,6 +206,61 @@ export async function fetchWatchHistory(userId, limit = 100) {
   }
 }
 
+/* ─── Lossless sync tombstones and backups ─── */
+
+export async function fetchDataTombstones(userId) {
+  const sb = getClient();
+  if (!sb || !userId) return [];
+  const { data, error } = await sb.from('user_data_tombstones').select('*').eq('user_id', userId);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function syncDataTombstones(userId, tombstones) {
+  const sb = getClient();
+  if (!sb || !userId || !tombstones?.length) return true;
+  const rows = tombstones.map(item => ({
+    user_id: userId,
+    data_type: item.data_type,
+    tmdb_id: Number(item.tmdb_id ?? item.id),
+    media_type: item.media_type,
+    deleted_at: item.deleted_at || new Date().toISOString()
+  }));
+  const { error } = await sb.from('user_data_tombstones')
+    .upsert(rows, { onConflict: 'user_id,data_type,tmdb_id,media_type' });
+  if (error) throw error;
+  return true;
+}
+
+export async function recordDataTombstone(userId, dataType, tmdbId, mediaType, deletedAt = new Date().toISOString()) {
+  try {
+    return await syncDataTombstones(userId, [{ data_type: dataType, tmdb_id: tmdbId, media_type: mediaType, deleted_at: deletedAt }]);
+  } catch (err) {
+    console.error('[Sync] record deletion failed:', err);
+    return false;
+  }
+}
+
+export async function clearDataTombstone(userId, dataType, tmdbId, mediaType) {
+  const sb = getClient();
+  if (!sb || !userId) return false;
+  const { error } = await sb.from('user_data_tombstones').delete()
+    .eq('user_id', userId)
+    .eq('data_type', dataType)
+    .eq('tmdb_id', tmdbId)
+    .eq('media_type', mediaType);
+  if (error) throw error;
+  return true;
+}
+
+export async function backupMyUserData() {
+  const sb = getClient();
+  if (!sb) return null;
+  const { data, error } = await sb.rpc('backup_my_user_data');
+  if (error) throw error;
+  return data;
+}
+
 /* ─── Watch Progress ─── */
 
 export async function saveWatchProgress(userId, item) {
@@ -198,6 +274,8 @@ export async function saveWatchProgress(userId, item) {
       season: item.season || null,
       episode: item.episode || null,
       progress_seconds: item.progress_seconds || 0,
+      duration_seconds: item.duration_seconds || 0,
+      episode_progress: item.episodes || {},
       updated_at: new Date().toISOString()
     }, { onConflict: 'user_id,tmdb_id' });
     if (error) throw error;
@@ -225,11 +303,14 @@ export async function fetchWatchProgress(userId) {
         episode: row.episode,
         playbackSeconds: row.progress_seconds,
         progress_seconds: row.progress_seconds,
+        durationSeconds: row.duration_seconds || 0,
         elapsedMinutes: row.media_type === 'tv' ? (Number(row.progress_seconds) || 0) / 60 : undefined,
-        updated_at: row.updated_at
+        updated_at: row.updated_at,
+        episodes: row.episode_progress || {}
       };
       if (row.media_type === 'tv' && row.season != null && row.episode != null) {
         progress.episodes = {
+          ...(progress.episodes || {}),
           [`s${Number(row.season) || 1}e${Number(row.episode) || 1}`]: {
             playbackSeconds: row.progress_seconds,
             progress_seconds: row.progress_seconds,
@@ -383,11 +464,14 @@ export async function fetchUserHistory(userId) {
   }
 }
 
-export async function removeWatchHistory(userId, tmdbId) {
+export async function removeWatchHistory(userId, tmdbId, mediaType) {
   const sb = getClient();
   if (!sb || !userId) return false;
   try {
-    const { error } = await sb.from('watch_history').delete().eq('user_id', userId).eq('tmdb_id', tmdbId);
+    const recorded = await recordDataTombstone(userId, 'history', tmdbId, mediaType);
+    if (!recorded) throw new Error('Could not record history deletion');
+    const { error } = await sb.from('watch_history').delete()
+      .eq('user_id', userId).eq('tmdb_id', tmdbId).eq('media_type', mediaType);
     if (error) throw error;
     return true;
   } catch (err) {

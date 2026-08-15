@@ -1,3 +1,5 @@
+import { mergeDataItems } from './data-merge.js';
+
 const tauriApi = () => window.__TAURI__ || null;
 
 export function isTauri() {
@@ -24,8 +26,30 @@ export async function importLegacyElectronStorage() {
   if (!migration?.storage) return false;
   for (const [key, value] of Object.entries(migration.storage)) {
     if (key === 'oc_is_admin' || key.startsWith('sb-')) continue;
-    if (typeof value === 'string' && localStorage.getItem(key) === null) {
+    if (typeof value !== 'string') continue;
+    const current = localStorage.getItem(key);
+    if (current === null) {
       localStorage.setItem(key, value);
+      continue;
+    }
+    try {
+      const legacyValue = JSON.parse(value);
+      const currentValue = JSON.parse(current);
+      if (key === 'oc_local_collection') {
+        localStorage.setItem(key, JSON.stringify(mergeDataItems(currentValue, legacyValue, {
+          timestampField: 'added_at', dataType: 'collection'
+        })));
+      } else if (key === 'oc_local_history') {
+        localStorage.setItem(key, JSON.stringify(mergeDataItems(currentValue, legacyValue, {
+          timestampField: 'watched_at', dataType: 'history'
+        })));
+      } else if (key === 'oc_local_progress' && currentValue && legacyValue) {
+        localStorage.setItem(key, JSON.stringify({ ...legacyValue, ...currentValue }));
+      } else if (key === 'oc_local_folders' && Array.isArray(currentValue) && Array.isArray(legacyValue)) {
+        localStorage.setItem(key, JSON.stringify([...new Set([...legacyValue, ...currentValue])]));
+      }
+    } catch (error) {
+      console.warn(`[Desktop] Could not merge legacy storage key ${key}:`, error);
     }
   }
   await invokeDesktop('complete_legacy_migration');

@@ -6,7 +6,7 @@ import {
   searchGalleryResults, setSearchGalleryResults, searchGalleryQuery, setSearchGalleryQuery
 } from './state.js';
 import {
-  getUserCollection, saveUserCollection, getUserHistory, saveUserHistory,
+  getUserCollection, saveUserCollection, getUserHistory,
   getWatchProgress, saveWatchProgress, getUserFolders, saveUserFolders,
   addToUserCollection as storageAddCollection, removeFromUserCollection as storageRemoveCollection,
   addToUserHistory as storageAddHistory, removeFromUserHistory as storageRemoveHistory,
@@ -1995,11 +1995,6 @@ export async function addToUserHistory(item) {
     vote_average: historyItem.vote_average || 0,
     watched_at: new Date().toISOString()
   };
-  const existing = userHistory.filter(h => !(h.id === item.id && h.media_type === item.media_type));
-  const nextHistory = [newItem, ...existing].slice(0, 200);
-
-  await saveUserHistory(nextHistory);
-  setUserHistory(nextHistory);
   await storageAddHistory(newItem);
   if (currentTab === 'history') renderUserHistory();
 }
@@ -2009,9 +2004,6 @@ async function removeFromUserHistory(id, type) {
   if (!item) return;
   const confirmed = await showConfirm('Remove from History?', `Remove "${item.title}" from your history?`);
   if (!confirmed) return;
-  const nextHistory = userHistory.filter(h => !(h.id === id && h.media_type === type));
-  await saveUserHistory(nextHistory);
-  setUserHistory(nextHistory);
   await storageRemoveHistory(id, type);
 
   // Also remove from Continue Watching / progress
