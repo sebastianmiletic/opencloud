@@ -58,11 +58,12 @@ jobs:
           tagName: v__VERSION__
           releaseName: 'Open Cloud v__VERSION__'
           releaseBody: |
-            Open Cloud 3.6.1 restores missing collection, watch-history, and playback-progress data
+            Open Cloud 3.6.2 restores missing collection, watch-history, and playback-progress data
             from all recoverable Open Cloud stores. Synchronization is now account-scoped,
             non-destructive, uncapped, and merges local and cloud records without dropping entries.
             Explicit removals use timestamped deletion markers, media types cannot collide, and
-            protected daily server snapshots provide a recovery path before synchronization.
+            protected daily server snapshots provide a recovery path before synchronization. Legacy
+            checkpoints without a media-type label are safely inferred and recovered to cloud.
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true

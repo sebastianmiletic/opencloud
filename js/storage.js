@@ -13,7 +13,7 @@ import {
   setUserCollection, setUserHistory, setWatchProgress, setUserFolders
 } from './state.js';
 import { episodeProgressKey } from './playback-progress.js';
-import { mergeDataItems, mergeProgressMaps, mergeTombstones, newerThanTombstone } from './data-merge.js';
+import { inferProgressMediaType, mergeDataItems, mergeProgressMaps, mergeTombstones, newerThanTombstone } from './data-merge.js';
 
 /* Lazy imports to avoid circular deps */
 let _api = null;
@@ -189,10 +189,7 @@ export async function initStorage() {
 
   _cache.progress = mergeProgressMaps(_cache.progress, progress);
   await Promise.allSettled(Object.entries(_cache.progress).map(([id, item]) => {
-    const mediaType = item.mediaType || item.media_type
-      || _cache.history.find(entry => String(entry.id) === String(id))?.media_type
-      || _cache.collection.find(entry => String(entry.id) === String(id))?.media_type;
-    if (!mediaType) return Promise.resolve(false);
+    const mediaType = inferProgressMediaType({ ...item, id }, _cache.history, _cache.collection);
     item.mediaType = mediaType;
     return syncProgressInOrder(userId, {
       id,

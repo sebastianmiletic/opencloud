@@ -129,3 +129,14 @@ export function mergeProgressMaps(localProgress, remoteProgress) {
   }
   return merged;
 }
+
+export function inferProgressMediaType(item, ...dataGroups) {
+  if (item?.mediaType || item?.media_type) return item.mediaType || item.media_type;
+  const id = String(item?.id ?? '');
+  for (const group of dataGroups) {
+    const match = (group || []).find(candidate => String(candidate.id) === id);
+    if (match?.media_type) return match.media_type;
+  }
+  if (item?.season != null || item?.episode != null) return 'tv';
+  return 'movie';
+}

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mergeDataItems, mergeProgressMaps, mergeTombstones } from '../js/data-merge.js';
+import { inferProgressMediaType, mergeDataItems, mergeProgressMaps, mergeTombstones } from '../js/data-merge.js';
 
 test('history merge keeps local-only, remote-only, newest time, and rich metadata', () => {
   const local = [
@@ -56,4 +56,10 @@ test('progress merge keeps local-only titles and episode checkpoints from both s
   );
   assert.deepEqual(Object.keys(merged), ['1', '2', '3']);
   assert.deepEqual(Object.keys(merged[1].episodes).sort(), ['s1e1', 's1e2']);
+});
+
+test('legacy progress without a media type is still recoverable', () => {
+  assert.equal(inferProgressMediaType({ id: 10, season: 1, episode: 2 }), 'tv');
+  assert.equal(inferProgressMediaType({ id: 11, progress_seconds: 42 }), 'movie');
+  assert.equal(inferProgressMediaType({ id: 12 }, [{ id: 12, media_type: 'tv' }]), 'tv');
 });

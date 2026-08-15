@@ -1,5 +1,5 @@
 /** Open Cloud Service Worker — auto-update from GitHub raw */
-const CACHE_NAME = 'openccloud-v3.6.1';
+const CACHE_NAME = 'openccloud-v3.6.2';
 const GITHUB_RAW = 'https://raw.githubusercontent.com/sebastianmiletic/opencloud/main/';
 
 /* Only static files that exist in the repo (env.js is server-generated) */
