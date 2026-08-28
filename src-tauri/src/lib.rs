@@ -540,7 +540,7 @@ pub fn run() {
             let blocker_for_window = blocker.clone();
             let event_app = app.handle().clone();
 
-            WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+            let main_window = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
                 .title("Open Cloud")
                 .inner_size(1480.0, 920.0)
                 .min_inner_size(1024.0, 640.0)
@@ -574,6 +574,9 @@ pub fn run() {
                     }
                 })
                 .build()?;
+
+            #[cfg(target_os = "linux")]
+            let _ = main_window.maximize();
 
             log::info!("Open Cloud Tauri shell initialized");
             Ok(())

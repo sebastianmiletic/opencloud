@@ -6,6 +6,7 @@ const { createOpenCloudServer } = require('./server');
 const APP_DIR = app.getAppPath();
 const LOCAL_HOST = '127.0.0.1';
 const LOCAL_PORT = Number(process.env.OPENCLOUD_ELECTRON_PORT || 38475);
+const UI_ZOOM_FACTOR = Number(process.env.OPENCLOUD_UI_ZOOM_FACTOR || 1.25);
 
 /* Hosts the Electron app is allowed to open (everything else = deny) */
 const ALLOWED_HOSTS = new Set([
@@ -29,6 +30,25 @@ function shouldAllowUrl(urlStr) {
 let mainWindow = null;
 let localServer = null;
 let localServerPort = null;
+
+const SESSION_FILE = path.join(app.getPath('userData'), 'supabase-session.json');
+
+async function loadSavedSession() {
+  try {
+    const raw = await fs.readFile(SESSION_FILE, 'utf8');
+    return JSON.parse(raw);
+  } catch (e) {
+    return null;
+  }
+}
+
+async function saveSessionToDisk(data) {
+  try {
+    await fs.writeFile(SESSION_FILE, JSON.stringify(data, null, 2), { mode: 0o600 });
+  } catch (e) {
+    console.error('[Session] Failed to save session:', e.message);
+  }
+}
 
 function registerDesktopBridge() {
   ipcMain.handle('opencloud:export-migration', async (_event, payload) => {
@@ -56,6 +76,15 @@ function registerDesktopBridge() {
     await fs.writeFile(temporary, serialized, { encoding: 'utf8', mode: 0o600 });
     await fs.rename(temporary, destination);
     return { path: destination };
+  });
+
+  ipcMain.handle('opencloud:save-session', async (_event, data) => {
+    await saveSessionToDisk(data);
+    return true;
+  });
+
+  ipcMain.handle('opencloud:load-session', async () => {
+    return loadSavedSession();
   });
 
   ipcMain.handle('opencloud:open-external', async (_event, url) => {
@@ -91,25 +120,28 @@ function injectBlocker(win) {
         }
         return _origOpen.apply(window, arguments);
       };
-      window.addEventListener('beforeunload', function(e) {
-        e.preventDefault(); e.returnValue = '';
-      });
     })();
   `).catch(() => {});
 }
 
 /* ── 3. Create main window ── */
-function createMainWindow(port) {
+async function createMainWindow(port) {
   const url = `http://${LOCAL_HOST}:${port}`;
+  const uiZoomFactor = Number.isFinite(UI_ZOOM_FACTOR) && UI_ZOOM_FACTOR > 0
+    ? UI_ZOOM_FACTOR
+    : 1.25;
 
   mainWindow = new BrowserWindow({
     width: 1480, height: 920, minWidth: 1024, minHeight: 640,
     title: 'Open Cloud', backgroundColor: '#000000',
+    autoHideMenuBar: true,
     icon: path.join(APP_DIR, process.platform === 'win32' ? 'icon.ico' : (process.platform === 'darwin' ? 'icon.icns' : 'icon.png')),
     webPreferences: {
       nodeIntegration: false, contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
-      webSecurity: true, allowRunningInsecureContent: false
+      webSecurity: true, allowRunningInsecureContent: false,
+      // Scale content like Spotify without altering the native Wayland surface.
+      zoomFactor: uiZoomFactor
     },
     show: false
   });
@@ -147,6 +179,25 @@ function createMainWindow(port) {
 
   /* 5️⃣  Inject JS-level protections on every dom-ready */
   mainWindow.webContents.on('dom-ready', () => injectBlocker(mainWindow));
+
+  mainWindow.setMenu(null);
+  mainWindow.removeMenu();
+  if (process.platform === 'linux') mainWindow.maximize();
+
+  // Restore Supabase session before the page loads so auth persists
+  const savedSession = await loadSavedSession();
+  if (savedSession && typeof savedSession === 'object') {
+    const injectScript = Object.entries(savedSession)
+      .map(([k, v]) => `localStorage.setItem(${JSON.stringify(k)}, ${JSON.stringify(v)});`)
+      .join('');
+    mainWindow.webContents.on('did-start-loading', () => {
+      try {
+        mainWindow.webContents.executeJavaScript(injectScript, true);
+      } catch (e) {
+        console.error('[Session] inject failed:', e.message);
+      }
+    });
+  }
 
   mainWindow.loadURL(url);
 

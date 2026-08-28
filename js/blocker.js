@@ -148,14 +148,7 @@ function initProgrammaticClickBlocker() {
   };
 }
 
-/* ─── 4. beforeunload traps ─── */
-function initBeforeunloadBlocker() {
-  window.addEventListener('beforeunload', (e) => {
-    if (settings.enabled) { e.preventDefault(); e.returnValue = ''; }
-  });
-}
-
-/* ─── 5. Dynamic popup link remover ─── */
+/* ─── 4. Dynamic popup link remover ─── */
 function initDynamicLinkRemover() {
   const observer = new MutationObserver((mutations) => {
     if (!settings.enabled) return;
@@ -353,7 +346,6 @@ export async function initBlocker() {
   initWindowOpenBlocker();
   initClickInterceptor();
   initProgrammaticClickBlocker();
-  initBeforeunloadBlocker();
   initDynamicLinkRemover();
   initIframeInterceptor();
 }

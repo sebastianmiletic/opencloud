@@ -68,14 +68,9 @@ jobs:
           tagName: v__VERSION__
           releaseName: 'Open Cloud v__VERSION__'
           releaseBody: |
-            Open Cloud 3.6.2 restores missing collection, watch-history, and playback-progress data
-            from all recoverable Open Cloud stores. Synchronization is now account-scoped,
-            non-destructive, uncapped, and merges local and cloud records without dropping entries.
-            Explicit removals use timestamped deletion markers, media types cannot collide, and
-            protected daily server snapshots provide a recovery path before synchronization. Legacy
-            checkpoints without a media-type label are safely inferred and recovered to cloud.
-            Linux is now a first-class release target with signed AppImage updater artifacts and
-            a native Debian package alongside the existing macOS and Windows builds.
+            Open Cloud 3.6.3 adds first-class Linux downloads as AppImage and Debian packages.
+            Linux windows open maximized, the interface scales cleanly across the full window,
+            and closing the app no longer triggers a false not-responding prompt.
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true

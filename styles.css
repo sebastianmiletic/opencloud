@@ -270,7 +270,8 @@ body {
 }
 
 .header-content {
-  max-width: 1400px;
+  width: 100%;
+  max-width: none;
   margin: 0 auto;
   padding: 0.625rem 2rem;
   display: flex;
@@ -754,7 +755,7 @@ body {
 
 /* Main Content */
 .main-content {
-  max-width: 1400px;
+  max-width: none;
   margin: 0 auto;
   padding: 1.5rem 2rem;
   width: 100%;
@@ -1058,7 +1059,8 @@ body {
 /* Collections View (See All) */
 .collections-view {
   padding: 2rem;
-  max-width: 1400px;
+  width: 100%;
+  max-width: none;
   margin: 0 auto;
 }
 
