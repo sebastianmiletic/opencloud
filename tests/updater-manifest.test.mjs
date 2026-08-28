@@ -7,7 +7,8 @@ test('release finalizer replaces GitHub API metadata URLs without changing signa
     version: '3.5.0',
     platforms: {
       'darwin-universal': { signature: 'mac-signature', url: 'https://api.github.com/assets/1' },
-      'windows-x86_64': { signature: 'win-signature', url: 'https://api.github.com/assets/2' }
+      'windows-x86_64': { signature: 'win-signature', url: 'https://api.github.com/assets/2' },
+      'linux-x86_64': { signature: 'linux-signature', url: 'https://api.github.com/assets/3' }
     }
   };
 
@@ -22,15 +23,20 @@ test('release finalizer replaces GitHub API metadata URLs without changing signa
   );
   assert.equal(result.platforms['darwin-universal'].signature, 'mac-signature');
   assert.equal(result.platforms['windows-x86_64'].signature, 'win-signature');
+  assert.equal(
+    result.platforms['linux-x86_64'].url,
+    'https://github.com/sebastianmiletic/opencloud/releases/download/v3.5.0/OpenCloud_3.5.0_amd64.AppImage.tar.gz'
+  );
+  assert.equal(result.platforms['linux-x86_64'].signature, 'linux-signature');
 });
 
 test('release finalizer refuses unsigned or unsupported updater entries', () => {
   assert.throws(
-    () => rewriteUpdaterManifest({ version: '1.0.0', platforms: { linux: { signature: '' } } }, 'owner/repo', 'v1.0.0'),
+    () => rewriteUpdaterManifest({ version: '1.0.0', platforms: { 'linux-x86_64': { signature: '' } } }, 'owner/repo', 'v1.0.0'),
     /Missing signature/
   );
   assert.throws(
-    () => rewriteUpdaterManifest({ version: '1.0.0', platforms: { linux: { signature: 'signed' } } }, 'owner/repo', 'v1.0.0'),
+    () => rewriteUpdaterManifest({ version: '1.0.0', platforms: { freebsd: { signature: 'signed' } } }, 'owner/repo', 'v1.0.0'),
     /Unsupported updater platform/
   );
 });

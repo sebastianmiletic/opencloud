@@ -13,6 +13,7 @@
     "tauri:build": "tauri build",
     "tauri:build:mac": "tauri build --target universal-apple-darwin --bundles app,dmg",
     "tauri:build:win": "tauri build --target x86_64-pc-windows-msvc --bundles nsis",
+    "tauri:build:linux": "tauri build --bundles appimage,deb",
     "check:js": "node scripts/check-js.mjs",
     "test:js": "node --test tests/*.test.mjs",
     "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",

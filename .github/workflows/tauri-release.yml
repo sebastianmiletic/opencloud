@@ -33,8 +33,13 @@ jobs:
         include:
           - platform: macos-latest
             args: '--target universal-apple-darwin --bundles app,dmg'
+            rust-targets: 'aarch64-apple-darwin,x86_64-apple-darwin'
           - platform: windows-latest
             args: '--target x86_64-pc-windows-msvc --bundles nsis'
+            rust-targets: 'x86_64-pc-windows-msvc'
+          - platform: ubuntu-22.04
+            args: '--target x86_64-unknown-linux-gnu --bundles appimage,deb'
+            rust-targets: 'x86_64-unknown-linux-gnu'
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
@@ -44,10 +49,15 @@ jobs:
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || 'x86_64-pc-windows-msvc' }}
+          targets: ${{ matrix.rust-targets }}
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+      - name: Install Linux system dependencies
+        if: startsWith(matrix.platform, 'ubuntu-')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
       - run: npm ci
       - uses: tauri-apps/tauri-action@v1
         env:
@@ -64,6 +74,8 @@ jobs:
             Explicit removals use timestamped deletion markers, media types cannot collide, and
             protected daily server snapshots provide a recovery path before synchronization. Legacy
             checkpoints without a media-type label are safely inferred and recovered to cloud.
+            Linux is now a first-class release target with signed AppImage updater artifacts and
+            a native Debian package alongside the existing macOS and Windows builds.
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true
