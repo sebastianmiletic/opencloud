@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, session, shell } = require('electron');
 const fs = require('fs/promises');
 const path = require('path');
 const { createOpenCloudServer } = require('./server');
@@ -18,9 +18,10 @@ const ALLOWED_HOSTS = new Set([
 
 function shouldAllowUrl(urlStr) {
   try {
-    const hostname = new URL(urlStr).hostname;
-    if (hostname === 'localhost' || hostname === '127.0.0.1') return true;
-    if (ALLOWED_HOSTS.has(hostname)) return true;
+    const parsed = new URL(urlStr);
+    const { hostname, protocol } = parsed;
+    if ((hostname === 'localhost' || hostname === '127.0.0.1') && protocol === 'http:') return true;
+    if (protocol === 'https:' && ALLOWED_HOSTS.has(hostname)) return true;
     return false;
   } catch {
     return false;
@@ -139,7 +140,8 @@ async function createMainWindow(port) {
     webPreferences: {
       nodeIntegration: false, contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
-      webSecurity: true, allowRunningInsecureContent: false,
+      sandbox: true, webSecurity: true, allowRunningInsecureContent: false,
+      devTools: !app.isPackaged,
       // Scale content like Spotify without altering the native Wayland surface.
       zoomFactor: uiZoomFactor
     },
@@ -208,6 +210,8 @@ async function createMainWindow(port) {
 /* ── 4. App lifecycle ── */
 app.whenReady().then(async () => {
   try {
+    session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
+    session.defaultSession.setPermissionCheckHandler(() => false);
     registerDesktopBridge();
     const port = await startServer();
     createMainWindow(port);

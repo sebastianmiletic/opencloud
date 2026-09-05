@@ -56,9 +56,10 @@ select is(
   'anonymous auth users receive no application session access'
 );
 select throws_ok(
-  $$select public.heartbeat_installation(
+  $$select public.heartbeat_app_activity(
     'cccccccc-cccc-4ccc-8ccc-cccccccccccc'::uuid,
-    '3.5.0', 'macos', 'aarch64'
+    'cccccccc-cccc-4ccc-8ccc-cccccccccccd'::uuid,
+    '3.6.2', 'macos', 'aarch64', 'laptop'
   )$$,
   '42501',
   'Active account required',
@@ -105,9 +106,10 @@ select throws_ok(
 );
 
 select lives_ok(
-  $$select public.heartbeat_installation(
+  $$select public.heartbeat_app_activity(
     'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid,
-    '3.5.0', 'macos', 'aarch64'
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab'::uuid,
+    '3.6.2', 'macos', 'aarch64', 'laptop'
   )$$,
   'ordinary active account can heartbeat its own installation'
 );
@@ -138,14 +140,13 @@ select ok(
   ),
   'owner row is explicitly labeled for self-protection in the Dev workspace'
 );
-select throws_ok(
-  $$select public.heartbeat_installation(
+select lives_ok(
+  $$select public.heartbeat_app_activity(
     'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid,
-    '3.5.0', 'macos', 'aarch64'
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaac'::uuid,
+    '3.6.2', 'macos', 'aarch64', 'laptop'
   )$$,
-  '42501',
-  'Installation ID belongs to another account',
-  'an installation ID cannot be reassigned to a different account'
+  'a shared installation can serve a second account below the cap'
 );
 select throws_ok(
   $$select public.dev_force_sign_out('11111111-1111-4111-8111-111111111111'::uuid)$$,

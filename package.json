@@ -17,7 +17,8 @@
     "check:js": "node scripts/check-js.mjs",
     "test:js": "node --test tests/*.test.mjs",
     "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
-    "check": "npm run check:js && npm run test:js && npm run build:web && npm run test:rust",
+    "check:secrets": "node scripts/check-secrets.mjs",
+    "check": "npm run check:secrets && npm run check:js && npm run test:js && npm run build:web && npm run test:rust",
     "build:dmg-background": "python3 build/create-dmg-background.py",
     "dist": "npm run build:dmg-background && electron-builder",
     "dist:mac": "npm run build:dmg-background && electron-builder --mac dmg --universal && python3 build/fix-dmg-layout.py dist/OpenCloud-3.6.3-mac.dmg",
@@ -25,7 +26,7 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.4",
-    "electron": "^35.0.0",
+    "electron": "^44.2.0",
     "electron-builder": "^26.15.3",
     "vite": "^7.3.6"
   },
@@ -56,12 +57,6 @@
       "icon.ico",
       "icon.icns",
       "package.json"
-    ],
-    "extraResources": [
-      {
-        "from": ".env",
-        "to": ".env"
-      }
     ],
     "mac": {
       "target": [

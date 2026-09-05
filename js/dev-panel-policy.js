@@ -6,12 +6,17 @@ export function validInstallationId(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value || '');
 }
 
-export function getInstallationIdentity(env = {}, deviceKind = 'laptop') {
+export function getOrCreateInstallationId() {
   let installId = localStorage.getItem(INSTALLATION_KEY) || '';
   if (!validInstallationId(installId)) {
     installId = crypto.randomUUID();
     localStorage.setItem(INSTALLATION_KEY, installId);
   }
+  return installId;
+}
+
+export function getInstallationIdentity(env = {}, deviceKind = 'laptop') {
+  const installId = getOrCreateInstallationId();
   let sessionId = sessionStorage.getItem(SESSION_KEY) || '';
   if (!validInstallationId(sessionId)) {
     sessionId = crypto.randomUUID();

@@ -88,8 +88,9 @@ function createOpenCloudServer({ baseDir, host = '127.0.0.1', port = 38475 }) {
       const relativePath = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
       const normalizedPath = path.normalize(relativePath);
       const filePath = path.join(rootDir, normalizedPath);
+      const relativeToRoot = path.relative(rootDir, filePath);
 
-      if (!filePath.startsWith(rootDir)) {
+      if (relativeToRoot.startsWith('..') || path.isAbsolute(relativeToRoot)) {
         res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
         res.end('Forbidden');
         return;

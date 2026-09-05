@@ -1,6 +1,7 @@
 /** Supabase Authentication Module */
 import { showToast } from './utils.js';
 import { createProfile, getMyAccess } from './sync.js';
+import { getOrCreateInstallationId } from './dev-panel-policy.js';
 
 const SUPABASE_URL = (typeof window !== 'undefined' && window.ENV?.SUPABASE_URL) ? window.ENV.SUPABASE_URL : '';
 const SUPABASE_ANON_KEY = (typeof window !== 'undefined' && window.ENV?.SUPABASE_ANON_KEY) ? window.ENV.SUPABASE_ANON_KEY : '';
@@ -103,7 +104,8 @@ export async function signUp(email, password, username) {
       options: {
         data: {
           username: username.trim(),
-          display_name: username.trim()
+          display_name: username.trim(),
+          opencloud_install_id: getOrCreateInstallationId()
         }
       }
     });

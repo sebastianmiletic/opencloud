@@ -15,6 +15,10 @@ const activityMigration = readFileSync(
   new URL('../supabase/migrations/202608150003_dev_activity_and_controls.sql', import.meta.url),
   'utf8'
 );
+const abuseMigration = readFileSync(
+  new URL('../supabase/migrations/202609050001_signup_abuse_protection.sql', import.meta.url),
+  'utf8'
+);
 const updaterSource = readFileSync(new URL('../js/updater.js', import.meta.url), 'utf8');
 
 test('legacy client-side admin activation is removed', () => {
@@ -86,6 +90,16 @@ test('online presence expires after two minutes', () => {
   assert.equal(isRecentlyOnline('2026-08-14T00:00:01.000Z', now), true);
   assert.equal(isRecentlyOnline('2026-08-13T23:59:59.000Z', now), false);
   assert.equal(isRecentlyOnline(null, now), false);
+});
+
+test('signup abuse controls are enforced by the database boundary', () => {
+  assert.match(authSource, /opencloud_install_id:\s*getOrCreateInstallationId\(\)/);
+  assert.match(abuseMigration, /private\.before_user_created/);
+  assert.match(abuseMigration, /v_domain = 'example\.com'/);
+  assert.match(abuseMigration, />= 5/);
+  assert.match(abuseMigration, /delete from auth\.users/);
+  assert.match(abuseMigration, /pg_advisory_xact_lock/);
+  assert.doesNotMatch(abuseMigration, /service_role|SUPABASE_ANON_KEY|SUPABASE_URL/);
 });
 
 test('database boundary requires owner checks and protects suspended accounts', () => {

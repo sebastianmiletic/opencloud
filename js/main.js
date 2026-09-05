@@ -111,7 +111,7 @@ function initAuthModal() {
     const email    = signupEmail?.value?.trim() || '';
     const password = signupPw?.value || '';
     if (!username || !email || !password) return;
-    if (password.length < 6) { showToast('Password must be at least 6 characters', 'error'); return; }
+    if (password.length < 10) { showToast('Password must be at least 10 characters', 'error'); return; }
     const { user, error } = await signUp(email, password, username);
     if (user && !error) {
       const authorized = await initializeSignedInRuntime();
