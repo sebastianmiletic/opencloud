@@ -18,6 +18,86 @@ const BLOCKER_INIT_SCRIPT: &str = include_str!("blocker_init.js");
 const MIGRATION_FILE_NAME: &str = "tauri-migration-v1.json";
 static PROVIDER_HEALTH_CLIENT: OnceLock<Result<reqwest::Client, String>> = OnceLock::new();
 
+#[cfg(any(all(target_os = "linux", target_arch = "aarch64"), test))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LinuxWebkitRenderer {
+    Accelerated,
+    Compatible,
+    Software,
+}
+
+#[cfg(any(all(target_os = "linux", target_arch = "aarch64"), test))]
+impl LinuxWebkitRenderer {
+    fn from_override(value: Option<&str>) -> Option<Self> {
+        match value.map(str::trim).map(str::to_ascii_lowercase).as_deref() {
+            Some("accelerated" | "dmabuf") => Some(Self::Accelerated),
+            Some("compatible" | "compat") => Some(Self::Compatible),
+            Some("software") => Some(Self::Software),
+            _ => None,
+        }
+    }
+}
+
+#[cfg(any(all(target_os = "linux", target_arch = "aarch64"), test))]
+fn is_oneplus_sdm845_device(identity: &str) -> bool {
+    let identity = identity.to_ascii_lowercase();
+    identity.contains("oneplus,enchilada")
+        || identity.contains("oneplus,oneplus6")
+        || identity.contains("oneplus 6")
+}
+
+#[cfg(any(all(target_os = "linux", target_arch = "aarch64"), test))]
+fn select_linux_webkit_renderer(
+    requested: Option<&str>,
+    is_oneplus_sdm845: bool,
+) -> LinuxWebkitRenderer {
+    LinuxWebkitRenderer::from_override(requested).unwrap_or(if is_oneplus_sdm845 {
+        LinuxWebkitRenderer::Compatible
+    } else {
+        LinuxWebkitRenderer::Accelerated
+    })
+}
+
+#[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+fn configure_linux_arm64_webkit() -> LinuxWebkitRenderer {
+    if std::env::var_os("GDK_BACKEND").is_none() {
+        // Prefer native Wayland on Hyprland, while retaining GTK's X11 fallback.
+        std::env::set_var("GDK_BACKEND", "wayland,x11");
+    }
+
+    let device_identity = ["/proc/device-tree/compatible", "/proc/device-tree/model"]
+        .iter()
+        .filter_map(|path| fs::read(path).ok())
+        .flatten()
+        .map(|byte| if byte == 0 { b' ' } else { byte })
+        .map(char::from)
+        .collect::<String>();
+    let requested = std::env::var("OPEN_CLOUD_WEBKIT_RENDERER").ok();
+    let renderer = select_linux_webkit_renderer(
+        requested.as_deref(),
+        is_oneplus_sdm845_device(&device_identity),
+    );
+
+    match renderer {
+        LinuxWebkitRenderer::Accelerated => {}
+        LinuxWebkitRenderer::Compatible => {
+            if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+                std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+            }
+        }
+        LinuxWebkitRenderer::Software => {
+            if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+                std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+            }
+            if std::env::var_os("WEBKIT_DISABLE_COMPOSITING_MODE").is_none() {
+                std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
+            }
+        }
+    }
+
+    renderer
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 struct PublicConfig {
@@ -506,6 +586,9 @@ fn ensure_parent(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+    let linux_arm64_renderer = configure_linux_arm64_webkit();
+
     let builder = tauri::Builder::default()
         .plugin(
             tauri_plugin_log::Builder::new()
@@ -528,7 +611,7 @@ pub fn run() {
             restart_app,
             set_player_fullscreen
         ])
-        .setup(|app| {
+        .setup(move |app| {
             let config_dir = app.path().app_config_dir()?;
             let blocker_path = config_dir.join("blocker-state.json");
             ensure_parent(&blocker_path)?;
@@ -540,10 +623,18 @@ pub fn run() {
             let blocker_for_window = blocker.clone();
             let event_app = app.handle().clone();
 
-            let main_window = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
-                .title("Open Cloud")
-                .inner_size(1480.0, 920.0)
-                .min_inner_size(1024.0, 640.0)
+            let main_window_builder =
+                WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+                    .title("Open Cloud")
+                    .inner_size(1480.0, 920.0);
+
+            #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+            let main_window_builder = main_window_builder.min_inner_size(320.0, 568.0);
+
+            #[cfg(not(all(target_os = "linux", target_arch = "aarch64")))]
+            let main_window_builder = main_window_builder.min_inner_size(1024.0, 640.0);
+
+            let _main_window = main_window_builder
                 .background_color(tauri::webview::Color(0, 0, 0, 255))
                 .visible(false)
                 .initialization_script_for_all_frames(BLOCKER_INIT_SCRIPT)
@@ -576,7 +667,10 @@ pub fn run() {
                 .build()?;
 
             #[cfg(target_os = "linux")]
-            let _ = main_window.maximize();
+            let _ = _main_window.maximize();
+
+            #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+            log::info!("Linux ARM64 WebKit renderer profile: {linux_arm64_renderer:?}");
 
             log::info!("Open Cloud Tauri shell initialized");
             Ok(())
@@ -654,5 +748,37 @@ mod tests {
         assert!(is_provider_host(Some("cloudorchestranova.com")));
         assert!(!is_provider_host(Some("ads.example.invalid")));
         assert!(!is_provider_host(Some("videasy.net.ads.example.invalid")));
+    }
+
+    #[test]
+    fn oneplus_6_device_tree_selects_compatible_renderer() {
+        assert!(is_oneplus_sdm845_device(
+            "qcom,sdm845 oneplus,enchilada OnePlus 6"
+        ));
+        assert_eq!(
+            select_linux_webkit_renderer(None, true),
+            LinuxWebkitRenderer::Compatible
+        );
+    }
+
+    #[test]
+    fn renderer_override_is_respected() {
+        assert_eq!(
+            select_linux_webkit_renderer(Some("dmabuf"), true),
+            LinuxWebkitRenderer::Accelerated
+        );
+        assert_eq!(
+            select_linux_webkit_renderer(Some("software"), false),
+            LinuxWebkitRenderer::Software
+        );
+    }
+
+    #[test]
+    fn unknown_arm_device_keeps_acceleration() {
+        assert!(!is_oneplus_sdm845_device("generic,arm64-server"));
+        assert_eq!(
+            select_linux_webkit_renderer(None, false),
+            LinuxWebkitRenderer::Accelerated
+        );
     }
 }
