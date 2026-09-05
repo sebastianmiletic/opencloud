@@ -79,9 +79,12 @@ jobs:
           tagName: v__VERSION__
           releaseName: 'Open Cloud v__VERSION__'
           releaseBody: |
-            Open Cloud 3.6.3 adds first-class Linux downloads as AppImage and Debian packages.
-            Linux windows open maximized, the interface scales cleanly across the full window,
-            and closing the app no longer triggers a false not-responding prompt.
+            Open Cloud 3.7.0 hardens account creation and desktop security without changing the
+            application interface. Signup abuse is rejected by a server-side Supabase hook,
+            including exact blocking of @example.com and a five-account-per-installation limit.
+            Local configuration is no longer committed or packaged, release credentials come from
+            protected GitHub Actions secrets, dependency vulnerabilities are resolved, and the
+            native shells enforce stricter sandbox, permission, navigation, and path boundaries.
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true
