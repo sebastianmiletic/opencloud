@@ -7,7 +7,7 @@ A black-and-white themed Tauri desktop streaming tracker with TMDB/OMDB integrat
 ## How to Download & Install
 
 <p align="center">
-  <a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud_3.7.2_universal.dmg"><img src="https://img.shields.io/badge/Download-macOS%20(.dmg)-black?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS"></a>&nbsp;&nbsp;<a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud_3.7.2_x64-setup.exe"><img src="https://img.shields.io/badge/Download-Windows%20(.exe)-black?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows"></a>&nbsp;&nbsp;<a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud_3.7.2_amd64.AppImage"><img src="https://img.shields.io/badge/Download-Linux%20(.AppImage)-black?style=for-the-badge&logo=linux&logoColor=white" alt="Download for Linux"></a>
+  <a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud_3.8.0_universal.dmg"><img src="https://img.shields.io/badge/Download-macOS%20(.dmg)-black?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS"></a>&nbsp;&nbsp;<a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud_3.8.0_x64-setup.exe"><img src="https://img.shields.io/badge/Download-Windows%20x64-black?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows x64"></a>&nbsp;&nbsp;<a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud_3.8.0_arm64-setup.exe"><img src="https://img.shields.io/badge/Download-Windows%20ARM64-black?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows ARM64"></a>&nbsp;&nbsp;<a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud_3.8.0_amd64.AppImage"><img src="https://img.shields.io/badge/Download-Linux%20x64-black?style=for-the-badge&logo=linux&logoColor=white" alt="Download for Linux x64"></a>&nbsp;&nbsp;<a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud_3.8.0_arm64.AppImage"><img src="https://img.shields.io/badge/Download-Linux%20ARM64-black?style=for-the-badge&logo=linux&logoColor=white" alt="Download for Linux ARM64"></a>
 </p>
 
 <p align="center">
@@ -23,7 +23,7 @@ A black-and-white themed Tauri desktop streaming tracker with TMDB/OMDB integrat
 ### macOS (Recommended — DMG)
 
 1. **Download the DMG**
-   - Click the **macOS (.dmg)** button above, or go to the [Releases page](https://github.com/sebastianmiletic/opencloud/releases/latest) and download `OpenCloud_3.7.2_universal.dmg`
+   - Click the **macOS (.dmg)** button above, or go to the [Releases page](https://github.com/sebastianmiletic/opencloud/releases/latest) and download `OpenCloud_3.8.0_universal.dmg`
 
 2. **Install the app**
    - Open the downloaded `OpenCloud.dmg`
@@ -43,7 +43,7 @@ A black-and-white themed Tauri desktop streaming tracker with TMDB/OMDB integrat
 ### Windows (Recommended — EXE)
 
 1. **Download the Installer**
-   - Click the **Windows (.exe)** button above, or go to the [Releases page](https://github.com/sebastianmiletic/opencloud/releases/latest) and download `OpenCloud_3.7.2_x64-setup.exe`
+   - Download `OpenCloud_3.8.0_x64-setup.exe` for Intel/AMD PCs or `OpenCloud_3.8.0_arm64-setup.exe` for Windows on ARM.
 
 2. **Run the installer**
    - Double-click the downloaded `OpenCloud.exe`
@@ -56,17 +56,17 @@ A black-and-white themed Tauri desktop streaming tracker with TMDB/OMDB integrat
 
 ### Linux (AppImage or Debian package)
 
-1. Download `OpenCloud_3.7.2_amd64.AppImage` for a portable install, or the `.deb` package on Debian/Ubuntu.
+1. Download `OpenCloud_3.8.0_amd64.AppImage` for Intel/AMD64 Linux or `OpenCloud_3.8.0_arm64.AppImage` for ARM64 Linux. Matching `.deb` packages are also available for Debian/Ubuntu.
 2. For the AppImage, make it executable and launch it:
 
    ```bash
-   chmod +x OpenCloud_3.7.2_amd64.AppImage
-   ./OpenCloud_3.7.2_amd64.AppImage
+   chmod +x OpenCloud_3.8.0_amd64.AppImage
+   ./OpenCloud_3.8.0_amd64.AppImage
    ```
 
    The app uses the desktop's native display scale; no force-scale launch flag is required.
 
-3. On Debian/Ubuntu, install the downloaded package with `sudo apt install ./OpenCloud_3.7.2_amd64.deb`.
+3. On Debian/Ubuntu, install the matching package with `sudo apt install ./OpenCloud_3.8.0_amd64.deb` or `sudo apt install ./OpenCloud_3.8.0_arm64.deb`.
 
 To build Linux packages locally, install the official Tauri Linux prerequisites, run `npm ci`, then run `npm run tauri:build:linux`.
 

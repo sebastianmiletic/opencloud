@@ -43,9 +43,15 @@ jobs:
           - platform: windows-latest
             args: '--target x86_64-pc-windows-msvc --bundles nsis'
             rust-targets: 'x86_64-pc-windows-msvc'
+          - platform: windows-11-arm
+            args: '--target aarch64-pc-windows-msvc --bundles nsis'
+            rust-targets: 'aarch64-pc-windows-msvc'
           - platform: ubuntu-22.04
             args: '--target x86_64-unknown-linux-gnu --bundles appimage,deb'
             rust-targets: 'x86_64-unknown-linux-gnu'
+          - platform: ubuntu-24.04-arm
+            args: '--target aarch64-unknown-linux-gnu --bundles appimage,deb'
+            rust-targets: 'aarch64-unknown-linux-gnu'
     runs-on: ${{ matrix.platform }}
     env:
       TMDB_BEARER_TOKEN: ${{ secrets.TMDB_BEARER_TOKEN }}
@@ -84,13 +90,10 @@ jobs:
           tagName: v__VERSION__
           releaseName: 'Open Cloud v__VERSION__'
           releaseBody: |
-            Open Cloud 3.7.2 hardens account creation and desktop security without changing the
-            application interface. Signup abuse is rejected by a server-side Supabase hook,
-            including exact blocking of @example.com and a five-account-per-installation limit.
-            Local configuration is no longer committed or packaged, release credentials come from
-            protected GitHub Actions secrets, dependency vulnerabilities are resolved, and the
-            native shells enforce stricter sandbox, permission, navigation, and path boundaries.
-            This hotfix also maps Linux AppImage and Debian updater entries to their matching signed assets.
+            Open Cloud 3.8.0 adds native ARM64 packages without changing the application interface
+            or behavior. Windows ARM64 and Linux ARM64 AppImage/Debian builds now ship alongside the
+            existing Windows x64, Linux x64, and universal Intel/Apple Silicon macOS builds. Every
+            updater entry maps to its matching signed architecture-specific asset.
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true
