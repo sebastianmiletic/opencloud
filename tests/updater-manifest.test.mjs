@@ -48,7 +48,7 @@ test('release finalizer replaces GitHub API metadata URLs without changing signa
   assert.equal(result.platforms['linux-x86_64-deb'].signature, 'linux-deb-signature');
   assert.equal(
     result.platforms['linux-aarch64'].url,
-    'https://github.com/sebastianmiletic/opencloud/releases/download/v3.5.0/OpenCloud_3.5.0_arm64.AppImage'
+    'https://github.com/sebastianmiletic/opencloud/releases/download/v3.5.0/OpenCloud_3.5.0_aarch64.AppImage'
   );
   assert.equal(result.platforms['linux-aarch64'].signature, 'linux-arm-appimage-signature');
   assert.equal(

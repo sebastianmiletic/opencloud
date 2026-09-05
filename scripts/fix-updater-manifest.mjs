@@ -34,11 +34,12 @@ export function rewriteUpdaterManifest(manifest, repository, tag) {
     if (!entry?.signature) throw new Error(`Missing signature for ${platform}`);
     const isArm64 = platform.includes('-aarch64');
     const windowsAsset = `OpenCloud_${manifest.version}_${isArm64 ? 'arm64' : 'x64'}-setup.exe`;
-    const linuxStem = `OpenCloud_${manifest.version}_${isArm64 ? 'arm64' : 'amd64'}`;
+    const linuxAppImageStem = `OpenCloud_${manifest.version}_${isArm64 ? 'aarch64' : 'amd64'}`;
+    const linuxDebStem = `OpenCloud_${manifest.version}_${isArm64 ? 'arm64' : 'amd64'}`;
     if (platform.startsWith('darwin-')) entry.url = `${baseUrl}/${macAsset}`;
     else if (platform.startsWith('windows-')) entry.url = `${baseUrl}/${windowsAsset}`;
-    else if (platform.startsWith('linux-') && platform.endsWith('-deb')) entry.url = `${baseUrl}/${linuxStem}.deb`;
-    else if (platform.startsWith('linux-')) entry.url = `${baseUrl}/${linuxStem}.AppImage`;
+    else if (platform.startsWith('linux-') && platform.endsWith('-deb')) entry.url = `${baseUrl}/${linuxDebStem}.deb`;
+    else if (platform.startsWith('linux-')) entry.url = `${baseUrl}/${linuxAppImageStem}.AppImage`;
     else throw new Error(`Unsupported updater platform: ${platform}`);
   }
 
