@@ -15,10 +15,8 @@ appimage="$(realpath "$appimage")"
 
 runtime_dir="$(mktemp -d)"
 chmod 700 "$runtime_dir"
-weston_log="$runtime_dir/weston.log"
 app_log="$runtime_dir/opencloud.log"
 extract_dir="$runtime_dir/appimage"
-weston_pid=""
 app_pid=""
 
 cleanup() {
@@ -26,34 +24,8 @@ cleanup() {
     kill "$app_pid" 2>/dev/null || true
     wait "$app_pid" 2>/dev/null || true
   fi
-  if [[ -n "$weston_pid" ]]; then
-    kill "$weston_pid" 2>/dev/null || true
-    wait "$weston_pid" 2>/dev/null || true
-  fi
 }
 trap cleanup EXIT
-
-XDG_RUNTIME_DIR="$runtime_dir" weston \
-  --backend=headless-backend.so \
-  --socket=opencloud-wayland-ci \
-  --idle-time=0 \
-  --log="$weston_log" &
-weston_pid="$!"
-
-for _ in {1..50}; do
-  [[ -S "$runtime_dir/opencloud-wayland-ci" ]] && break
-  kill -0 "$weston_pid" 2>/dev/null || {
-    cat "$weston_log" >&2
-    exit 1
-  }
-  sleep 0.2
-done
-
-if [[ ! -S "$runtime_dir/opencloud-wayland-ci" ]]; then
-  cat "$weston_log" >&2
-  echo "Wayland compositor did not become ready" >&2
-  exit 1
-fi
 
 mkdir "$extract_dir"
 (
@@ -66,21 +38,18 @@ if [[ ! -x "$app_runner" ]]; then
   exit 1
 fi
 
-dbus-run-session -- env \
-  XDG_RUNTIME_DIR="$runtime_dir" \
-  XDG_SESSION_TYPE=wayland \
-  WAYLAND_DISPLAY=opencloud-wayland-ci \
-  GDK_BACKEND=wayland \
+dbus-run-session -- xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24 -nolisten tcp" env \
+  XDG_SESSION_TYPE=x11 \
+  GDK_BACKEND=x11 \
   OPEN_CLOUD_WEBKIT_RENDERER=compatible \
   "$app_runner" >"$app_log" 2>&1 &
 app_pid="$!"
 
 sleep 15
 if ! kill -0 "$app_pid" 2>/dev/null; then
-  cat "$weston_log" >&2
   cat "$app_log" >&2
-  echo "Open Cloud exited during the ARM64 Wayland WebKitGTK smoke test" >&2
+  echo "Open Cloud exited during the ARM64 WebKitGTK smoke test" >&2
   exit 1
 fi
 
-echo "ARM64 AppImage remained healthy for 15 seconds in a native Wayland WebKitGTK session"
+echo "ARM64 AppImage remained healthy for 15 seconds in a native AArch64 WebKitGTK session"

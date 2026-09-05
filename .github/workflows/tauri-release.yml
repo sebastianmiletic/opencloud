@@ -80,9 +80,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
-      - name: Install ARM64 Wayland smoke-test dependencies
+      - name: Install ARM64 WebKitGTK smoke-test dependencies
         if: matrix.wayland_smoke
-        run: sudo apt-get install -y dbus-x11 weston
+        run: sudo apt-get install -y dbus-x11 xvfb
       - run: npm ci
       - run: node scripts/check-build-env.mjs
       - uses: tauri-apps/tauri-action@v1
@@ -98,17 +98,17 @@ jobs:
           tagName: v__VERSION__
           releaseName: 'Open Cloud v__VERSION__'
           releaseBody: |
-            Open Cloud 3.9.1 adds a Linux ARM64 WebKitGTK compatibility profile for the OnePlus 6
+            Open Cloud 3.9.2 adds a Linux ARM64 WebKitGTK compatibility profile for the OnePlus 6
             running Kupfer Linux and Hyprland, while preserving the existing interface. It prefers
             native Wayland, automatically avoids the problematic DMA-BUF renderer on detected
             OnePlus 6 hardware, allows phone-sized windows, and bundles the AppImage media framework.
-            The ARM64 AppImage is also smoke-tested in a native ARM64 headless Wayland session before
+            The ARM64 AppImage is also smoke-tested in a native ARM64 virtual GTK display before
             this draft can be published. Existing Windows, macOS, and Linux packages remain included.
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true
           args: ${{ matrix.args }}
-      - name: Smoke test ARM64 AppImage in Wayland WebKitGTK
+      - name: Smoke test ARM64 AppImage in WebKitGTK
         if: matrix.wayland_smoke
         run: scripts/smoke-linux-arm64-wayland.sh
 
