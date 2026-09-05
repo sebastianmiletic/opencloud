@@ -9,14 +9,16 @@ export function rewriteUpdaterManifest(manifest, repository, tag) {
 
   const macAsset = `OpenCloud_${manifest.version}_universal.app.tar.gz`;
   const windowsAsset = `OpenCloud_${manifest.version}_x64-setup.exe`;
-  const linuxAsset = `OpenCloud_${manifest.version}_amd64.AppImage`;
+  const linuxAppImageAsset = `OpenCloud_${manifest.version}_amd64.AppImage`;
+  const linuxDebAsset = `OpenCloud_${manifest.version}_amd64.deb`;
   const baseUrl = `https://github.com/${repository}/releases/download/${tag}`;
 
   for (const [platform, entry] of Object.entries(manifest.platforms)) {
     if (!entry?.signature) throw new Error(`Missing signature for ${platform}`);
     if (platform.startsWith('darwin-')) entry.url = `${baseUrl}/${macAsset}`;
     else if (platform.startsWith('windows-')) entry.url = `${baseUrl}/${windowsAsset}`;
-    else if (platform.startsWith('linux-')) entry.url = `${baseUrl}/${linuxAsset}`;
+    else if (platform.startsWith('linux-') && platform.endsWith('-deb')) entry.url = `${baseUrl}/${linuxDebAsset}`;
+    else if (platform.startsWith('linux-')) entry.url = `${baseUrl}/${linuxAppImageAsset}`;
     else throw new Error(`Unsupported updater platform: ${platform}`);
   }
 

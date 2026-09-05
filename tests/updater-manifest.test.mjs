@@ -8,7 +8,8 @@ test('release finalizer replaces GitHub API metadata URLs without changing signa
     platforms: {
       'darwin-universal': { signature: 'mac-signature', url: 'https://api.github.com/assets/1' },
       'windows-x86_64': { signature: 'win-signature', url: 'https://api.github.com/assets/2' },
-      'linux-x86_64': { signature: 'linux-signature', url: 'https://api.github.com/assets/3' }
+      'linux-x86_64': { signature: 'linux-appimage-signature', url: 'https://api.github.com/assets/3' },
+      'linux-x86_64-deb': { signature: 'linux-deb-signature', url: 'https://api.github.com/assets/4' }
     }
   };
 
@@ -27,7 +28,12 @@ test('release finalizer replaces GitHub API metadata URLs without changing signa
     result.platforms['linux-x86_64'].url,
     'https://github.com/sebastianmiletic/opencloud/releases/download/v3.5.0/OpenCloud_3.5.0_amd64.AppImage'
   );
-  assert.equal(result.platforms['linux-x86_64'].signature, 'linux-signature');
+  assert.equal(result.platforms['linux-x86_64'].signature, 'linux-appimage-signature');
+  assert.equal(
+    result.platforms['linux-x86_64-deb'].url,
+    'https://github.com/sebastianmiletic/opencloud/releases/download/v3.5.0/OpenCloud_3.5.0_amd64.deb'
+  );
+  assert.equal(result.platforms['linux-x86_64-deb'].signature, 'linux-deb-signature');
 });
 
 test('release finalizer refuses unsigned or unsupported updater entries', () => {
