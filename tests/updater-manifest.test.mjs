@@ -25,7 +25,7 @@ test('release finalizer replaces GitHub API metadata URLs without changing signa
   assert.equal(result.platforms['windows-x86_64'].signature, 'win-signature');
   assert.equal(
     result.platforms['linux-x86_64'].url,
-    'https://github.com/sebastianmiletic/opencloud/releases/download/v3.5.0/OpenCloud_3.5.0_amd64.AppImage.tar.gz'
+    'https://github.com/sebastianmiletic/opencloud/releases/download/v3.5.0/OpenCloud_3.5.0_amd64.AppImage'
   );
   assert.equal(result.platforms['linux-x86_64'].signature, 'linux-signature');
 });

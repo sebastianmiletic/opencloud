@@ -9,7 +9,7 @@ export function rewriteUpdaterManifest(manifest, repository, tag) {
 
   const macAsset = `OpenCloud_${manifest.version}_universal.app.tar.gz`;
   const windowsAsset = `OpenCloud_${manifest.version}_x64-setup.exe`;
-  const linuxAsset = `OpenCloud_${manifest.version}_amd64.AppImage.tar.gz`;
+  const linuxAsset = `OpenCloud_${manifest.version}_amd64.AppImage`;
   const baseUrl = `https://github.com/${repository}/releases/download/${tag}`;
 
   for (const [platform, entry] of Object.entries(manifest.platforms)) {
