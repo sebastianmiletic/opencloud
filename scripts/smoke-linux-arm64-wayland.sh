@@ -11,11 +11,13 @@ if [[ -z "$appimage" ]]; then
   echo "ARM64 AppImage was not produced" >&2
   exit 1
 fi
+appimage="$(realpath "$appimage")"
 
 runtime_dir="$(mktemp -d)"
 chmod 700 "$runtime_dir"
 weston_log="$runtime_dir/weston.log"
 app_log="$runtime_dir/opencloud.log"
+extract_dir="$runtime_dir/appimage"
 weston_pid=""
 app_pid=""
 
@@ -53,16 +55,29 @@ if [[ ! -S "$runtime_dir/opencloud-wayland-ci" ]]; then
   exit 1
 fi
 
-env \
+mkdir "$extract_dir"
+(
+  cd "$extract_dir"
+  "$appimage" --appimage-extract >/dev/null
+)
+app_runner="$extract_dir/squashfs-root/AppRun"
+if [[ ! -x "$app_runner" ]]; then
+  echo "ARM64 AppImage extraction did not produce AppRun" >&2
+  exit 1
+fi
+
+dbus-run-session -- env \
   XDG_RUNTIME_DIR="$runtime_dir" \
+  XDG_SESSION_TYPE=wayland \
   WAYLAND_DISPLAY=opencloud-wayland-ci \
   GDK_BACKEND=wayland \
   OPEN_CLOUD_WEBKIT_RENDERER=compatible \
-  "$appimage" --appimage-extract-and-run >"$app_log" 2>&1 &
+  "$app_runner" >"$app_log" 2>&1 &
 app_pid="$!"
 
 sleep 15
 if ! kill -0 "$app_pid" 2>/dev/null; then
+  cat "$weston_log" >&2
   cat "$app_log" >&2
   echo "Open Cloud exited during the ARM64 Wayland WebKitGTK smoke test" >&2
   exit 1
