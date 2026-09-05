@@ -47,6 +47,11 @@ jobs:
             args: '--target x86_64-unknown-linux-gnu --bundles appimage,deb'
             rust-targets: 'x86_64-unknown-linux-gnu'
     runs-on: ${{ matrix.platform }}
+    env:
+      TMDB_BEARER_TOKEN: ${{ secrets.TMDB_BEARER_TOKEN }}
+      OMDB_API_KEY: ${{ secrets.OMDB_API_KEY }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
