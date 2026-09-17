@@ -58,6 +58,21 @@ test('home exposes one episode-aware Continue Watching row and no Up Next headin
   assert.doesNotMatch(html, /<h3>Up Next<\/h3>/);
 });
 
+test('collection and history preserve the complete poster artwork', () => {
+  const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
+  assert.match(css, /\.collection-grid \.grid-item \.item-poster img,[\s\S]*?\.history-grid \.grid-item \.item-poster img\s*\{[\s\S]*?object-fit:\s*contain/);
+  assert.match(css, /\.collection-grid \.grid-item:hover \.item-poster img,[\s\S]*?transform:\s*none/);
+});
+
+test('macOS builds use the framed multi-resolution app icon', () => {
+  const config = readFileSync(new URL('../src-tauri/tauri.conf.json', import.meta.url), 'utf8');
+  const iconBuilder = readFileSync(new URL('../build/create-macos-icon.py', import.meta.url), 'utf8');
+  const icns = readFileSync(new URL('../icon.icns', import.meta.url));
+  assert.match(config, /\.\.\/icon\.icns/);
+  assert.match(iconBuilder, /rounded_rectangle/);
+  assert.equal(icns.subarray(0, 4).toString('ascii'), 'icns');
+});
+
 test('automatic provider failover is off by default and settings migrate safely', async () => {
   const { getSettings } = await import('../js/config.js');
   localValues.clear();

@@ -1742,14 +1742,29 @@ body {
 }
 
 .grid-item .item-poster img {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center;
   transition: transform var(--transition-slow);
 }
 
 .grid-item:hover .item-poster img {
   transform: scale(1.04);
+}
+
+/* Personal-library posters must remain fully visible. Some providers return
+   slightly non-standard poster ratios, so cover would crop them vertically. */
+.collection-grid .grid-item .item-poster img,
+.history-grid .grid-item .item-poster img {
+  object-fit: contain;
+  background: var(--bg-secondary);
+}
+
+.collection-grid .grid-item:hover .item-poster img,
+.history-grid .grid-item:hover .item-poster img {
+  transform: none;
 }
 
 .grid-item .type-badge {
