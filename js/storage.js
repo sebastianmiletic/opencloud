@@ -112,6 +112,10 @@ function getUserId() {
   return getCurrentAuthUser()?.id || null;
 }
 
+function mergeFolderNames(...groups) {
+  return [...new Set(groups.flat().map(name => String(name || '').trim()).filter(Boolean))];
+}
+
 async function syncProgressInOrder(userId, item) {
   const key = `${userId}:${item.id}`;
   const previous = _progressSyncChains.get(key) || Promise.resolve();
@@ -144,16 +148,18 @@ export async function initStorage() {
     fetchWatchHistory(userId),
     fetchWatchProgress(userId),
     fetchUserSettings(userId),
+    fetchFolders(userId),
     fetchDataTombstones(userId),
     backupMyUserData()
   ]);
 
-  const [collectionRes, historyRes, progressRes, settingsRes, tombstonesRes] = results;
+  const [collectionRes, historyRes, progressRes, settingsRes, foldersRes, tombstonesRes] = results;
 
   const collection = collectionRes.status === 'fulfilled' ? collectionRes.value : [];
   const history    = historyRes.status    === 'fulfilled' ? historyRes.value    : [];
   const progress   = progressRes.status   === 'fulfilled' ? progressRes.value   : {};
   const settings   = settingsRes.status   === 'fulfilled' ? settingsRes.value   : null;
+  const remoteFolders = foldersRes.status === 'fulfilled' ? foldersRes.value : [];
   const remoteTombstones = tombstonesRes.status === 'fulfilled' ? tombstonesRes.value : [];
 
   _cache.tombstones = mergeTombstones(_cache.tombstones, remoteTombstones);
@@ -164,11 +170,21 @@ export async function initStorage() {
     timestampField: 'watched_at', dataType: 'history', tombstones: _cache.tombstones
   }).filter(item => !!item.id);
 
+  // A folder can be recovered from its member rows even if an older client
+  // failed to create user_settings. Never replace one device's folder list.
+  _cache.folders = mergeFolderNames(
+    _cache.folders,
+    settings?.folders || [],
+    remoteFolders,
+    _cache.collection.map(item => item.folder)
+  );
+
   // Repair either side from the union. These operations never clear a table first.
   await Promise.allSettled([
     syncDataTombstones(userId, _cache.tombstones),
     syncCollection(userId, _cache.collection),
-    syncWatchHistory(userId, _cache.history)
+    syncWatchHistory(userId, _cache.history),
+    syncSaveFolders(userId, _cache.folders)
   ]);
 
   // A later explicit re-add supersedes and clears an older deletion marker.
@@ -202,8 +218,7 @@ export async function initStorage() {
     });
   }));
   if (settings) {
-    _cache.settings = settings || { device: 'laptop', provider: 'videasy', autoPlay: true, folders: [] };
-    _cache.folders = settings?.folders || [];
+    _cache.settings = { ...(_cache.settings || {}), ...settings, folders: _cache.folders };
   }
 
   persistLocalCache();
@@ -239,7 +254,8 @@ export async function addToUserCollection(item) {
     poster_path: item.poster_path || null,
     vote_average: item.vote_average != null ? item.vote_average : null,
     added_at: item.added_at || new Date().toISOString(),
-    folder: item.folder || null
+    folder: item.folder || null,
+    folder_updated_at: item.folder_updated_at || item.added_at || new Date().toISOString()
   };
   _cache.tombstones = _cache.tombstones.filter(t => !(t.data_type === 'collection'
     && Number(t.tmdb_id) === Number(normalized.id) && t.media_type === normalized.media_type));
@@ -482,12 +498,12 @@ export function getUserFolders() {
 }
 
 export async function saveUserFolders(folders) {
-  _cache.folders = folders;
-  setUserFolders(folders);
+  _cache.folders = mergeFolderNames(_cache.folders, folders);
+  setUserFolders(_cache.folders);
   persistLocalCache();
   const userId = getUserId();
   if (!userId) return true;
-  await syncSaveFolders(userId, folders);
+  await syncSaveFolders(userId, _cache.folders);
   return true;
 }
 

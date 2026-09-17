@@ -1631,6 +1631,7 @@ function renderModalFolderPicker(btn, id, type) {
         const chosen = targetFolder === 'All' ? null : targetFolder;
         if (chosen !== item.folder) {
           item.folder = chosen;
+          item.folder_updated_at = new Date().toISOString();
           saveUserCollection([...userCollection]);
           setUserCollection([...userCollection]);
           showToast(chosen ? `Moved to ${chosen}` : 'Moved to All', 'success');
@@ -1685,6 +1686,7 @@ export async function addToUserCollection(item, folder = null) {
       poster_path: item.poster_path || null,
       vote_average: item.vote_average || 0,
       folder: folder || null,
+      folder_updated_at: new Date().toISOString(),
       added_at: new Date().toISOString()
     };
 
@@ -1961,6 +1963,7 @@ function openMovePopover(button, item) {
         return;
       }
       item.folder = targetFolder;
+      item.folder_updated_at = new Date().toISOString();
       saveUserCollection([...userCollection]);
       setUserCollection([...userCollection]);
       renderUserCollection();

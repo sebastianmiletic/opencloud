@@ -98,12 +98,11 @@ jobs:
           tagName: v__VERSION__
           releaseName: 'Open Cloud v__VERSION__'
           releaseBody: |
-            Open Cloud 3.9.2 adds a Linux ARM64 WebKitGTK compatibility profile for the OnePlus 6
-            running Kupfer Linux and Hyprland, while preserving the existing interface. It prefers
-            native Wayland, automatically avoids the problematic DMA-BUF renderer on detected
-            OnePlus 6 hardware, allows phone-sized windows, and bundles the AppImage media framework.
-            The ARM64 AppImage is also smoke-tested in a native ARM64 virtual GTK display before
-            this draft can be published. Existing Windows, macOS, and Linux packages remain included.
+            Open Cloud 3.9.3 makes named collections account-scoped and syncs both folder names and
+            every movie/TV membership between devices. Existing local and cloud data are merged
+            without destructive replacement, folder moves use conflict-safe timestamps, and server
+            backups are created before synchronization. Includes universal Intel/Apple Silicon macOS,
+            Windows x64/ARM64, and Linux x64/ARM64 packages.
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true

@@ -21,7 +21,16 @@ create table if not exists collections (
   poster_path text,
   vote_average numeric(3,1) default 0,
   added_at timestamp with time zone default timezone('utc'::text, now()),
-  unique(user_id, tmdb_id)
+  folder text,
+  folder_updated_at timestamp with time zone not null default timezone('utc'::text, now()),
+  unique(user_id, tmdb_id, media_type)
+);
+
+create table if not exists collection_folders (
+  user_id uuid references auth.users on delete cascade not null,
+  name text not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()),
+  primary key(user_id, name)
 );
 
 create table if not exists watch_history (
@@ -78,6 +87,7 @@ create table if not exists watch_sessions (
 
 alter table profiles enable row level security;
 alter table collections enable row level security;
+alter table collection_folders enable row level security;
 alter table watch_history enable row level security;
 alter table watch_progress enable row level security;
 alter table user_settings enable row level security;
@@ -87,6 +97,7 @@ create policy "Users can read own profile" on profiles for select using (auth.ui
 create policy "Users can insert own profile" on profiles for insert with check (auth.uid() = id);
 create policy "Users can update own profile" on profiles for update using (auth.uid() = id);
 create policy "Users can manage own collections" on collections for all using (auth.uid() = user_id);
+create policy "Users can manage own collection folders" on collection_folders for all using (auth.uid() = user_id);
 create policy "Users can manage own history" on watch_history for all using (auth.uid() = user_id);
 create policy "Users can manage own progress" on watch_progress for all using (auth.uid() = user_id);
 create policy "Users can manage own settings" on user_settings for all using (auth.uid() = user_id);

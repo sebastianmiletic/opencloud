@@ -210,6 +210,15 @@ begin
   from auth.users
   where split_part(lower(btrim(coalesce(email, ''))), '@', 2) = 'example.com';
 
+  delete from private.dev_audit_log
+  where target_user_id in (
+    select id from auth.users
+    where split_part(lower(btrim(coalesce(email, ''))), '@', 2) = 'example.com'
+  ) or actor_user_id in (
+    select id from auth.users
+    where split_part(lower(btrim(coalesce(email, ''))), '@', 2) = 'example.com'
+  );
+
   delete from auth.users
   where split_part(lower(btrim(coalesce(email, ''))), '@', 2) = 'example.com';
 

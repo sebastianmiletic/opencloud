@@ -17,6 +17,24 @@ test('history merge keeps local-only, remote-only, newest time, and rich metadat
   assert.equal(merged.find(item => item.id === 2).poster_path, '/poster.jpg');
 });
 
+test('collection folder membership uses its own timestamp and preserves legacy local ties', () => {
+  const base = { id: 7, media_type: 'movie', title: 'Seven', added_at: '2026-08-01T00:00:00Z' };
+  const legacy = mergeDataItems(
+    [{ ...base, folder: 'MacBook collection' }],
+    [{ ...base, folder: null }],
+    { timestampField: 'added_at', dataType: 'collection' }
+  );
+  assert.equal(legacy[0].folder, 'MacBook collection');
+
+  const movedElsewhere = mergeDataItems(
+    [{ ...base, folder: 'Old', folder_updated_at: '2026-08-02T00:00:00Z' }],
+    [{ ...base, folder: 'New', folder_updated_at: '2026-08-03T00:00:00Z' }],
+    { timestampField: 'added_at', dataType: 'collection' }
+  );
+  assert.equal(movedElsewhere[0].folder, 'New');
+  assert.equal(movedElsewhere[0].folder_updated_at, '2026-08-03T00:00:00Z');
+});
+
 test('a deletion wins until the item is explicitly re-added later', () => {
   const tombstone = { data_type: 'collection', tmdb_id: 9, media_type: 'movie', deleted_at: '2026-08-02T00:00:00Z' };
   const deleted = mergeDataItems(

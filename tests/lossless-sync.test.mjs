@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 const storage = await readFile(new URL('../js/storage.js', import.meta.url), 'utf8');
 const sync = await readFile(new URL('../js/sync.js', import.meta.url), 'utf8');
 const migration = await readFile(new URL('../supabase/migrations/202608150004_lossless_user_data_sync.sql', import.meta.url), 'utf8');
+const folderMigration = await readFile(new URL('../supabase/migrations/202609170001_account_collection_folders.sql', import.meta.url), 'utf8');
 
 test('history saves are non-destructive and uncapped', () => {
   const body = storage.match(/export async function saveUserHistory\(items\) \{([\s\S]*?)\n\}/)?.[1] || '';
@@ -23,4 +24,14 @@ test('database distinguishes media types and preserves deletion intent and backu
   assert.match(migration, /create table if not exists public\.user_data_tombstones/i);
   assert.match(migration, /create table if not exists private\.user_data_backups/i);
   assert.match(sync, /onConflict: 'user_id,tmdb_id,media_type'/);
+});
+
+test('named collections and item membership are account scoped and recoverable', () => {
+  assert.match(folderMigration, /create table if not exists public\.collection_folders/i);
+  assert.match(folderMigration, /primary key \(user_id, name\)/i);
+  assert.match(folderMigration, /before_account_collection_folders_migration/i);
+  assert.match(folderMigration, /folder_updated_at/i);
+  assert.match(storage, /_cache\.collection\.map\(item => item\.folder\)/);
+  assert.match(sync, /from\('collection_folders'\)\.upsert/);
+  assert.match(sync, /user_settings'\)\.upsert/);
 });

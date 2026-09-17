@@ -19,11 +19,21 @@ function useful(value, field) {
 
 function richerItem(older, newer, timestampField) {
   const merged = { ...older, ...newer };
-  for (const field of ['title', 'year', 'poster_path', 'vote_average', 'folder']) {
+  for (const field of ['title', 'year', 'poster_path', 'vote_average']) {
     if (!useful(merged[field], field)) {
       const fallback = useful(newer[field], field) ? newer[field] : older[field];
       if (fallback != null) merged[field] = fallback;
     }
+  }
+
+  // Folder membership has its own clock. A move must not lose to an unrelated
+  // metadata update, and legacy equal timestamps prefer the local/existing item.
+  if (timestamp(older.folder_updated_at || older.added_at) > timestamp(newer.folder_updated_at || newer.added_at)) {
+    merged.folder = older.folder ?? null;
+    merged.folder_updated_at = older.folder_updated_at || older.added_at || null;
+  } else {
+    merged.folder = newer.folder ?? null;
+    merged.folder_updated_at = newer.folder_updated_at || newer.added_at || null;
   }
   merged.duration_watched = Math.max(
     Number(older.duration_watched) || 0,
@@ -52,7 +62,7 @@ export function mergeDataItems(localItems, remoteItems, {
     }
     const existingTime = timestamp(existing[timestampField]);
     const candidateTime = timestamp(normalized[timestampField]);
-    const newer = candidateTime >= existingTime ? normalized : existing;
+    const newer = candidateTime > existingTime ? normalized : existing;
     const older = newer === normalized ? existing : normalized;
     merged.set(key, richerItem(older, newer, timestampField));
   }

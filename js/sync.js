@@ -40,7 +40,8 @@ export async function syncCollection(userId, items) {
       poster_path: item.poster_path || null,
       vote_average: item.vote_average || 0,
       added_at: item.added_at || new Date().toISOString(),
-      folder: item.folder || null
+      folder: item.folder || null,
+      folder_updated_at: item.folder_updated_at || item.added_at || new Date().toISOString()
     }));
     if (!rows.length) return true;
     const { error } = await sb.from('collections').upsert(rows, { onConflict: 'user_id,tmdb_id,media_type' });
@@ -70,7 +71,8 @@ export async function fetchCollection(userId) {
       poster_path: row.poster_path,
       vote_average: row.vote_average,
       added_at: row.added_at,
-      folder: row.folder || null
+      folder: row.folder || null,
+      folder_updated_at: row.folder_updated_at || row.added_at
     }));
   } catch (err) {
     console.error('[Sync] fetch collection failed:', err);
@@ -92,7 +94,8 @@ export async function addToCollection(userId, item) {
       poster_path: item.poster_path || null,
       vote_average: item.vote_average || 0,
       added_at: item.added_at || new Date().toISOString(),
-      folder: item.folder || null
+      folder: item.folder || null,
+      folder_updated_at: item.folder_updated_at || item.added_at || new Date().toISOString()
     }, { onConflict: 'user_id,tmdb_id,media_type' });
     if (error) throw error;
     return true;
@@ -333,14 +336,16 @@ export async function saveUserSettings(userId, settings) {
   const sb = getClient();
   if (!sb || !userId) return false;
   try {
-    const { error } = await sb.from('user_settings').upsert({
+    const row = {
       user_id: userId,
       device: settings.device || 'laptop',
       provider: settings.provider || 'vidsrccc',
       auto_play: settings.autoPlay !== false,
-      folders: settings.folders || [],
       updated_at: new Date().toISOString()
-    }, { onConflict: 'user_id' });
+    };
+    // General preference saves must not erase named collections.
+    if (Array.isArray(settings.folders)) row.folders = settings.folders;
+    const { error } = await sb.from('user_settings').upsert(row, { onConflict: 'user_id' });
     if (error) throw error;
     return true;
   } catch (err) {
@@ -539,12 +544,24 @@ export async function fetchWatchSessions(userId, days = 365) {
 export async function saveFolders(userId, folders) {
   const sb = getClient();
   if (!sb || !userId) return false;
+  const names = [...new Set((folders || []).map(name => String(name).trim()).filter(Boolean))];
   try {
-    const { error } = await sb.from('user_settings').update({
-      folders: folders,
+    // Keep the legacy settings copy for older clients, but upsert so accounts
+    // without a settings row do not silently lose their folders.
+    const settingsWrite = sb.from('user_settings').upsert({
+      user_id: userId,
+      folders: names,
       updated_at: new Date().toISOString()
-    }).eq('user_id', userId);
-    if (error) throw error;
+    }, { onConflict: 'user_id' });
+    const folderWrite = names.length
+      ? sb.from('collection_folders').upsert(
+          names.map(name => ({ user_id: userId, name })),
+          { onConflict: 'user_id,name' }
+        )
+      : Promise.resolve({ error: null });
+    const [{ error: settingsError }, { error: folderError }] = await Promise.all([settingsWrite, folderWrite]);
+    if (settingsError) throw settingsError;
+    if (folderError) throw folderError;
     return true;
   } catch (err) {
     console.error('[Sync] save folders failed:', err);
@@ -556,16 +573,19 @@ export async function fetchFolders(userId) {
   const sb = getClient();
   if (!sb || !userId) return [];
   try {
-    const { data, error } = await sb
-      .from('user_settings')
-      .select('folders')
-      .eq('user_id', userId)
-      .single();
-    if (error && error.code !== 'PGRST116') throw error;
-    return data?.folders || [];
+    const [settingsResult, foldersResult] = await Promise.all([
+      sb.from('user_settings').select('folders').eq('user_id', userId).maybeSingle(),
+      sb.from('collection_folders').select('name').eq('user_id', userId).order('created_at')
+    ]);
+    if (settingsResult.error) throw settingsResult.error;
+    if (foldersResult.error) throw foldersResult.error;
+    return [...new Set([
+      ...(settingsResult.data?.folders || []),
+      ...(foldersResult.data || []).map(row => row.name)
+    ].map(name => String(name).trim()).filter(Boolean))];
   } catch (err) {
     console.error('[Sync] fetch folders failed:', err);
-    return [];
+    throw err;
   }
 }
 
