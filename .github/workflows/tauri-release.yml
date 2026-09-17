@@ -31,8 +31,32 @@ jobs:
       - run: node scripts/check-build-env.mjs
       - run: npm run check
 
-  release:
+  prepare-release:
     needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Create one shared draft before matrix uploads
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          TAG="v${VERSION}"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --draft --title "Open Cloud ${TAG}" --notes-file - <<'EOF'
+          Open Cloud 3.9.3 makes named collections account-scoped and syncs both folder names and
+          every movie/TV membership between devices. Existing local and cloud data are merged
+          without destructive replacement, folder moves use conflict-safe timestamps, and server
+          backups are created before synchronization. Includes universal Intel/Apple Silicon macOS,
+          Windows x64/ARM64, and Linux x64/ARM64 packages.
+          EOF
+          fi
+
+  release:
+    needs: prepare-release
     strategy:
       fail-fast: false
       matrix:
