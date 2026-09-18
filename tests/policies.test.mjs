@@ -58,9 +58,10 @@ test('home exposes one episode-aware Continue Watching row and no Up Next headin
   assert.doesNotMatch(html, /<h3>Up Next<\/h3>/);
 });
 
-test('collection and history preserve the complete poster artwork', () => {
+test('collection and history preserve complete posters on older Intel Mac WebKit', () => {
   const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
-  assert.match(css, /\.collection-grid \.grid-item \.item-poster img,[\s\S]*?\.history-grid \.grid-item \.item-poster img\s*\{[\s\S]*?object-fit:\s*contain/);
+  assert.match(css, /\.collection-grid \.grid-item \.item-poster::before,[\s\S]*?padding-top:\s*150%/);
+  assert.match(css, /\.collection-grid \.grid-item \.item-poster img,[\s\S]*?\.history-grid \.grid-item \.item-poster img\s*\{[\s\S]*?position:\s*absolute[\s\S]*?inset:\s*0[\s\S]*?object-fit:\s*contain/);
   assert.match(css, /\.collection-grid \.grid-item:hover \.item-poster img,[\s\S]*?transform:\s*none/);
 });
 
@@ -70,6 +71,8 @@ test('macOS builds use the framed multi-resolution app icon', () => {
   const icns = readFileSync(new URL('../icon.icns', import.meta.url));
   assert.match(config, /\.\.\/icon\.icns/);
   assert.match(iconBuilder, /rounded_rectangle/);
+  assert.match(iconBuilder, /target_width = 470/);
+  assert.match(iconBuilder, /cloud_y = \(CANVAS_SIZE - target_height\) \/\/ 2/);
   assert.equal(icns.subarray(0, 4).toString('ascii'), 'icns');
 });
 

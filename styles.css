@@ -1754,10 +1754,25 @@ body {
   transform: scale(1.04);
 }
 
-/* Personal-library posters must remain fully visible. Some providers return
-   slightly non-standard poster ratios, so cover would crop them vertically. */
+/* Use the classic intrinsic-ratio pattern in personal-library grids. Older
+   Intel Mac WebKit builds can miscalculate `aspect-ratio` with percentage-height
+   images, leaving only one horizontal half of a poster visible. */
+.collection-grid .grid-item .item-poster,
+.history-grid .grid-item .item-poster {
+  aspect-ratio: auto;
+}
+
+.collection-grid .grid-item .item-poster::before,
+.history-grid .grid-item .item-poster::before {
+  content: '';
+  display: block;
+  padding-top: 150%;
+}
+
 .collection-grid .grid-item .item-poster img,
 .history-grid .grid-item .item-poster img {
+  position: absolute;
+  inset: 0;
   object-fit: contain;
   background: var(--bg-secondary);
 }

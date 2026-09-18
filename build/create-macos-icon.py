@@ -55,13 +55,15 @@ def build_master():
     cloud_alpha = cloud.getchannel("A")
     cloud = Image.new("RGBA", cloud.size, (246, 247, 249, 255))
     cloud.putalpha(cloud_alpha)
-    target_width = 612
+    # Keep the cloud comfortably inside the tile and optically centered. This
+    # same ICNS is embedded in both Intel and Apple Silicon slices.
+    target_width = 470
     target_height = round(cloud.height * target_width / cloud.width)
     cloud = cloud.resize((target_width, target_height), Image.Resampling.LANCZOS)
 
     cloud_shadow = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
     cloud_x = (CANVAS_SIZE - target_width) // 2
-    cloud_y = 338
+    cloud_y = (CANVAS_SIZE - target_height) // 2
     shadow_mask = cloud.getchannel("A").filter(ImageFilter.GaussianBlur(14))
     shadow_art = Image.new("RGBA", cloud.size, (0, 0, 0, 120))
     shadow_art.putalpha(shadow_mask.point(lambda value: round(value * 0.47)))
