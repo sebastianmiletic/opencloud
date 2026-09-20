@@ -248,6 +248,7 @@ function renderProviderCards() {
     const badges = [];
     const healthScore = providerHealthScores.get(key);
     if (rankLabel) badges.push(`<span class="provider-badge badge-rank">${rankLabel}</span>`);
+    (p.tags || []).forEach(tag => badges.push(`<span class="provider-badge badge-status badge-${tag.toLowerCase()}">${tag}</span>`));
     if (p.movie && p.tv) badges.push('<span class="provider-badge"><i class="fas fa-film"></i> Movies + TV</span>');
     else if (p.movie) badges.push('<span class="provider-badge"><i class="fas fa-film"></i> Movies</span>');
     else if (p.tv) badges.push('<span class="provider-badge"><i class="fas fa-tv"></i> TV</span>');

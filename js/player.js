@@ -170,10 +170,11 @@ function renderProviderMenu() {
     copy.append(name, meta);
     option.append(check, copy);
 
-    if (provider.rank) {
+    const providerLabels = [provider.rank, ...(provider.tags || [])].filter(Boolean);
+    if (providerLabels.length) {
       const rank = document.createElement('span');
       rank.className = 'player-provider-option-rank';
-      rank.textContent = provider.rank;
+      rank.textContent = providerLabels.join(' · ');
       option.appendChild(rank);
     } else {
       option.appendChild(document.createElement('span'));

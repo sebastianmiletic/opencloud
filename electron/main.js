@@ -13,6 +13,9 @@ const ALLOWED_HOSTS = new Set([
   'localhost', '127.0.0.1',
   'vidsrc.cc', 'player.videasy.net', 'vsembed.ru', 'cloudorchestranova.com', 'vidsrc.me', 'vidsrc.to',
   'moviesapi.club', 'vidsrc.su', 'vidlink.pro',
+  'vidphantom.com', 'vidphantom.live', 'vidphantom.online', 'vidphantom.site', 'vidphantom.website', 'vidphantom.xyz',
+  'vidcore.org', 'www.vidcore.org', 'embedmaster.link', 'embdmstrplayer.com',
+  'vixsrc.to', 'moviesapi.to', 'vidsrc.sh', 'vidfast.pro', 'vidfast.vc',
   'image.tmdb.org', 'www.themoviedb.org', 'api.themoviedb.org', 'www.omdbapi.com',
 ]);
 

@@ -341,6 +341,21 @@ fn is_provider_host(host: Option<&str>) -> bool {
             | Some("moviesapi.club")
             | Some("vidsrc.su")
             | Some("vidlink.pro")
+            | Some("vidphantom.com")
+            | Some("vidphantom.live")
+            | Some("vidphantom.online")
+            | Some("vidphantom.site")
+            | Some("vidphantom.website")
+            | Some("vidphantom.xyz")
+            | Some("vidcore.org")
+            | Some("www.vidcore.org")
+            | Some("embedmaster.link")
+            | Some("embdmstrplayer.com")
+            | Some("vixsrc.to")
+            | Some("moviesapi.to")
+            | Some("vidsrc.sh")
+            | Some("vidfast.pro")
+            | Some("vidfast.vc")
     )
 }
 
@@ -746,6 +761,11 @@ mod tests {
         assert!(is_provider_host(Some("player.videasy.net")));
         assert!(is_provider_host(Some("vsembed.ru")));
         assert!(is_provider_host(Some("cloudorchestranova.com")));
+        assert!(is_provider_host(Some("vidphantom.com")));
+        assert!(is_provider_host(Some("www.vidcore.org")));
+        assert!(is_provider_host(Some("embdmstrplayer.com")));
+        assert!(is_provider_host(Some("vidsrc.sh")));
+        assert!(is_provider_host(Some("vidfast.vc")));
         assert!(!is_provider_host(Some("ads.example.invalid")));
         assert!(!is_provider_host(Some("videasy.net.ads.example.invalid")));
     }

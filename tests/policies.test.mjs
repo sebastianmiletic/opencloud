@@ -141,11 +141,40 @@ test('stall recovery gives weak connections time to refill before failover', () 
   });
 });
 
-test('Plasma is marked new and generates exact movie and TV embed URLs', () => {
-  assert.equal(PROVIDERS.vsembed.name, 'Plasma');
-  assert.equal(PROVIDERS.vsembed.rank, 'New');
-  assert.equal(getProviderUrlFor('vsembed', 'movie', 550), 'https://vsembed.ru/embed/movie/550');
-  assert.equal(getProviderUrlFor('vsembed', 'tv', 66732, 1, 1), 'https://vsembed.ru/embed/tv/66732/1/1');
+test('new providers expose working tags and exact movie and TV embed URLs', () => {
+  const expected = {
+    ultra: ['https://vidphantom.com/movie/666243', 'https://vidphantom.com/tv/94997/1/1'],
+    delta: ['https://vidcore.org/embed/movie/666243', 'https://vidcore.org/embed/tv/94997/1/1'],
+    omega: ['https://embedmaster.link/movie/666243', 'https://embedmaster.link/tv/94997/1/1']
+  };
+
+  for (const [key, [movieUrl, tvUrl]] of Object.entries(expected)) {
+    assert.deepEqual(PROVIDERS[key].tags, ['New', 'Working']);
+    assert.equal(getProviderUrlFor(key, 'movie', 666243), movieUrl);
+    assert.equal(getProviderUrlFor(key, 'tv', 94997, 1, 1), tvUrl);
+  }
+
+  const providersMarkedNew = Object.entries(PROVIDERS)
+    .filter(([, provider]) => provider.tags?.includes('New') || provider.rank === 'New')
+    .map(([key]) => key);
+  assert.deepEqual(providersMarkedNew, ['ultra', 'delta', 'omega']);
+});
+
+test('requested existing providers retain their exact aliases and embed URLs', () => {
+  const expected = {
+    vixsrc: ['Rakan', 'https://vixsrc.to/movie/666243?autoPlay=true&lang=en', 'https://vixsrc.to/tv/94997/1/1?autoPlay=true&lang=en'],
+    moviesapi: ['Bard', 'https://moviesapi.to/movie/666243', 'https://moviesapi.to/tv/94997-1-1'],
+    vidsrcme: ['Xayah', 'https://vidsrc.me/embed/movie?tmdb=666243&autoplay=1', 'https://vidsrc.me/embed/tv?tmdb=94997&season=1&episode=1&autoplay=1'],
+    videasy: ['Ekko', 'https://player.videasy.net/movie/666243', 'https://player.videasy.net/tv/94997/1/1?nextEpisode=true&episodeSelector=true'],
+    vidfast: ['Naafiri', 'https://vidfast.pro/movie/666243?autoPlay=true', 'https://vidfast.pro/tv/94997/1/1?autoPlay=true'],
+    vidlink: ['Ryze', 'https://vidlink.pro/movie/666243?title=true&poster=true&autoplay=true', 'https://vidlink.pro/tv/94997/1/1?title=true&poster=true&autoplay=true&nextbutton=true']
+  };
+
+  for (const [key, [name, movieUrl, tvUrl]] of Object.entries(expected)) {
+    assert.equal(PROVIDERS[key].name, name);
+    assert.equal(getProviderUrlFor(key, 'movie', 666243), movieUrl);
+    assert.equal(getProviderUrlFor(key, 'tv', 94997, 1, 1), tvUrl);
+  }
 });
 
 test('exact playback checkpoints stay isolated per episode', () => {

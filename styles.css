@@ -3322,10 +3322,18 @@ body.device-laptop .player-overlay.player-header-autohide .player-health {
   border-color: var(--text-primary);
 }
 
-.provider-badge.badge-rank {
+.provider-badge.badge-rank,
+.provider-badge.badge-new {
   background: var(--text-primary);
   color: var(--bg-primary);
   border-color: var(--text-primary);
+  font-weight: 700;
+}
+
+.provider-badge.badge-working {
+  color: #86efac;
+  background: rgba(34, 197, 94, 0.1);
+  border-color: rgba(34, 197, 94, 0.35);
   font-weight: 700;
 }
 

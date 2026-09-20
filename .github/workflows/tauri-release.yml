@@ -47,10 +47,10 @@ jobs:
           TAG="v${VERSION}"
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" --draft --title "Open Cloud ${TAG}" --notes-file - <<'EOF'
-          Open Cloud 3.9.5 fixes older Intel Mac WebKit rendering that could show only one
-          horizontal half of Collection and Watch History posters. The macOS icon now uses a smaller,
-          precisely centered cloud while retaining the framed design in both Intel and Apple Silicon
-          builds. Includes macOS, Windows x64/ARM64, and Linux x64/ARM64 packages.
+          Open Cloud 3.9.6 adds Ultra (VidPhantom), Delta (VidCore), and Omega (EmbedMaster),
+          plus the Rakan, Bard, Xayah, Ekko, Naafiri, and Ryze sources. New provider domains and
+          redirects are enabled across desktop security policies. Includes macOS Universal,
+          Windows x64/ARM64, and Linux x64/ARM64 packages.
           EOF
           fi
 
@@ -121,10 +121,10 @@ jobs:
           tagName: v__VERSION__
           releaseName: 'Open Cloud v__VERSION__'
           releaseBody: |
-            Open Cloud 3.9.5 fixes older Intel Mac WebKit rendering that could show only one
-            horizontal half of Collection and Watch History posters. The macOS icon now uses a smaller,
-            precisely centered cloud while retaining the framed design in both Intel and Apple Silicon
-            builds. Includes macOS, Windows x64/ARM64, and Linux x64/ARM64 packages.
+            Open Cloud 3.9.6 adds Ultra (VidPhantom), Delta (VidCore), and Omega (EmbedMaster),
+            plus the Rakan, Bard, Xayah, Ekko, Naafiri, and Ryze sources. New provider domains and
+            redirects are enabled across desktop security policies. Includes macOS Universal,
+            Windows x64/ARM64, and Linux x64/ARM64 packages.
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true

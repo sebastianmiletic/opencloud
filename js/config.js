@@ -32,7 +32,7 @@ export const PROVIDERS = {
     tvUrl: 'https://vidsrc.cc/v3/embed/tv/{id}/{season}/{episode}?autoPlay=false'
   },
   videasy: {
-    name: 'Helix',
+    name: 'Ekko',
     rank: '1st',
     tier: 1,
     movie: true,
@@ -41,12 +41,50 @@ export const PROVIDERS = {
     subtitles: true,
     speed: 'Fast',
     description: 'Premium player with built-in next-episode and selector UI.',
-    movieUrl: 'https://player.videasy.net/movie/{id}?nextEpisode=true&episodeSelector=true',
+    movieUrl: 'https://player.videasy.net/movie/{id}',
     tvUrl: 'https://player.videasy.net/tv/{id}/{season}/{episode}?nextEpisode=true&episodeSelector=true'
+  },
+  ultra: {
+    name: 'Ultra',
+    tags: ['New', 'Working'],
+    tier: 1,
+    movie: true,
+    tv: true,
+    quality: '1080p',
+    subtitles: true,
+    speed: 'Fast',
+    description: 'VidPhantom player with broad movie and episode coverage.',
+    movieUrl: 'https://vidphantom.com/movie/{id}',
+    tvUrl: 'https://vidphantom.com/tv/{id}/{season}/{episode}'
+  },
+  delta: {
+    name: 'Delta',
+    tags: ['New', 'Working'],
+    tier: 1,
+    movie: true,
+    tv: true,
+    quality: '4K',
+    subtitles: true,
+    speed: 'Fast',
+    description: 'Fast VidCore player with adaptive streaming and subtitles.',
+    movieUrl: 'https://vidcore.org/embed/movie/{id}',
+    tvUrl: 'https://vidcore.org/embed/tv/{id}/{season}/{episode}'
+  },
+  omega: {
+    name: 'Omega',
+    tags: ['New', 'Working'],
+    tier: 1,
+    movie: true,
+    tv: true,
+    quality: '1080p',
+    subtitles: true,
+    speed: 'Fast',
+    description: 'EmbedMaster player with movie, episode, and subtitle support.',
+    movieUrl: 'https://embedmaster.link/movie/{id}',
+    tvUrl: 'https://embedmaster.link/tv/{id}/{season}/{episode}'
   },
   vsembed: {
     name: 'Plasma',
-    rank: 'New',
     tier: 1,
     movie: true,
     tv: true,
@@ -55,7 +93,7 @@ export const PROVIDERS = {
     tvUrl: 'https://vsembed.ru/embed/tv/{id}/{season}/{episode}'
   },
   vidsrcme: {
-    name: 'Pulse',
+    name: 'Xayah',
     rank: '2nd',
     tier: 1,
     movie: true,
@@ -64,8 +102,8 @@ export const PROVIDERS = {
     subtitles: true,
     speed: 'Medium',
     description: 'Stable source with multi-language subtitle support.',
-    movieUrl: 'https://vidsrc.me/embed/movie?tmdb={id}',
-    tvUrl: 'https://vidsrc.me/embed/tv?tmdb={id}&season={season}&episode={episode}'
+    movieUrl: 'https://vidsrc.me/embed/movie?tmdb={id}&autoplay=1',
+    tvUrl: 'https://vidsrc.me/embed/tv?tmdb={id}&season={season}&episode={episode}&autoplay=1'
   },
   vidsrcto: {
     name: 'Phantom',
@@ -79,15 +117,37 @@ export const PROVIDERS = {
     tvUrl: 'https://vidsrc.to/embed/tv/{id}/{season}/{episode}'
   },
   moviesapi: {
-    name: 'Dossier',
+    name: 'Bard',
     movie: true,
     tv: true,
     quality: '720p',
     subtitles: false,
     speed: 'Medium',
     description: 'Large back-catalog with older titles and cult classics.',
-    movieUrl: 'https://moviesapi.club/movie/{id}',
-    tvUrl: 'https://moviesapi.club/tv/{id}-{season}-{episode}'
+    movieUrl: 'https://moviesapi.to/movie/{id}',
+    tvUrl: 'https://moviesapi.to/tv/{id}-{season}-{episode}'
+  },
+  vixsrc: {
+    name: 'Rakan',
+    movie: true,
+    tv: true,
+    quality: '1080p',
+    subtitles: true,
+    speed: 'Fast',
+    description: 'Fast VixSrc player with English language playback.',
+    movieUrl: 'https://vixsrc.to/movie/{id}?autoPlay=true&lang=en',
+    tvUrl: 'https://vixsrc.to/tv/{id}/{season}/{episode}?autoPlay=true&lang=en'
+  },
+  vidfast: {
+    name: 'Naafiri',
+    movie: true,
+    tv: true,
+    quality: '1080p',
+    subtitles: true,
+    speed: 'Fast',
+    description: 'Responsive VidFast source with automatic playback.',
+    movieUrl: 'https://vidfast.pro/movie/{id}?autoPlay=true',
+    tvUrl: 'https://vidfast.pro/tv/{id}/{season}/{episode}?autoPlay=true'
   },
   vidsrcsu: {
     name: 'Zenith',
@@ -101,15 +161,15 @@ export const PROVIDERS = {
     tvUrl: 'https://vidsrc.su/embed/tv/{id}/{season}/{episode}'
   },
   vidlink: {
-    name: 'Vertex',
+    name: 'Ryze',
     movie: true,
     tv: true,
     quality: '4K',
     subtitles: true,
     speed: 'Medium',
     description: 'Rich UI with poster, title cards, and next-episode button.',
-    movieUrl: 'https://vidlink.pro/movie/{id}?title=true&poster=true&autoplay=false&nextbutton=true',
-    tvUrl: 'https://vidlink.pro/tv/{id}/{season}/{episode}?title=true&poster=true&autoplay=false&nextbutton=true'
+    movieUrl: 'https://vidlink.pro/movie/{id}?title=true&poster=true&autoplay=true',
+    tvUrl: 'https://vidlink.pro/tv/{id}/{season}/{episode}?title=true&poster=true&autoplay=true&nextbutton=true'
   }
 };
 
