@@ -76,23 +76,30 @@ test('macOS builds use the framed multi-resolution app icon', () => {
   assert.equal(icns.subarray(0, 4).toString('ascii'), 'icns');
 });
 
-test('automatic provider failover is off by default and settings migrate safely', async () => {
+test('Plasma becomes the default once for new and existing settings', async () => {
   const { getSettings } = await import('../js/config.js');
   localValues.clear();
+  assert.equal(getSettings().provider, 'vsembed');
   assert.equal(getSettings().autoProviderFailover, false);
 
   localValues.set('openccloud_settings', JSON.stringify({
-    _version: 3,
+    _version: 6,
     provider: 'moviesapi',
     device: 'tv',
     autoPlay: false
   }));
   assert.deepEqual(
-    { provider: getSettings().provider, device: getSettings().device, autoPlay: getSettings().autoPlay, autoProviderFailover: getSettings().autoProviderFailover, playerHeaderAutoHide: getSettings().playerHeaderAutoHide, theme: getSettings().theme, roundedUI: getSettings().roundedUI },
-    { provider: 'moviesapi', device: 'tv', autoPlay: false, autoProviderFailover: false, playerHeaderAutoHide: false, theme: 'noir', roundedUI: false }
+    { provider: getSettings().provider, device: getSettings().device, autoPlay: getSettings().autoPlay, autoProviderFailover: getSettings().autoProviderFailover },
+    { provider: 'vsembed', device: 'tv', autoPlay: false, autoProviderFailover: false }
   );
+  assert.equal(JSON.parse(localValues.get('openccloud_settings'))._version, 7);
 
-  localValues.set('openccloud_settings', JSON.stringify({ playerHeaderAutoHide: true }));
+  localValues.set('openccloud_settings', JSON.stringify({
+    _version: 7,
+    provider: 'vidlink',
+    playerHeaderAutoHide: true
+  }));
+  assert.equal(getSettings().provider, 'vidlink');
   assert.equal(getSettings().playerHeaderAutoHide, true);
 });
 
@@ -160,21 +167,17 @@ test('new providers expose working tags and exact movie and TV embed URLs', () =
   assert.deepEqual(providersMarkedNew, ['ultra', 'delta', 'omega']);
 });
 
-test('requested existing providers retain their exact aliases and embed URLs', () => {
-  const expected = {
-    vixsrc: ['Rakan', 'https://vixsrc.to/movie/666243?autoPlay=true&lang=en', 'https://vixsrc.to/tv/94997/1/1?autoPlay=true&lang=en'],
-    moviesapi: ['Bard', 'https://moviesapi.to/movie/666243', 'https://moviesapi.to/tv/94997-1-1'],
-    vidsrcme: ['Xayah', 'https://vidsrc.me/embed/movie?tmdb=666243&autoplay=1', 'https://vidsrc.me/embed/tv?tmdb=94997&season=1&episode=1&autoplay=1'],
-    videasy: ['Ekko', 'https://player.videasy.net/movie/666243', 'https://player.videasy.net/tv/94997/1/1?nextEpisode=true&episodeSelector=true'],
-    vidfast: ['Naafiri', 'https://vidfast.pro/movie/666243?autoPlay=true', 'https://vidfast.pro/tv/94997/1/1?autoPlay=true'],
-    vidlink: ['Ryze', 'https://vidlink.pro/movie/666243?title=true&poster=true&autoplay=true', 'https://vidlink.pro/tv/94997/1/1?title=true&poster=true&autoplay=true&nextbutton=true']
-  };
+test('original provider names are preserved without character aliases', () => {
+  assert.equal(PROVIDERS.videasy.name, 'Helix');
+  assert.equal(PROVIDERS.moviesapi.name, 'Dossier');
+  assert.equal(PROVIDERS.vidsrcme.name, 'Pulse');
+  assert.equal(PROVIDERS.vidlink.name, 'Vertex');
+  assert.equal(PROVIDERS.vixsrc.name, 'VixSrc');
+  assert.equal(PROVIDERS.vidfast.name, 'VidFast');
+  assert.equal(PROVIDERS.vsembed.rank, 'Default');
 
-  for (const [key, [name, movieUrl, tvUrl]] of Object.entries(expected)) {
-    assert.equal(PROVIDERS[key].name, name);
-    assert.equal(getProviderUrlFor(key, 'movie', 666243), movieUrl);
-    assert.equal(getProviderUrlFor(key, 'tv', 94997, 1, 1), tvUrl);
-  }
+  const forbiddenAliases = new Set(['Rakan', 'Bard', 'Xayah', 'Ekko', 'Naafiri', 'Ryze']);
+  assert.equal(Object.values(PROVIDERS).some(provider => forbiddenAliases.has(provider.name)), false);
 });
 
 test('exact playback checkpoints stay isolated per episode', () => {

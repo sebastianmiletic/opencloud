@@ -20,7 +20,6 @@ export const STAR_WARS_SAGA_ORDER = [
 export const PROVIDERS = {
   vidsrccc: {
     name: 'Nova',
-    rank: 'Default',
     tier: 1,
     movie: true,
     tv: true,
@@ -32,7 +31,7 @@ export const PROVIDERS = {
     tvUrl: 'https://vidsrc.cc/v3/embed/tv/{id}/{season}/{episode}?autoPlay=false'
   },
   videasy: {
-    name: 'Ekko',
+    name: 'Helix',
     rank: '1st',
     tier: 1,
     movie: true,
@@ -85,6 +84,7 @@ export const PROVIDERS = {
   },
   vsembed: {
     name: 'Plasma',
+    rank: 'Default',
     tier: 1,
     movie: true,
     tv: true,
@@ -93,7 +93,7 @@ export const PROVIDERS = {
     tvUrl: 'https://vsembed.ru/embed/tv/{id}/{season}/{episode}'
   },
   vidsrcme: {
-    name: 'Xayah',
+    name: 'Pulse',
     rank: '2nd',
     tier: 1,
     movie: true,
@@ -117,7 +117,7 @@ export const PROVIDERS = {
     tvUrl: 'https://vidsrc.to/embed/tv/{id}/{season}/{episode}'
   },
   moviesapi: {
-    name: 'Bard',
+    name: 'Dossier',
     movie: true,
     tv: true,
     quality: '720p',
@@ -128,7 +128,7 @@ export const PROVIDERS = {
     tvUrl: 'https://moviesapi.to/tv/{id}-{season}-{episode}'
   },
   vixsrc: {
-    name: 'Rakan',
+    name: 'VixSrc',
     movie: true,
     tv: true,
     quality: '1080p',
@@ -139,7 +139,7 @@ export const PROVIDERS = {
     tvUrl: 'https://vixsrc.to/tv/{id}/{season}/{episode}?autoPlay=true&lang=en'
   },
   vidfast: {
-    name: 'Naafiri',
+    name: 'VidFast',
     movie: true,
     tv: true,
     quality: '1080p',
@@ -161,7 +161,7 @@ export const PROVIDERS = {
     tvUrl: 'https://vidsrc.su/embed/tv/{id}/{season}/{episode}'
   },
   vidlink: {
-    name: 'Ryze',
+    name: 'Vertex',
     movie: true,
     tv: true,
     quality: '4K',
@@ -181,8 +181,8 @@ export const DEVICES = {
 
 export const THEMES = Object.freeze(['noir', 'graphite', 'midnight', 'ember', 'paper']);
 
-export const DEFAULT_PROVIDER = 'videasy';
-const SETTINGS_VERSION = 6;
+export const DEFAULT_PROVIDER = 'vsembed';
+const SETTINGS_VERSION = 7;
 const DEFAULT_SETTINGS = Object.freeze({
   provider: DEFAULT_PROVIDER,
   device: 'laptop',
@@ -194,13 +194,24 @@ const DEFAULT_SETTINGS = Object.freeze({
   _version: SETTINGS_VERSION
 });
 
+function normalizeSettings(settings, sourceVersion = settings?._version) {
+  const normalized = { ...DEFAULT_SETTINGS, ...settings, _version: SETTINGS_VERSION };
+  // Version 7 makes Plasma the one-time default for every existing installation/account.
+  if ((Number(sourceVersion) || 0) < SETTINGS_VERSION) normalized.provider = DEFAULT_PROVIDER;
+  if (!PROVIDERS[normalized.provider]) normalized.provider = DEFAULT_PROVIDER;
+  return normalized;
+}
+
 export function getSettings() {
   const raw = localStorage.getItem('openccloud_settings');
   if (raw) {
     try {
       const parsed = JSON.parse(raw);
-      // Add new defaults without discarding a user's provider and device choices.
-      return { ...DEFAULT_SETTINGS, ...parsed, _version: SETTINGS_VERSION };
+      const normalized = normalizeSettings(parsed);
+      if (parsed._version !== SETTINGS_VERSION || parsed.provider !== normalized.provider) {
+        localStorage.setItem('openccloud_settings', JSON.stringify(normalized));
+      }
+      return normalized;
     } catch (e) { /* fall through */ }
   }
   return { ...DEFAULT_SETTINGS };
@@ -252,7 +263,10 @@ export async function hydrateSettingsFromCloud() {
     if (!user?.id) return;
     const cloudSettings = await fetchUserSettings(user.id);
     if (cloudSettings) {
-      const merged = { ...getSettings(), ...cloudSettings, _version: SETTINGS_VERSION };
+      const merged = normalizeSettings(
+        { ...getSettings(), ...cloudSettings },
+        cloudSettings._version
+      );
       saveSettings(merged);
     }
   } catch (err) {
