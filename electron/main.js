@@ -11,7 +11,7 @@ const UI_ZOOM_FACTOR = Number(process.env.OPENCLOUD_UI_ZOOM_FACTOR || 1.25);
 /* Hosts the Electron app is allowed to open (everything else = deny) */
 const ALLOWED_HOSTS = new Set([
   'localhost', '127.0.0.1',
-  'vidsrc.cc', 'player.videasy.net', 'vsembed.ru', 'cloudorchestranova.com', 'vidsrc.me', 'vidsrc.to',
+  'vidsrc.cc', 'player.videasy.net', 'player.videasy.to', 'vsembed.ru', 'cloudorchestranova.com', 'vidsrc.me', 'vidsrc.to',
   'moviesapi.club', 'vidsrc.su', 'vidlink.pro',
   'vidphantom.com', 'vidphantom.live', 'vidphantom.online', 'vidphantom.site', 'vidphantom.website', 'vidphantom.xyz',
   'vidcore.org', 'www.vidcore.org', 'embedmaster.link', 'embdmstrplayer.com',
@@ -19,12 +19,20 @@ const ALLOWED_HOSTS = new Set([
   'image.tmdb.org', 'www.themoviedb.org', 'api.themoviedb.org', 'www.omdbapi.com',
 ]);
 
+function isAppUrl(urlStr) {
+  try {
+    const parsed = new URL(urlStr);
+    return parsed.protocol === 'http:' && (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1');
+  } catch {
+    return false;
+  }
+}
+
 function shouldAllowUrl(urlStr) {
   try {
     const parsed = new URL(urlStr);
-    const { hostname, protocol } = parsed;
-    if ((hostname === 'localhost' || hostname === '127.0.0.1') && protocol === 'http:') return true;
-    if (protocol === 'https:' && ALLOWED_HOSTS.has(hostname)) return true;
+    if (isAppUrl(urlStr)) return true;
+    if (parsed.protocol === 'https:' && ALLOWED_HOSTS.has(parsed.hostname)) return true;
     return false;
   } catch {
     return false;
@@ -153,24 +161,23 @@ async function createMainWindow(port) {
 
   /* 1️⃣  Block popups / new windows */
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (shouldAllowUrl(url)) return { action: 'allow' };
     console.log('[ElectronBlocker] BLOCKED popup:', url);
     return { action: 'deny' };
   });
 
-  /* 2️⃣  Block top-level navigation to untrusted hosts */
+  /* 2️⃣  Never let a provider replace the OpenCloud application frame. */
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    if (!shouldAllowUrl(url)) {
-      console.log('[ElectronBlocker] BLOCKED navigation:', url);
+    if (!isAppUrl(url)) {
+      console.log('[ElectronBlocker] BLOCKED top-level navigation:', url);
       event.preventDefault();
-      shell.openExternal(url).catch(() => {});
     }
   });
 
   /* 3️⃣  Block iframe redirects to untrusted hosts */
   mainWindow.webContents.on('will-frame-navigate', (details) => {
     if (details.frame === mainWindow.webContents.mainFrame) return;
-    if (!shouldAllowUrl(details.url)) {
+    const internalFrameUrl = /^(about:blank|data:|blob:)/.test(details.url);
+    if (!internalFrameUrl && !shouldAllowUrl(details.url)) {
       console.log('[ElectronBlocker] BLOCKED iframe nav:', details.url);
       details.preventDefault();
     }

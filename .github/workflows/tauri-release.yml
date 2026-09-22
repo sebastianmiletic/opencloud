@@ -47,10 +47,12 @@ jobs:
           TAG="v${VERSION}"
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" --draft --title "Open Cloud ${TAG}" --notes-file - <<'EOF'
-          Open Cloud 3.9.7 restores the original provider names and removes the unintended
-          character aliases. Plasma is now the automatic default source for new and existing
-          users while preserving their other settings. Includes macOS Universal, Windows
-          x64/ARM64, and Linux x64/ARM64 packages.
+          Open Cloud 3.9.8 makes playback-source changes reliable by isolating each iframe
+          generation, preserving checkpoints, and ignoring stale load events. Failed sources
+          now show retry and source-selection actions instead of a blank screen. Desktop
+          navigation protections also cover verified redirects and prevent providers from
+          replacing the app. Includes macOS Universal, Windows x64/ARM64, and Linux x64/ARM64
+          packages.
           EOF
           fi
 
@@ -121,10 +123,12 @@ jobs:
           tagName: v__VERSION__
           releaseName: 'Open Cloud v__VERSION__'
           releaseBody: |
-            Open Cloud 3.9.7 restores the original provider names and removes the unintended
-            character aliases. Plasma is now the automatic default source for new and existing
-            users while preserving their other settings. Includes macOS Universal, Windows
-            x64/ARM64, and Linux x64/ARM64 packages.
+            Open Cloud 3.9.8 makes playback-source changes reliable by isolating each iframe
+            generation, preserving checkpoints, and ignoring stale load events. Failed sources
+            now show retry and source-selection actions instead of a blank screen. Desktop
+            navigation protections also cover verified redirects and prevent providers from
+            replacing the app. Includes macOS Universal, Windows x64/ARM64, and Linux x64/ARM64
+            packages.
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true

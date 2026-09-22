@@ -15,6 +15,7 @@ import {
   isPlausiblePlaybackSample,
   mergePlaybackCheckpoint
 } from '../js/playback-progress.js';
+import { getNextProviderCandidate, isCurrentFrameGeneration } from '../js/player-frame-lifecycle.js';
 
 const localValues = new Map();
 globalThis.localStorage = {
@@ -126,6 +127,57 @@ test('player provider picker is accessible and checkpoints before switching sour
   assert.ok(checkpoint > switchStart);
   assert.ok(providerChange > checkpoint);
   assert.ok(reload > providerChange);
+});
+
+test('rapid provider switches ignore stale iframe events and choose an untried fallback', () => {
+  const oldFrame = {};
+  const currentFrame = {};
+  const current = {
+    frame: currentFrame,
+    sessionToken: 12,
+    providerKey: 'delta',
+    playerOpen: true
+  };
+
+  assert.equal(isCurrentFrameGeneration({
+    frame: oldFrame,
+    sessionToken: 11,
+    providerKey: 'ultra'
+  }, current), false);
+  assert.equal(isCurrentFrameGeneration({
+    frame: currentFrame,
+    sessionToken: 12,
+    providerKey: 'delta'
+  }, current), true);
+  assert.equal(isCurrentFrameGeneration({
+    frame: currentFrame,
+    sessionToken: 12,
+    providerKey: 'delta'
+  }, { ...current, playerOpen: false }), false);
+  assert.equal(getNextProviderCandidate(['vsembed', 'delta', 'omega'], new Set(['vsembed', 'delta'])), 'omega');
+  assert.equal(getNextProviderCandidate(['vsembed'], new Set(['vsembed'])), null);
+});
+
+test('player source transitions replace the iframe and expose loading and recovery states', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
+  const playerSource = readFileSync(new URL('../js/player.js', import.meta.url), 'utf8');
+
+  assert.match(html, /id="playerFrameStatus"[^>]*role="status"[^>]*aria-live="polite"/);
+  assert.match(html, /id="playerFrameRetryBtn"/);
+  assert.match(html, /id="playerFrameChooseBtn"/);
+  assert.match(css, /\.player-frame-wrap iframe\s*\{[\s\S]*?opacity:\s*0/);
+  assert.match(css, /\.player-frame-wrap iframe\.is-ready\s*\{[\s\S]*?opacity:\s*1/);
+  assert.match(playerSource, /const nextFrame = document\.createElement\('iframe'\)/);
+  assert.match(playerSource, /previousFrame\.replaceWith\(nextFrame\)/);
+  assert.match(playerSource, /providerKey, sessionToken\);/);
+});
+
+test('Electron allows verified provider redirects only inside child frames', () => {
+  const electronSource = readFileSync(new URL('../electron/main.js', import.meta.url), 'utf8');
+  assert.match(electronSource, /'player\.videasy\.to'/);
+  assert.match(electronSource, /will-navigate[\s\S]*?if \(!isAppUrl\(url\)\)[\s\S]*?event\.preventDefault\(\)/);
+  assert.match(electronSource, /will-frame-navigate[\s\S]*?shouldAllowUrl\(details\.url\)/);
 });
 
 test('provider health uses actual video buffer depth and media failures', () => {
