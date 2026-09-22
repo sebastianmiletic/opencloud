@@ -16,6 +16,11 @@ const ALLOWED_HOSTS = new Set([
   'vidphantom.com', 'vidphantom.live', 'vidphantom.online', 'vidphantom.site', 'vidphantom.website', 'vidphantom.xyz',
   'vidcore.org', 'www.vidcore.org', 'embedmaster.link', 'embdmstrplayer.com',
   'vixsrc.to', 'moviesapi.to', 'vidsrc.sh', 'vidfast.pro', 'vidfast.vc',
+  '1414.hexa.su', 'play.xpass.top', 'vidlux.top', 'vidlux.xyz', 'vidlux.online', 'vidsrc.mov',
+  'vidzee.wtf', 'player.vidzee.wtf', 'vidnest.fun', 'player.vidplus.to', 'player.smashy.stream',
+  'rivestream.net', 'spencerdevs.xyz', 'www.2embed.cc', 'www.2embed.skin', 'vidsrcme.ru',
+  'vidsrc-me.ru', 'vidsrc-embed.ru', 'vsrc.su', 'multiembed.mov', 'movish.to',
+  'vidcore.liveblog365.com', 'ji1pfnerysxkina0.fstream.app',
   'image.tmdb.org', 'www.themoviedb.org', 'api.themoviedb.org', 'www.omdbapi.com',
 ]);
 

@@ -71,6 +71,28 @@
     try { window.parent.postMessage({ channel: PLAYER_INPUT_CHANNEL, type, frameId, ...payload }, '*'); } catch (_) {}
   };
 
+  let frameReadinessReported = false;
+  const reportFrameReadiness = () => {
+    if (window.top === window || frameReadinessReported) return;
+    try {
+      const body = document.body;
+      if (!body) return;
+      const textLength = String(body.innerText || body.textContent || '').trim().length;
+      const playerElements = body.querySelectorAll?.(
+        'video, iframe, canvas, button, input, select, [role="button"], [class*="player"], [id*="player"]'
+      ).length || 0;
+      const meaningful = body.childElementCount > 0
+        && (playerElements > 0 || textLength >= 12 || body.childElementCount >= 3);
+      if (!meaningful) return;
+      frameReadinessReported = true;
+      forwardPlayerInput('frame-ready', {
+        documentReady: true,
+        playerElements,
+        textLength: Math.min(textLength, 10000)
+      });
+    } catch (_) {}
+  };
+
   const videoSample = (video) => {
     const rect = video.getBoundingClientRect?.();
     const currentTime = Number(video.currentTime);
@@ -282,9 +304,12 @@
         sample: data.sample,
         seconds: data.seconds,
         durationSeconds: data.durationSeconds,
-        sessionKey: String(data.sessionKey || '').slice(0, 160)
+        sessionKey: String(data.sessionKey || '').slice(0, 160),
+        documentReady: data.documentReady === true
       };
       if (window.top === window) {
+        const currentPlayerFrame = document.getElementById?.('playerFrame');
+        detail.rootFrameCurrent = Boolean(currentPlayerFrame?.contentWindow === event.source);
         window.dispatchEvent(new CustomEvent('opencloud:player-frame-input', {
           detail
         }));
@@ -370,6 +395,10 @@
   document.addEventListener('DOMContentLoaded', () => {
     scanForVideos();
     forwardPlayerInput('bridge-ready');
+    reportFrameReadiness();
+    if (typeof setTimeout === 'function') {
+      [250, 1000, 2500].forEach(delay => setTimeout(reportFrameReadiness, delay));
+    }
     if (typeof setInterval === 'function') {
       setInterval(() => {
         try {
@@ -383,6 +412,7 @@
       for (const mutation of mutations) {
         for (const node of mutation.addedNodes) {
           scanForVideos(node);
+          reportFrameReadiness();
           const frames = [];
           if (node?.tagName === 'IFRAME') frames.push(node);
           try { node?.querySelectorAll?.('iframe').forEach(frame => frames.push(frame)); } catch (_) {}

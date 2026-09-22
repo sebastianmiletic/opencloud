@@ -171,11 +171,15 @@ test('player source transitions replace the iframe and expose loading and recove
   assert.match(playerSource, /const nextFrame = document\.createElement\('iframe'\)/);
   assert.match(playerSource, /previousFrame\.replaceWith\(nextFrame\)/);
   assert.match(playerSource, /providerKey, sessionToken\);/);
+  assert.match(playerSource, /detail\?\.type === 'frame-ready'\) confirmPlayerFrameReady\(\)/);
+  assert.match(playerSource, /if \(!isTauri\(\)\) confirmPlayerFrameReady\(providerKey, sessionToken\)/);
 });
 
 test('Electron allows verified provider redirects only inside child frames', () => {
   const electronSource = readFileSync(new URL('../electron/main.js', import.meta.url), 'utf8');
   assert.match(electronSource, /'player\.videasy\.to'/);
+  assert.match(electronSource, /'play\.xpass\.top'/);
+  assert.match(electronSource, /'1414\.hexa\.su'/);
   assert.match(electronSource, /will-navigate[\s\S]*?if \(!isAppUrl\(url\)\)[\s\S]*?event\.preventDefault\(\)/);
   assert.match(electronSource, /will-frame-navigate[\s\S]*?shouldAllowUrl\(details\.url\)/);
 });
@@ -307,7 +311,12 @@ test('native child-frame bridge forwards controls and resumes the content video'
   const mockDocument = {
     addEventListener: (type, listener) => { documentListeners[type] = listener; },
     querySelectorAll: selector => selector === 'video' ? [video] : [],
-    documentElement: {}
+    documentElement: {},
+    body: {
+      innerText: 'Movie player ready',
+      childElementCount: 1,
+      querySelectorAll: () => [video]
+    }
   };
 
   runInNewContext(
@@ -363,6 +372,7 @@ test('native child-frame bridge forwards controls and resumes the content video'
   assert.equal(prevented, true);
   assert.equal(stopped, true);
   assert.equal(video.currentTime, 321.4);
+  assert.ok(messages.some(message => message.type === 'frame-ready' && message.documentReady === true));
   assert.ok(messages.some(message => message.type === 'resume-applied' && message.sessionKey === 'movie:99'));
   assert.ok(messages.some(message => message.type === 'playback-progress'
     && message.sessionKey === 'movie:99'

@@ -47,12 +47,11 @@ jobs:
           TAG="v${VERSION}"
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" --draft --title "Open Cloud ${TAG}" --notes-file - <<'EOF'
-          Open Cloud 3.9.8 makes playback-source changes reliable by isolating each iframe
-          generation, preserving checkpoints, and ignoring stale load events. Failed sources
-          now show retry and source-selection actions instead of a blank screen. Desktop
-          navigation protections also cover verified redirects and prevent providers from
-          replacing the app. Includes macOS Universal, Windows x64/ARM64, and Linux x64/ARM64
-          packages.
+          Open Cloud 3.9.9 prevents white screens during in-player source changes by waiting
+          for meaningful content from the current player frame instead of trusting the outer
+          iframe load event. It also permits the verified nested player hosts used by provider
+          redirect chains while stale and detached frames remain ignored. Includes macOS
+          Universal, Windows x64/ARM64, and Linux x64/ARM64 packages.
           EOF
           fi
 
@@ -123,12 +122,11 @@ jobs:
           tagName: v__VERSION__
           releaseName: 'Open Cloud v__VERSION__'
           releaseBody: |
-            Open Cloud 3.9.8 makes playback-source changes reliable by isolating each iframe
-            generation, preserving checkpoints, and ignoring stale load events. Failed sources
-            now show retry and source-selection actions instead of a blank screen. Desktop
-            navigation protections also cover verified redirects and prevent providers from
-            replacing the app. Includes macOS Universal, Windows x64/ARM64, and Linux x64/ARM64
-            packages.
+            Open Cloud 3.9.9 prevents white screens during in-player source changes by waiting
+            for meaningful content from the current player frame instead of trusting the outer
+            iframe load event. It also permits the verified nested player hosts used by provider
+            redirect chains while stale and detached frames remain ignored. Includes macOS
+            Universal, Windows x64/ARM64, and Linux x64/ARM64 packages.
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true

@@ -356,6 +356,29 @@ fn is_provider_host(host: Option<&str>) -> bool {
             | Some("vidsrc.sh")
             | Some("vidfast.pro")
             | Some("vidfast.vc")
+            | Some("1414.hexa.su")
+            | Some("play.xpass.top")
+            | Some("vidlux.top")
+            | Some("vidlux.xyz")
+            | Some("vidlux.online")
+            | Some("vidsrc.mov")
+            | Some("vidzee.wtf")
+            | Some("player.vidzee.wtf")
+            | Some("vidnest.fun")
+            | Some("player.vidplus.to")
+            | Some("player.smashy.stream")
+            | Some("rivestream.net")
+            | Some("spencerdevs.xyz")
+            | Some("www.2embed.cc")
+            | Some("www.2embed.skin")
+            | Some("vidsrcme.ru")
+            | Some("vidsrc-me.ru")
+            | Some("vidsrc-embed.ru")
+            | Some("vsrc.su")
+            | Some("multiembed.mov")
+            | Some("movish.to")
+            | Some("vidcore.liveblog365.com")
+            | Some("ji1pfnerysxkina0.fstream.app")
     )
 }
 
@@ -766,6 +789,9 @@ mod tests {
         assert!(is_provider_host(Some("embdmstrplayer.com")));
         assert!(is_provider_host(Some("vidsrc.sh")));
         assert!(is_provider_host(Some("vidfast.vc")));
+        assert!(is_provider_host(Some("play.xpass.top")));
+        assert!(is_provider_host(Some("1414.hexa.su")));
+        assert!(is_provider_host(Some("ji1pfnerysxkina0.fstream.app")));
         assert!(!is_provider_host(Some("ads.example.invalid")));
         assert!(!is_provider_host(Some("videasy.net.ads.example.invalid")));
     }

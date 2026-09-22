@@ -50,6 +50,7 @@ let _providerProbeTimeout = null;
 let _providerProbeToken = 0;
 let _providerProbeFailures = 0;
 let _frameLoadStartedAt = 0;
+let _frameNavigationLoaded = false;
 let _lastFrameScore = 1;
 let _currentProviderKey = null;
 let _providerCandidates = [];
@@ -147,6 +148,25 @@ function showPlayerFrameFailure(reason = 'This source did not respond.') {
   if (playerFrameStatusTitle) playerFrameStatusTitle.textContent = `${providerName(_currentProviderKey)} could not start`;
   if (playerFrameStatusMessage) playerFrameStatusMessage.textContent = reason;
   playerFrameStatusActions?.classList.remove('hidden');
+}
+
+function confirmPlayerFrameReady(providerKey = _currentProviderKey, sessionToken = _playerFrameSessionToken) {
+  if (!_frameNavigationLoaded
+    || sessionToken !== _playerFrameSessionToken
+    || providerKey !== _currentProviderKey
+    || playerOverlay?.classList.contains('hidden')) return false;
+  clearHealthTimer();
+  showPlayerFrameReady();
+  const latency = Math.max(0, performance.now() - _frameLoadStartedAt);
+  const score = adjustScoreForConnection(connectionScoreForLatency(latency));
+  _lastFrameScore = score;
+  _providerProbeFailures = 0;
+  if (!_playbackSignalsActive && !_playbackBufferingSince) {
+    setPlayerHealth(score <= 2 ? 'slow' : 'ready', `${providerName(providerKey)} · ${healthQuality(score)}`, false, score, latency);
+  }
+  startProviderHealthProbes();
+  scheduleResumeAttempts();
+  return true;
 }
 
 function providerName(key) {
@@ -714,12 +734,17 @@ function flushPlaybackCheckpoint() {
 }
 
 function handlePlayerFrameInput(detail) {
+  if (detail?.rootFrameCurrent !== true) return;
   if (detail?.type === 'toggle-header') handlePlayerHeaderShortcut();
   if (detail?.type === 'pointer-activity') showPlayerHeaderForMouseActivity();
   if (detail?.type === 'bridge-ready') sendResumeToProviderFrames();
+  if (detail?.type === 'frame-ready') confirmPlayerFrameReady();
   if (detail?.type === 'playback-progress') {
     const forceCloud = ['pause', 'seeked', 'ended', 'pagehide'].includes(detail.eventName);
-    if (persistPlaybackSample(detail, forceCloud)) updatePlaybackHealth(detail);
+    if (persistPlaybackSample(detail, forceCloud)) {
+      confirmPlayerFrameReady();
+      updatePlaybackHealth(detail);
+    }
   }
   if (detail?.type === 'resume-applied') {
     if (detail.sessionKey !== playbackContextKey()) return;
@@ -902,7 +927,6 @@ function attachIframeLoadListener() {
   const monitoredFrame = playerFrame;
   const sessionToken = _playerFrameSessionToken;
   const providerKey = _currentProviderKey;
-  let initialLoadHandled = false;
   _monitoredPlayerFrame = monitoredFrame;
   _iframeLoadHandler = () => {
     if (!isCurrentFrameGeneration(
@@ -914,20 +938,12 @@ function attachIframeLoadListener() {
         playerOpen: !playerOverlay?.classList.contains('hidden')
       }
     )) return;
-    showPlayerFrameReady();
+    _frameNavigationLoaded = true;
+    setPlayerHealth('connecting', `${providerName(providerKey)} · Opening player…`, false, 2);
     sendResumeToProviderFrames();
-    if (initialLoadHandled) return;
-    initialLoadHandled = true;
-    clearHealthTimer();
-    const latency = Math.max(0, performance.now() - _frameLoadStartedAt);
-    const score = adjustScoreForConnection(connectionScoreForLatency(latency));
-    _lastFrameScore = score;
-    _providerProbeFailures = 0;
-    if (!_playbackSignalsActive && !_playbackBufferingSince) {
-      setPlayerHealth(score <= 2 ? 'slow' : 'ready', `${providerName(providerKey)} · ${healthQuality(score)}`, false, score, latency);
-    }
-    startProviderHealthProbes();
-    scheduleResumeAttempts();
+    // Browser and legacy Electron builds do not have the all-frame native
+    // readiness bridge. Their load event remains the compatibility fallback.
+    if (!isTauri()) confirmPlayerFrameReady(providerKey, sessionToken);
   };
   monitoredFrame.addEventListener('load', _iframeLoadHandler);
   _iframeErrorHandler = () => handleProviderFailure(`${providerName(providerKey)} failed to load`, providerKey, sessionToken);
@@ -1207,6 +1223,7 @@ function loadPlayerIframe() {
   stopProviderHealthProbes();
   _attemptedProviders.add(providerKey);
   _frameLoadStartedAt = performance.now();
+  _frameNavigationLoaded = false;
   _lastFrameScore = 1;
   setPlayerHealth('connecting', `Connecting to ${providerName(providerKey)}…`, false, 2);
   showPlayerFrameLoading(providerKey);
