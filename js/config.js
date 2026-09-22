@@ -20,6 +20,7 @@ export const STAR_WARS_SAGA_ORDER = [
 export const PROVIDERS = {
   vidsrccc: {
     name: 'Nova',
+    userVisible: false,
     tier: 1,
     movie: true,
     tv: true,
@@ -71,6 +72,7 @@ export const PROVIDERS = {
   },
   omega: {
     name: 'Omega',
+    userVisible: false,
     tags: ['New', 'Working'],
     tier: 1,
     movie: true,
@@ -94,6 +96,7 @@ export const PROVIDERS = {
   },
   vidsrcme: {
     name: 'Pulse',
+    userVisible: false,
     rank: '2nd',
     tier: 1,
     movie: true,
@@ -107,6 +110,7 @@ export const PROVIDERS = {
   },
   vidsrcto: {
     name: 'Phantom',
+    userVisible: false,
     movie: true,
     tv: true,
     quality: '1080p',
@@ -118,6 +122,7 @@ export const PROVIDERS = {
   },
   moviesapi: {
     name: 'Dossier',
+    userVisible: false,
     movie: true,
     tv: true,
     quality: '720p',
@@ -129,6 +134,7 @@ export const PROVIDERS = {
   },
   vixsrc: {
     name: 'VixSrc',
+    userVisible: false,
     movie: true,
     tv: true,
     quality: '1080p',
@@ -140,6 +146,7 @@ export const PROVIDERS = {
   },
   vidfast: {
     name: 'VidFast',
+    userVisible: false,
     movie: true,
     tv: true,
     quality: '1080p',
@@ -182,7 +189,7 @@ export const DEVICES = {
 export const THEMES = Object.freeze(['noir', 'graphite', 'midnight', 'ember', 'paper']);
 
 export const DEFAULT_PROVIDER = 'vsembed';
-const SETTINGS_VERSION = 7;
+const SETTINGS_VERSION = 8;
 const DEFAULT_SETTINGS = Object.freeze({
   provider: DEFAULT_PROVIDER,
   device: 'laptop',
@@ -196,9 +203,12 @@ const DEFAULT_SETTINGS = Object.freeze({
 
 function normalizeSettings(settings, sourceVersion = settings?._version) {
   const normalized = { ...DEFAULT_SETTINGS, ...settings, _version: SETTINGS_VERSION };
-  // Version 7 makes Plasma the one-time default for every existing installation/account.
-  if ((Number(sourceVersion) || 0) < SETTINGS_VERSION) normalized.provider = DEFAULT_PROVIDER;
-  if (!PROVIDERS[normalized.provider]) normalized.provider = DEFAULT_PROVIDER;
+  // Version 7 made Plasma the one-time default. Version 8 only moves users
+  // away from sources that are retained in code but no longer shown in the app.
+  if ((Number(sourceVersion) || 0) < 7) normalized.provider = DEFAULT_PROVIDER;
+  if (!PROVIDERS[normalized.provider] || PROVIDERS[normalized.provider].userVisible === false) {
+    normalized.provider = DEFAULT_PROVIDER;
+  }
   return normalized;
 }
 
@@ -288,7 +298,7 @@ export function getProviderUrl(type, id, season = 1, episode = 1) {
 export function getProviderCandidates(type) {
   const selected = getSettings().provider;
   return Object.entries(PROVIDERS)
-    .filter(([, provider]) => provider[type] !== false)
+    .filter(([, provider]) => provider.userVisible !== false && provider[type] !== false)
     .sort((a, b) => {
       if (a[0] === selected) return -1;
       if (b[0] === selected) return 1;

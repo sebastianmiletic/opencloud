@@ -8,7 +8,7 @@ import {
   connectionScoreForPlayback,
   stallThresholdsForConnection
 } from '../js/player-health.js';
-import { getProviderUrlFor, PROVIDERS } from '../js/config.js';
+import { getProviderCandidates, getProviderUrlFor, PROVIDERS } from '../js/config.js';
 import {
   getSavedPlaybackDuration,
   getSavedPlaybackSeconds,
@@ -93,7 +93,7 @@ test('Plasma becomes the default once for new and existing settings', async () =
     { provider: getSettings().provider, device: getSettings().device, autoPlay: getSettings().autoPlay, autoProviderFailover: getSettings().autoProviderFailover },
     { provider: 'vsembed', device: 'tv', autoPlay: false, autoProviderFailover: false }
   );
-  assert.equal(JSON.parse(localValues.get('openccloud_settings'))._version, 7);
+  assert.equal(JSON.parse(localValues.get('openccloud_settings'))._version, 8);
 
   localValues.set('openccloud_settings', JSON.stringify({
     _version: 7,
@@ -102,6 +102,16 @@ test('Plasma becomes the default once for new and existing settings', async () =
   }));
   assert.equal(getSettings().provider, 'vidlink');
   assert.equal(getSettings().playerHeaderAutoHide, true);
+
+  localValues.set('openccloud_settings', JSON.stringify({
+    _version: 7,
+    provider: 'omega',
+    device: 'phone',
+    roundedUI: true
+  }));
+  assert.equal(getSettings().provider, 'vsembed');
+  assert.equal(getSettings().device, 'phone');
+  assert.equal(getSettings().roundedUI, true);
 });
 
 test('provider health maps reachability and latency onto five honest levels', () => {
@@ -202,6 +212,21 @@ test('stall recovery gives weak connections time to refill before failover', () 
     recoverAfterMs: 5000,
     failoverAfterMs: 20000
   });
+});
+
+test('retired providers remain in code but are hidden from every user-facing source list', () => {
+  const hiddenKeys = ['vidsrccc', 'omega', 'vixsrc', 'vidfast', 'vidsrcto', 'moviesapi', 'vidsrcme'];
+  for (const key of hiddenKeys) assert.equal(PROVIDERS[key].userVisible, false);
+
+  const visibleCandidates = getProviderCandidates('movie');
+  assert.deepEqual(
+    new Set(visibleCandidates),
+    new Set(['videasy', 'ultra', 'delta', 'vsembed', 'vidsrcsu', 'vidlink'])
+  );
+  hiddenKeys.forEach(key => assert.equal(visibleCandidates.includes(key), false));
+
+  const settingsSource = readFileSync(new URL('../js/settings.js', import.meta.url), 'utf8');
+  assert.match(settingsSource, /filter\(\(\[, provider\]\) => provider\.userVisible !== false\)/);
 });
 
 test('new providers expose working tags and exact movie and TV embed URLs', () => {

@@ -234,12 +234,14 @@ function renderProviderCards() {
   const currentKey = getSettings().provider;
 
   // Sort: tier 1 (best) first, then alphabetical by name
-  const sortedEntries = Object.entries(PROVIDERS).sort((a, b) => {
-    const tierA = a[1].tier || 99;
-    const tierB = b[1].tier || 99;
-    if (tierA !== tierB) return tierA - tierB;
-    return a[1].name.localeCompare(b[1].name);
-  });
+  const sortedEntries = Object.entries(PROVIDERS)
+    .filter(([, provider]) => provider.userVisible !== false)
+    .sort((a, b) => {
+      const tierA = a[1].tier || 99;
+      const tierB = b[1].tier || 99;
+      if (tierA !== tierB) return tierA - tierB;
+      return a[1].name.localeCompare(b[1].name);
+    });
 
   container.innerHTML = sortedEntries.map(([key, p]) => {
     const isActive = key === currentKey;
