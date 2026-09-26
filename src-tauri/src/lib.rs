@@ -356,6 +356,8 @@ fn is_provider_host(host: Option<&str>) -> bool {
             | Some("vidsrc.sh")
             | Some("vidfast.pro")
             | Some("vidfast.vc")
+            | Some("cdn.vidspark.to")
+            | Some("cinesrc.st")
             | Some("1414.hexa.su")
             | Some("play.xpass.top")
             | Some("vidlux.top")
@@ -789,6 +791,8 @@ mod tests {
         assert!(is_provider_host(Some("embdmstrplayer.com")));
         assert!(is_provider_host(Some("vidsrc.sh")));
         assert!(is_provider_host(Some("vidfast.vc")));
+        assert!(is_provider_host(Some("cdn.vidspark.to")));
+        assert!(is_provider_host(Some("cinesrc.st")));
         assert!(is_provider_host(Some("play.xpass.top")));
         assert!(is_provider_host(Some("1414.hexa.su")));
         assert!(is_provider_host(Some("ji1pfnerysxkina0.fstream.app")));

@@ -74,13 +74,15 @@ Seven sources with custom single-word names:
 
 | Name | Source | Quality | Subtitles |
 |------|--------|---------|-----------|
-| Nova | vidsrc.cc | 1080p | Yes |
-| Phantom | vidsrc.to | 1080p | No |
-| Dossier | moviesapi.club | 720p | No |
-| Pulse | vidsrc.me | 1080p | Yes |
 | Helix | player.videasy.net | 4K | Yes |
+| Ultra | vidphantom.com | 1080p | Yes |
+| Delta | vidcore.org | 4K | Yes |
+| Plasma | vsembed.ru | Not specified | Not specified |
+| Titan | cdn.vidspark.to | 1080p | Yes |
+| Pathos | cloudorchestranova.com | 1080p | Yes |
+| Platinum | cinesrc.st | 1080p | Yes |
 | Zenith | vidsrc.su | 1080p | No |
-| Vertex | vidlink.pro | 4K | Yes |
+| Illumini | vidlink.pro | 4K | Yes |
 
 ## License
 

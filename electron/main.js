@@ -16,6 +16,7 @@ const ALLOWED_HOSTS = new Set([
   'vidphantom.com', 'vidphantom.live', 'vidphantom.online', 'vidphantom.site', 'vidphantom.website', 'vidphantom.xyz',
   'vidcore.org', 'www.vidcore.org', 'embedmaster.link', 'embdmstrplayer.com',
   'vixsrc.to', 'moviesapi.to', 'vidsrc.sh', 'vidfast.pro', 'vidfast.vc',
+  'cdn.vidspark.to', 'cinesrc.st',
   '1414.hexa.su', 'play.xpass.top', 'vidlux.top', 'vidlux.xyz', 'vidlux.online', 'vidsrc.mov',
   'vidzee.wtf', 'player.vidzee.wtf', 'vidnest.fun', 'player.vidplus.to', 'player.smashy.stream',
   'rivestream.net', 'spencerdevs.xyz', 'www.2embed.cc', 'www.2embed.skin', 'vidsrcme.ru',

@@ -192,6 +192,8 @@ test('Electron allows verified provider redirects only inside child frames', () 
   assert.match(electronSource, /'player\.videasy\.to'/);
   assert.match(electronSource, /'play\.xpass\.top'/);
   assert.match(electronSource, /'1414\.hexa\.su'/);
+  assert.match(electronSource, /'cdn\.vidspark\.to'/);
+  assert.match(electronSource, /'cinesrc\.st'/);
   assert.match(electronSource, /will-navigate[\s\S]*?if \(!isAppUrl\(url\)\)[\s\S]*?event\.preventDefault\(\)/);
   assert.match(electronSource, /will-frame-navigate[\s\S]*?shouldAllowUrl\(details\.url\)/);
 });
@@ -217,13 +219,13 @@ test('stall recovery gives weak connections time to refill before failover', () 
 });
 
 test('retired providers remain in code but are hidden from every user-facing source list', () => {
-  const hiddenKeys = ['vidsrccc', 'omega', 'vidfast', 'vidsrcto', 'moviesapi', 'vidsrcme'];
+  const hiddenKeys = ['vidsrccc', 'omega', 'vixsrc', 'vidfast', 'vidsrcto', 'moviesapi', 'vidsrcme'];
   for (const key of hiddenKeys) assert.equal(PROVIDERS[key].userVisible, false);
 
   const visibleCandidates = getProviderCandidates('movie');
   assert.deepEqual(
     new Set(visibleCandidates),
-    new Set(['videasy', 'ultra', 'delta', 'vsembed', 'vixsrc', 'vidsrcsu', 'vidlink'])
+    new Set(['videasy', 'ultra', 'delta', 'vsembed', 'titan', 'pathos', 'platinum', 'vidsrcsu', 'vidlink'])
   );
   hiddenKeys.forEach(key => assert.equal(visibleCandidates.includes(key), false));
 
@@ -231,14 +233,19 @@ test('retired providers remain in code but are hidden from every user-facing sou
   assert.match(settingsSource, /filter\(\(\[, provider\]\) => provider\.userVisible !== false\)/);
 });
 
-test('Magma exposes VixSrc playback as the highest-ranked visible provider', () => {
-  localValues.set('openccloud_settings', JSON.stringify({ _version: 8, provider: 'vsembed' }));
-  assert.equal(PROVIDERS.vixsrc.name, 'Magma');
-  assert.equal(PROVIDERS.vixsrc.rank, 'Best');
-  assert.equal(PROVIDERS.vixsrc.userVisible, undefined);
-  assert.equal(getProviderUrlFor('vixsrc', 'movie', 550), 'https://vixsrc.to/movie/550?autoPlay=true&lang=en');
-  assert.equal(getProviderUrlFor('vixsrc', 'tv', 1399, 1, 2), 'https://vixsrc.to/tv/1399/1/2?autoPlay=true&lang=en');
-  assert.equal(getProviderCandidates('movie')[1], 'vixsrc');
+test('Titan, Pathos, Platinum, and Illumini expose exact movie and TV routes', () => {
+  assert.equal(PROVIDERS.titan.name, 'Titan');
+  assert.equal(PROVIDERS.pathos.name, 'Pathos');
+  assert.equal(PROVIDERS.platinum.name, 'Platinum');
+  assert.equal(PROVIDERS.vidlink.name, 'Illumini');
+  assert.equal(getProviderUrlFor('titan', 'movie', 550), 'https://cdn.vidspark.to/movie/550');
+  assert.equal(getProviderUrlFor('titan', 'tv', 1399, 1, 2), 'https://cdn.vidspark.to/tv/1399/1/2');
+  assert.equal(getProviderUrlFor('pathos', 'movie', 550), 'https://vidsrc.me/embed/movie?tmdb=550&autoplay=1');
+  assert.equal(getProviderUrlFor('pathos', 'tv', 1399, 1, 2), 'https://vidsrc.me/embed/tv?tmdb=1399&season=1&episode=2&autoplay=1');
+  assert.equal(getProviderUrlFor('platinum', 'movie', 550), 'https://cinesrc.st/embed/movie/550');
+  assert.equal(getProviderUrlFor('platinum', 'tv', 1399, 1, 2), 'https://cinesrc.st/embed/tv/1399?s=1&e=2');
+  assert.equal(getProviderUrlFor('vidlink', 'movie', 550), 'https://vidlink.pro/movie/550?title=true&poster=true&autoplay=true');
+  assert.equal(PROVIDERS.vixsrc.userVisible, false);
 });
 
 test('new providers expose working tags and exact movie and TV embed URLs', () => {
@@ -264,7 +271,7 @@ test('original provider names are preserved without character aliases', () => {
   assert.equal(PROVIDERS.videasy.name, 'Helix');
   assert.equal(PROVIDERS.moviesapi.name, 'Dossier');
   assert.equal(PROVIDERS.vidsrcme.name, 'Pulse');
-  assert.equal(PROVIDERS.vidlink.name, 'Vertex');
+  assert.equal(PROVIDERS.vidlink.name, 'Illumini');
   assert.equal(PROVIDERS.vixsrc.name, 'Magma');
   assert.equal(PROVIDERS.vidfast.name, 'VidFast');
   assert.equal(PROVIDERS.vsembed.rank, 'Default');

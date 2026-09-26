@@ -134,8 +134,7 @@ export const PROVIDERS = {
   },
   vixsrc: {
     name: 'Magma',
-    rank: 'Best',
-    tier: 1,
+    userVisible: false,
     movie: true,
     tv: true,
     quality: '1080p',
@@ -144,6 +143,42 @@ export const PROVIDERS = {
     description: 'Fast VixSrc player with English language playback.',
     movieUrl: 'https://vixsrc.to/movie/{id}?autoPlay=true&lang=en',
     tvUrl: 'https://vixsrc.to/tv/{id}/{season}/{episode}?autoPlay=true&lang=en'
+  },
+  titan: {
+    name: 'Titan',
+    tier: 1,
+    movie: true,
+    tv: true,
+    quality: '1080p',
+    subtitles: true,
+    speed: 'Fast',
+    description: 'VidSpark player with movies, series, and multiple playback servers.',
+    movieUrl: 'https://cdn.vidspark.to/movie/{id}',
+    tvUrl: 'https://cdn.vidspark.to/tv/{id}/{season}/{episode}'
+  },
+  pathos: {
+    name: 'Pathos',
+    tier: 1,
+    movie: true,
+    tv: true,
+    quality: '1080p',
+    subtitles: true,
+    speed: 'Fast',
+    description: 'CloudOrchestra-backed source for movies and television episodes.',
+    movieUrl: 'https://vidsrc.me/embed/movie?tmdb={id}&autoplay=1',
+    tvUrl: 'https://vidsrc.me/embed/tv?tmdb={id}&season={season}&episode={episode}&autoplay=1'
+  },
+  platinum: {
+    name: 'Platinum',
+    tier: 1,
+    movie: true,
+    tv: true,
+    quality: '1080p',
+    subtitles: true,
+    speed: 'Fast',
+    description: 'CineSrc player with minimal interruptions and TMDB-based playback.',
+    movieUrl: 'https://cinesrc.st/embed/movie/{id}',
+    tvUrl: 'https://cinesrc.st/embed/tv/{id}?s={season}&e={episode}'
   },
   vidfast: {
     name: 'VidFast',
@@ -169,7 +204,7 @@ export const PROVIDERS = {
     tvUrl: 'https://vidsrc.su/embed/tv/{id}/{season}/{episode}'
   },
   vidlink: {
-    name: 'Vertex',
+    name: 'Illumini',
     movie: true,
     tv: true,
     quality: '4K',

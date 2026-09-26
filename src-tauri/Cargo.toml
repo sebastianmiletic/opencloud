@@ -1,6 +1,6 @@
 [package]
 name = "opencloud"
-version = "3.9.13"
+version = "3.9.14"
 description = "Open Cloud desktop app"
 edition = "2021"
 rust-version = "1.77.2"
