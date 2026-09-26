@@ -133,8 +133,9 @@ export const PROVIDERS = {
     tvUrl: 'https://moviesapi.to/tv/{id}-{season}-{episode}'
   },
   vixsrc: {
-    name: 'VixSrc',
-    userVisible: false,
+    name: 'Magma',
+    rank: 'Best',
+    tier: 1,
     movie: true,
     tv: true,
     quality: '1080p',
@@ -302,7 +303,9 @@ export function getProviderCandidates(type) {
     .sort((a, b) => {
       if (a[0] === selected) return -1;
       if (b[0] === selected) return 1;
-      const tierDiff = (a[1].tier || 99) - (b[1].tier || 99);
+      const bestDiff = Number(b[1].rank === 'Best') - Number(a[1].rank === 'Best');
+      if (bestDiff) return bestDiff;
+      const tierDiff = (a[1].tier ?? 99) - (b[1].tier ?? 99);
       return tierDiff || a[1].name.localeCompare(b[1].name);
     })
     .map(([key]) => key);

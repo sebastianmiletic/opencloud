@@ -237,15 +237,17 @@ function renderProviderCards() {
   const sortedEntries = Object.entries(PROVIDERS)
     .filter(([, provider]) => provider.userVisible !== false)
     .sort((a, b) => {
-      const tierA = a[1].tier || 99;
-      const tierB = b[1].tier || 99;
+      const bestDiff = Number(b[1].rank === 'Best') - Number(a[1].rank === 'Best');
+      if (bestDiff) return bestDiff;
+      const tierA = a[1].tier ?? 99;
+      const tierB = b[1].tier ?? 99;
       if (tierA !== tierB) return tierA - tierB;
       return a[1].name.localeCompare(b[1].name);
     });
 
   container.innerHTML = sortedEntries.map(([key, p]) => {
     const isActive = key === currentKey;
-    const isBest = p.tier === 1;
+    const isBest = p.rank === 'Best';
     const rankLabel = p.rank || '';
     const badges = [];
     const healthScore = providerHealthScores.get(key);

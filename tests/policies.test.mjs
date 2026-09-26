@@ -215,18 +215,28 @@ test('stall recovery gives weak connections time to refill before failover', () 
 });
 
 test('retired providers remain in code but are hidden from every user-facing source list', () => {
-  const hiddenKeys = ['vidsrccc', 'omega', 'vixsrc', 'vidfast', 'vidsrcto', 'moviesapi', 'vidsrcme'];
+  const hiddenKeys = ['vidsrccc', 'omega', 'vidfast', 'vidsrcto', 'moviesapi', 'vidsrcme'];
   for (const key of hiddenKeys) assert.equal(PROVIDERS[key].userVisible, false);
 
   const visibleCandidates = getProviderCandidates('movie');
   assert.deepEqual(
     new Set(visibleCandidates),
-    new Set(['videasy', 'ultra', 'delta', 'vsembed', 'vidsrcsu', 'vidlink'])
+    new Set(['videasy', 'ultra', 'delta', 'vsembed', 'vixsrc', 'vidsrcsu', 'vidlink'])
   );
   hiddenKeys.forEach(key => assert.equal(visibleCandidates.includes(key), false));
 
   const settingsSource = readFileSync(new URL('../js/settings.js', import.meta.url), 'utf8');
   assert.match(settingsSource, /filter\(\(\[, provider\]\) => provider\.userVisible !== false\)/);
+});
+
+test('Magma exposes VixSrc playback as the highest-ranked visible provider', () => {
+  localValues.set('openccloud_settings', JSON.stringify({ _version: 8, provider: 'vsembed' }));
+  assert.equal(PROVIDERS.vixsrc.name, 'Magma');
+  assert.equal(PROVIDERS.vixsrc.rank, 'Best');
+  assert.equal(PROVIDERS.vixsrc.userVisible, undefined);
+  assert.equal(getProviderUrlFor('vixsrc', 'movie', 550), 'https://vixsrc.to/movie/550?autoPlay=true&lang=en');
+  assert.equal(getProviderUrlFor('vixsrc', 'tv', 1399, 1, 2), 'https://vixsrc.to/tv/1399/1/2?autoPlay=true&lang=en');
+  assert.equal(getProviderCandidates('movie')[1], 'vixsrc');
 });
 
 test('new providers expose working tags and exact movie and TV embed URLs', () => {
@@ -253,7 +263,7 @@ test('original provider names are preserved without character aliases', () => {
   assert.equal(PROVIDERS.moviesapi.name, 'Dossier');
   assert.equal(PROVIDERS.vidsrcme.name, 'Pulse');
   assert.equal(PROVIDERS.vidlink.name, 'Vertex');
-  assert.equal(PROVIDERS.vixsrc.name, 'VixSrc');
+  assert.equal(PROVIDERS.vixsrc.name, 'Magma');
   assert.equal(PROVIDERS.vidfast.name, 'VidFast');
   assert.equal(PROVIDERS.vsembed.rank, 'Default');
 
