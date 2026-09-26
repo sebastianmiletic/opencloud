@@ -3,8 +3,22 @@
   const PLAYER_INPUT_CHANNEL = '__opencloud_player_input_v1__';
   const PLAYER_CONTROL_CHANNEL = '__opencloud_player_control_v1__';
   const MIN_CONTENT_DURATION_SECONDS = 180;
+  const VIXSRC_EMBED_REFERRER = 'https://github.com/';
   if (window.__openCloudNativeBlockerInstalled) return;
   window.__openCloudNativeBlockerInstalled = true;
+
+  // WKWebView strips custom-scheme parents from document.referrer even when
+  // the embedding iframe uses referrerpolicy="origin". VixSrc rejects that
+  // empty value before loading its player. Restore a stable HTTPS origin only
+  // inside VixSrc and only when WebKit removed the real referrer.
+  try {
+    if (window.location.hostname === 'vixsrc.to' && !document.referrer) {
+      Object.defineProperty(document, 'referrer', {
+        configurable: true,
+        get: () => VIXSRC_EMBED_REFERRER
+      });
+    }
+  } catch (_) {}
 
   let policy = {
     enabled: true,

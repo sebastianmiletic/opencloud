@@ -340,7 +340,7 @@ test('native child-frame bridge forwards controls and resumes the content video'
   const mockWindow = {
     top: {},
     parent,
-    location: { href: 'https://player.videasy.net/tv/1/1/1' },
+    location: { href: 'https://vixsrc.to/tv/1/1/1', hostname: 'vixsrc.to' },
     open: () => null,
     addEventListener: (type, listener) => { listeners[type] = listener; },
     dispatchEvent: () => {}
@@ -349,6 +349,7 @@ test('native child-frame bridge forwards controls and resumes the content video'
     addEventListener: (type, listener) => { documentListeners[type] = listener; },
     querySelectorAll: selector => selector === 'video' ? [video] : [],
     documentElement: {},
+    referrer: '',
     body: {
       innerText: 'Movie player ready',
       childElementCount: 1,
@@ -369,6 +370,7 @@ test('native child-frame bridge forwards controls and resumes the content video'
     }
   );
 
+  assert.equal(mockDocument.referrer, 'https://github.com/');
   documentListeners.DOMContentLoaded();
   listeners.message({
     source: parent,
