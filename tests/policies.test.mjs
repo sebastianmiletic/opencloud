@@ -176,9 +176,11 @@ test('player source transitions replace the iframe and expose loading and recove
   assert.match(html, /id="playerFrameStatus"[^>]*role="status"[^>]*aria-live="polite"/);
   assert.match(html, /id="playerFrameRetryBtn"/);
   assert.match(html, /id="playerFrameChooseBtn"/);
+  assert.match(html, /id="playerFrame"[^>]*referrerpolicy="origin"/);
   assert.match(css, /\.player-frame-wrap iframe\s*\{[\s\S]*?opacity:\s*0/);
   assert.match(css, /\.player-frame-wrap iframe\.is-ready\s*\{[\s\S]*?opacity:\s*1/);
   assert.match(playerSource, /const nextFrame = document\.createElement\('iframe'\)/);
+  assert.match(playerSource, /nextFrame\.referrerPolicy = 'origin'/);
   assert.match(playerSource, /previousFrame\.replaceWith\(nextFrame\)/);
   assert.match(playerSource, /providerKey, sessionToken\);/);
   assert.match(playerSource, /detail\?\.type === 'frame-ready'\) confirmPlayerFrameReady\(\)/);

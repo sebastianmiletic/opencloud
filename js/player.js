@@ -1239,6 +1239,7 @@ function loadPlayerIframe() {
   nextFrame.id = 'playerFrame';
   nextFrame.title = 'Open Cloud video player';
   nextFrame.loading = 'eager';
+  nextFrame.referrerPolicy = 'origin';
   nextFrame.allowFullscreen = true;
   nextFrame.allow = 'fullscreen; autoplay; encrypted-media; picture-in-picture';
   nextFrame.setAttribute('fetchpriority', 'high');

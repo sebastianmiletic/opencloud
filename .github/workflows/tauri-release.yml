@@ -47,10 +47,10 @@ jobs:
           TAG="v${VERSION}"
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" --draft --title "Open Cloud ${TAG}" --notes-file - <<'EOF'
-          Open Cloud 3.9.11 adds Magma, powered by vixsrc.to, as the highest-ranked visible
-          playback provider. Magma is labeled Best and prioritized in provider lists while
-          Plasma remains the default until a user selects another source. Includes macOS
-          Universal, Windows x64/ARM64, and Linux x64/ARM64 packages.
+          Open Cloud 3.9.12 sets the playback iframe referrer policy to origin for both initial
+          playback and every provider switch. This satisfies Magma's embedding requirement while
+          retaining the generation-safe loading and recovery behavior. Includes macOS Universal,
+          Windows x64/ARM64, and Linux x64/ARM64 packages.
           EOF
           fi
 
@@ -121,10 +121,10 @@ jobs:
           tagName: v__VERSION__
           releaseName: 'Open Cloud v__VERSION__'
           releaseBody: |
-            Open Cloud 3.9.11 adds Magma, powered by vixsrc.to, as the highest-ranked visible
-            playback provider. Magma is labeled Best and prioritized in provider lists while
-            Plasma remains the default until a user selects another source. Includes macOS
-            Universal, Windows x64/ARM64, and Linux x64/ARM64 packages.
+            Open Cloud 3.9.12 sets the playback iframe referrer policy to origin for both initial
+            playback and every provider switch. This satisfies Magma's embedding requirement while
+            retaining the generation-safe loading and recovery behavior. Includes macOS Universal,
+            Windows x64/ARM64, and Linux x64/ARM64 packages.
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true
