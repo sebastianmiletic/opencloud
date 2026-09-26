@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   assertRequiredUpdaterPlatforms,
+  completeUpdaterManifest,
   REQUIRED_UPDATER_PLATFORMS,
-  rewriteUpdaterManifest
+  rewriteUpdaterManifest,
+  updaterPlatformAssets
 } from '../scripts/fix-updater-manifest.mjs';
 
 test('release finalizer replaces GitHub API metadata URLs without changing signatures', () => {
@@ -56,6 +58,23 @@ test('release finalizer replaces GitHub API metadata URLs without changing signa
     'https://github.com/sebastianmiletic/opencloud/releases/download/v3.5.0/OpenCloud_3.5.0_arm64.deb'
   );
   assert.equal(result.platforms['linux-aarch64-deb'].signature, 'linux-arm-deb-signature');
+});
+
+test('release finalizer reconstructs matrix entries from signed release assets', () => {
+  const manifest = {
+    version: '3.9.13',
+    platforms: {
+      'linux-x86_64': { signature: 'stale', url: 'https://api.github.com/assets/1' }
+    }
+  };
+  const assets = updaterPlatformAssets(manifest.version);
+  const completed = completeUpdaterManifest(manifest, name => `signature:${name}`);
+
+  assert.equal(Object.keys(completed.platforms).length, 16);
+  assert.equal(completed.platforms['windows-aarch64'].signature, `signature:${assets['windows-aarch64']}.sig`);
+  assert.equal(completed.platforms['windows-x86_64-nsis'].signature, `signature:${assets['windows-x86_64-nsis']}.sig`);
+  assert.equal(completed.platforms['darwin-x86_64'].signature, `signature:${assets['darwin-x86_64']}.sig`);
+  assert.doesNotThrow(() => assertRequiredUpdaterPlatforms(completed));
 });
 
 test('release finalizer refuses unsigned or unsupported updater entries', () => {

@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 export const REQUIRED_UPDATER_PLATFORMS = [
@@ -19,6 +20,47 @@ export const REQUIRED_UPDATER_PLATFORMS = [
 export function assertRequiredUpdaterPlatforms(manifest) {
   const missing = REQUIRED_UPDATER_PLATFORMS.filter((platform) => !manifest?.platforms?.[platform]);
   if (missing.length) throw new Error(`Updater manifest is missing required platforms: ${missing.join(', ')}`);
+}
+
+export function updaterPlatformAssets(version) {
+  const mac = `OpenCloud_${version}_universal.app.tar.gz`;
+  const windowsArm = `OpenCloud_${version}_arm64-setup.exe`;
+  const windowsX64 = `OpenCloud_${version}_x64-setup.exe`;
+  const linuxArmAppImage = `OpenCloud_${version}_aarch64.AppImage`;
+  const linuxArmDeb = `OpenCloud_${version}_arm64.deb`;
+  const linuxX64AppImage = `OpenCloud_${version}_amd64.AppImage`;
+  const linuxX64Deb = `OpenCloud_${version}_amd64.deb`;
+  return {
+    'darwin-aarch64': mac,
+    'darwin-aarch64-app': mac,
+    'darwin-universal': mac,
+    'darwin-universal-app': mac,
+    'darwin-x86_64': mac,
+    'darwin-x86_64-app': mac,
+    'windows-aarch64': windowsArm,
+    'windows-aarch64-nsis': windowsArm,
+    'windows-x86_64': windowsX64,
+    'windows-x86_64-nsis': windowsX64,
+    'linux-aarch64': linuxArmAppImage,
+    'linux-aarch64-appimage': linuxArmAppImage,
+    'linux-aarch64-deb': linuxArmDeb,
+    'linux-x86_64': linuxX64AppImage,
+    'linux-x86_64-appimage': linuxX64AppImage,
+    'linux-x86_64-deb': linuxX64Deb
+  };
+}
+
+export function completeUpdaterManifest(manifest, readSignature) {
+  if (!manifest?.version || typeof readSignature !== 'function') throw new Error('Manifest version and signature reader are required');
+  manifest.platforms ||= {};
+  for (const [platform, asset] of Object.entries(updaterPlatformAssets(manifest.version))) {
+    manifest.platforms[platform] = {
+      ...manifest.platforms[platform],
+      signature: readSignature(`${asset}.sig`).trim(),
+      url: manifest.platforms[platform]?.url || asset
+    };
+  }
+  return manifest;
 }
 
 export function rewriteUpdaterManifest(manifest, repository, tag) {
@@ -47,9 +89,15 @@ export function rewriteUpdaterManifest(manifest, repository, tag) {
 }
 
 function main() {
-  const [manifestPath, repository, tag] = process.argv.slice(2);
-  if (!manifestPath) throw new Error('Usage: fix-updater-manifest <latest.json> <owner/repo> <tag>');
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  const [manifestPath, repository, tag, signatureDir] = process.argv.slice(2);
+  if (!manifestPath) throw new Error('Usage: fix-updater-manifest <latest.json> <owner/repo> <tag> [signature-directory]');
+  let manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  if (signatureDir) {
+    manifest = completeUpdaterManifest(
+      manifest,
+      (name) => fs.readFileSync(path.join(signatureDir, name), 'utf8')
+    );
+  }
   const corrected = rewriteUpdaterManifest(manifest, repository, tag);
   assertRequiredUpdaterPlatforms(corrected);
   fs.writeFileSync(manifestPath, `${JSON.stringify(corrected, null, 2)}\n`);

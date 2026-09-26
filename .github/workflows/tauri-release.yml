@@ -152,8 +152,8 @@ jobs:
           TAG="v${VERSION}"
           mkdir -p updater-manifest
           gh release download "$TAG" --pattern latest.json --dir updater-manifest
-          node scripts/fix-updater-manifest.mjs updater-manifest/latest.json "$RELEASE_REPOSITORY" "$TAG"
           gh release download "$TAG" --pattern '*.sig' --dir updater-manifest
+          node scripts/fix-updater-manifest.mjs updater-manifest/latest.json "$RELEASE_REPOSITORY" "$TAG" updater-manifest
           gh release view "$TAG" --json assets > updater-manifest/assets.json
           node scripts/verify-updater-assets.mjs updater-manifest/latest.json updater-manifest/assets.json updater-manifest
           gh release upload "$TAG" updater-manifest/latest.json --clobber
