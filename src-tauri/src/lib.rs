@@ -8,6 +8,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tauri::{
+    utils::config::BackgroundThrottlingPolicy,
     webview::{NewWindowResponse, PageLoadEvent, WebviewWindowBuilder},
     Emitter, Manager, State, WebviewUrl,
 };
@@ -357,7 +358,11 @@ fn is_provider_host(host: Option<&str>) -> bool {
             | Some("vidfast.pro")
             | Some("vidfast.vc")
             | Some("cdn.vidspark.to")
+            | Some("player.moviesapi.vip")
             | Some("cinesrc.st")
+            | Some("a.cineflix.st")
+            | Some("a2.cineflix.st")
+            | Some("fembox.aether.bar")
             | Some("1414.hexa.su")
             | Some("play.xpass.top")
             | Some("vidlux.top")
@@ -676,6 +681,11 @@ pub fn run() {
 
             let _main_window = main_window_builder
                 .background_color(tauri::webview::Color(0, 0, 0, 255))
+                // Serve the app from an HTTPS custom origin so embedded players
+                // receive a normal secure referrer instead of an empty tauri://
+                // referrer. Keep media timers active like a foreground browser.
+                .use_https_scheme(true)
+                .background_throttling(BackgroundThrottlingPolicy::Disabled)
                 .visible(false)
                 .initialization_script_for_all_frames(BLOCKER_INIT_SCRIPT)
                 .on_navigation(|url| {
@@ -792,7 +802,10 @@ mod tests {
         assert!(is_provider_host(Some("vidsrc.sh")));
         assert!(is_provider_host(Some("vidfast.vc")));
         assert!(is_provider_host(Some("cdn.vidspark.to")));
+        assert!(is_provider_host(Some("player.moviesapi.vip")));
         assert!(is_provider_host(Some("cinesrc.st")));
+        assert!(is_provider_host(Some("a.cineflix.st")));
+        assert!(is_provider_host(Some("fembox.aether.bar")));
         assert!(is_provider_host(Some("play.xpass.top")));
         assert!(is_provider_host(Some("1414.hexa.su")));
         assert!(is_provider_host(Some("ji1pfnerysxkina0.fstream.app")));

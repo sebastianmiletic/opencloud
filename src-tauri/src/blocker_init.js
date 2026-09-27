@@ -76,6 +76,7 @@
   const instrumentedVideos = new WeakSet();
   const trackedVideos = new Set();
   const lastVideoReportAt = new WeakMap();
+  const VIDEO_REPORT_INTERVAL_MS = 3000;
   const appliedResumeTargets = new WeakMap();
   let pendingResume = { seconds: 0, durationSeconds: 0, sessionKey: '' };
   let lastPointerActivityAt = 0;
@@ -139,7 +140,7 @@
   const reportVideoProgress = (video, eventName, force = false) => {
     if (window.top === window) return;
     const now = Date.now();
-    if (!force && now - (lastVideoReportAt.get(video) || 0) < 1500) return;
+    if (!force && now - (lastVideoReportAt.get(video) || 0) < VIDEO_REPORT_INTERVAL_MS) return;
     const sample = videoSample(video);
     if (!Number.isFinite(sample.seconds) || !Number.isFinite(sample.durationSeconds)) return;
     lastVideoReportAt.set(video, now);
@@ -174,10 +175,9 @@
     if (!video || instrumentedVideos.has(video)) return;
     instrumentedVideos.add(video);
     trackedVideos.add(video);
-    try {
-      video.preload = 'auto';
-      video.setAttribute?.('preload', 'auto');
-    } catch (_) {}
+    // Observe the provider's media element without changing its preload or
+    // adaptive-streaming decisions. The provider remains in full control of
+    // buffering and quality, just as it is in a normal browser tab.
     ['loadedmetadata', 'durationchange', 'canplay'].forEach((eventName) => {
       video.addEventListener(eventName, () => {
         applyPendingResume(video);
@@ -200,26 +200,10 @@
 
   const recoverVideo = (video) => {
     if (!video || video.ended || Number(video.duration) < MIN_CONTENT_DURATION_SECONDS) return;
-    try {
-      video.preload = 'auto';
-      video.setAttribute?.('preload', 'auto');
-      if (video.error) {
-        const target = Number(video.currentTime) || Number(pendingResume.seconds) || 0;
-        const resumeAfterLoad = () => {
-          try {
-            if (target > 0 && Number(video.duration) > target + 2) video.currentTime = target;
-            video.play?.().catch?.(() => {});
-          } catch (_) {}
-        };
-        video.addEventListener('canplay', resumeAfterLoad, { once: true, capture: true });
-        video.load?.();
-      } else if (!video.paused) {
-        const target = Number(video.currentTime);
-        if (Number.isFinite(target) && target > 0) video.currentTime = target;
-        video.play?.().catch?.(() => {});
-      }
-      reportVideoProgress(video, 'recovery-attempt', true);
-    } catch (_) {}
+    // Do not call load(), play(), or seek here. Those operations flush native
+    // buffers and fight HLS/DASH players' own recovery logic. A browser tab
+    // lets the provider recover its stream, so OpenCloud now does the same.
+    reportVideoProgress(video, 'recovery-observed', true);
   };
 
   const scanForVideos = (root = document) => {
@@ -417,10 +401,14 @@
       setInterval(() => {
         try {
           trackedVideos.forEach((video) => {
-            if (!video.paused && !video.ended) reportVideoProgress(video, 'heartbeat', true);
+            if (!video.isConnected) {
+              trackedVideos.delete(video);
+            } else if (!video.paused && !video.ended) {
+              reportVideoProgress(video, 'heartbeat');
+            }
           });
         } catch (_) {}
-      }, 2000);
+      }, 5000);
     }
     const observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {

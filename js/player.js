@@ -507,6 +507,9 @@ function stopProviderHealthProbes() {
 }
 
 async function probeCurrentProvider() {
+  // Once real media telemetry is flowing, it is both more accurate and less
+  // wasteful than a second native HTTP request to the provider landing page.
+  if (_playbackSignalsActive) return;
   const providerKey = _currentProviderKey;
   if (!providerKey || !playerState.id || playerOverlay?.classList.contains('hidden')) return;
   const probeToken = _providerProbeToken;
@@ -555,7 +558,7 @@ async function probeCurrentProvider() {
 function startProviderHealthProbes() {
   stopProviderHealthProbes();
   _providerProbeTimeout = setTimeout(probeCurrentProvider, 2500);
-  _providerProbeInterval = setInterval(probeCurrentProvider, 15000);
+  _providerProbeInterval = setInterval(probeCurrentProvider, 30000);
 }
 
 /* Active watch tracking */
@@ -1249,7 +1252,10 @@ function loadPlayerIframe() {
   previousFrame.replaceWith(nextFrame);
   scheduleResumeAttempts();
   const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-  const initialLoadTimeoutMs = stallThresholdsForConnection(connection).failoverAfterMs === 20000 ? 20000 : 12000;
+  // Embedded WebViews often need a cold DNS/TLS and player-script startup.
+  // Match normal browser patience instead of declaring a healthy source dead
+  // while its adaptive player is still initializing.
+  const initialLoadTimeoutMs = stallThresholdsForConnection(connection).failoverAfterMs >= 45000 ? 45000 : 30000;
   _healthTimer = setTimeout(() => {
     handleProviderFailure(`${providerName(providerKey)} is taking too long`, providerKey, sessionToken);
   }, initialLoadTimeoutMs);

@@ -187,13 +187,26 @@ test('player source transitions replace the iframe and expose loading and recove
   assert.match(playerSource, /if \(!isTauri\(\)\) confirmPlayerFrameReady\(providerKey, sessionToken\)/);
 });
 
+test('Tauri playback preserves provider buffering and uses a secure browser-like origin', () => {
+  const blockerSource = readFileSync(new URL('../src-tauri/src/blocker_init.js', import.meta.url), 'utf8');
+  const tauriSource = readFileSync(new URL('../src-tauri/src/lib.rs', import.meta.url), 'utf8');
+
+  assert.doesNotMatch(blockerSource, /video\.preload\s*=/);
+  assert.doesNotMatch(blockerSource, /video\.load\?\./);
+  assert.match(blockerSource, /reportVideoProgress\(video, 'heartbeat'\)/);
+  assert.match(tauriSource, /\.use_https_scheme\(true\)/);
+  assert.match(tauriSource, /BackgroundThrottlingPolicy::Disabled/);
+});
+
 test('Electron allows verified provider redirects only inside child frames', () => {
   const electronSource = readFileSync(new URL('../electron/main.js', import.meta.url), 'utf8');
   assert.match(electronSource, /'player\.videasy\.to'/);
   assert.match(electronSource, /'play\.xpass\.top'/);
   assert.match(electronSource, /'1414\.hexa\.su'/);
   assert.match(electronSource, /'cdn\.vidspark\.to'/);
+  assert.match(electronSource, /'player\.moviesapi\.vip'/);
   assert.match(electronSource, /'cinesrc\.st'/);
+  assert.match(electronSource, /'a\.cineflix\.st'/);
   assert.match(electronSource, /will-navigate[\s\S]*?if \(!isAppUrl\(url\)\)[\s\S]*?event\.preventDefault\(\)/);
   assert.match(electronSource, /will-frame-navigate[\s\S]*?shouldAllowUrl\(details\.url\)/);
 });
@@ -207,14 +220,14 @@ test('provider health uses actual video buffer depth and media failures', () => 
   assert.equal(connectionScoreForPlayback(60, 4, false, 2), 1);
 });
 
-test('stall recovery gives weak connections time to refill before failover', () => {
+test('stall recovery gives providers browser-like time to refill before failover', () => {
   assert.deepEqual(stallThresholdsForConnection({ effectiveType: '4g', downlink: 20 }), {
-    recoverAfterMs: 4000,
-    failoverAfterMs: 14000
+    recoverAfterMs: 10000,
+    failoverAfterMs: 30000
   });
   assert.deepEqual(stallThresholdsForConnection({ effectiveType: '3g', downlink: 2 }), {
-    recoverAfterMs: 5000,
-    failoverAfterMs: 20000
+    recoverAfterMs: 15000,
+    failoverAfterMs: 45000
   });
 });
 
@@ -425,7 +438,8 @@ test('native child-frame bridge forwards controls and resumes the content video'
     && message.sample.seconds === 321.4
     && Math.abs(message.sample.bufferedAheadSeconds - 38.6) < 0.01));
   assert.ok(messages.some(message => message.type === 'playback-progress' && message.eventName === 'waiting'));
-  assert.equal(recoveryPlayCalls, 1);
+  assert.equal(recoveryPlayCalls, 0);
+  assert.ok(messages.some(message => message.type === 'playback-progress' && message.eventName === 'recovery-observed'));
   assert.ok(messages.some(message => message.type === 'toggle-header'));
   assert.ok(messages.some(message => message.type === 'pointer-activity'));
 });

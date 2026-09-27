@@ -32,6 +32,6 @@ export function stallThresholdsForConnection(connection = null) {
     || effectiveType === '3g'
     || (Number.isFinite(downlink) && downlink > 0 && downlink < 3);
   return weakConnection
-    ? { recoverAfterMs: 5000, failoverAfterMs: 20000 }
-    : { recoverAfterMs: 4000, failoverAfterMs: 14000 };
+    ? { recoverAfterMs: 15000, failoverAfterMs: 45000 }
+    : { recoverAfterMs: 10000, failoverAfterMs: 30000 };
 }
