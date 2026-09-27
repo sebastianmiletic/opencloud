@@ -296,7 +296,7 @@ async function switchPlayerProvider(providerKey) {
   const previousProvider = _currentProviderKey;
   closeProviderMenu();
   setPlayerHealth('switching', `Saving position for ${providerName(providerKey)}…`, false, 2);
-  await requestFreshPlaybackCheckpoint(240).catch(() => false);
+  await requestFreshPlaybackCheckpoint(60).catch(() => false);
   flushPlaybackCheckpoint();
 
   if (switchToken !== _providerSwitchToken
@@ -691,7 +691,7 @@ function isActivePlaybackSample(detail) {
   return true;
 }
 
-function persistPlaybackSample(detail, forceCloud = false) {
+function persistPlaybackSample(detail, forceCloud = false, forceLocal = forceCloud) {
   if (!isActivePlaybackSample(detail)) return false;
   const context = currentPlaybackContext();
   if (!context) return false;
@@ -704,7 +704,7 @@ function persistPlaybackSample(detail, forceCloud = false) {
   const checkpointResolvers = _checkpointResolvers.splice(0);
   checkpointResolvers.forEach(resolve => resolve(true));
 
-  const shouldPersistLocal = forceCloud || now - _lastLocalCheckpointAt >= LOCAL_CHECKPOINT_INTERVAL_MS;
+  const shouldPersistLocal = forceLocal || now - _lastLocalCheckpointAt >= LOCAL_CHECKPOINT_INTERVAL_MS;
   if (!shouldPersistLocal) return true;
   _lastLocalCheckpointAt = now;
   const progress = { ...getCurrentProgress() };
@@ -743,8 +743,9 @@ function handlePlayerFrameInput(detail) {
   if (detail?.type === 'bridge-ready') sendResumeToProviderFrames();
   if (detail?.type === 'frame-ready') confirmPlayerFrameReady();
   if (detail?.type === 'playback-progress') {
-    const forceCloud = ['pause', 'seeked', 'ended', 'pagehide'].includes(detail.eventName);
-    if (persistPlaybackSample(detail, forceCloud)) {
+    const forceCloud = ['pause', 'ended', 'pagehide'].includes(detail.eventName);
+    const forceLocal = forceCloud || detail.eventName === 'seeked';
+    if (persistPlaybackSample(detail, forceCloud, forceLocal)) {
       confirmPlayerFrameReady();
       updatePlaybackHealth(detail);
     }
@@ -1079,6 +1080,10 @@ function handlePlayerHeaderShortcut() {
 }
 
 export function initPlayer() {
+  // Start DNS, TCP and TLS setup for the preferred player while the user is
+  // browsing. No provider page or media is downloaded until playback starts.
+  warmProviderConnections(getSettings().provider);
+
   if (playerBackBtn) playerBackBtn.addEventListener('click', closePlayer);
   if (epPopoverClose) epPopoverClose.addEventListener('click', closeEpPopover);
   if (epPopoverBack) epPopoverBack.addEventListener('click', () => {
@@ -1118,6 +1123,12 @@ export function initPlayer() {
     event.preventDefault();
     openProviderMenu(event.key === 'ArrowUp' ? 'last' : 'selected');
   });
+  const warmProviderOption = (event) => {
+    const option = event.target.closest?.('.player-provider-option');
+    if (option?.dataset.provider) warmProviderConnections(option.dataset.provider);
+  };
+  playerProviderMenu?.addEventListener('pointerover', warmProviderOption);
+  playerProviderMenu?.addEventListener('focusin', warmProviderOption);
   playerProviderMenu?.addEventListener('click', (event) => {
     const option = event.target.closest('.player-provider-option');
     if (!option) return;
@@ -1196,12 +1207,25 @@ function preconnectProvider(url) {
     const origin = new URL(url).origin;
     if (_preconnectedProviderOrigins.has(origin)) return;
     _preconnectedProviderOrigins.add(origin);
-    const link = document.createElement('link');
-    link.rel = 'preconnect';
-    link.href = origin;
-    link.crossOrigin = 'anonymous';
-    document.head.appendChild(link);
+
+    const dns = document.createElement('link');
+    dns.rel = 'dns-prefetch';
+    dns.href = origin;
+    document.head.appendChild(dns);
+
+    const connection = document.createElement('link');
+    connection.rel = 'preconnect';
+    connection.href = origin;
+    connection.crossOrigin = 'anonymous';
+    document.head.appendChild(connection);
   } catch (_) {}
+}
+
+function warmProviderConnections(providerKey) {
+  const provider = PROVIDERS[providerKey];
+  if (!provider) return;
+  preconnectProvider(getProviderUrlFor(providerKey, 'movie', 0));
+  (provider.connectionOrigins || []).forEach(preconnectProvider);
 }
 
 function loadPlayerIframe() {
@@ -1231,6 +1255,7 @@ function loadPlayerIframe() {
   setPlayerHealth('connecting', `Connecting to ${providerName(providerKey)}…`, false, 2);
   showPlayerFrameLoading(providerKey);
   const playerSrc = getPlayerSrc(providerKey);
+  warmProviderConnections(providerKey);
   preconnectProvider(playerSrc);
   if (getSettings().autoProviderFailover === true) {
     const nextProvider = _providerCandidates.find(key => key !== _currentProviderKey && !_attemptedProviders.has(key));
@@ -1475,7 +1500,10 @@ async function switchEpisode(season, episode, knownName = '') {
   if (!playerState.id || playerState.type !== 'tv') return;
   _providerSwitchToken += 1;
   closeProviderMenu();
-  await requestFreshPlaybackCheckpoint();
+  // The bridge reports progress every few seconds. Give a final frame message
+  // one animation-sized window, rather than blocking episode startup for the
+  // old 120 ms timeout.
+  await requestFreshPlaybackCheckpoint(40);
   saveCurrentEpisodeElapsed();
   setPlayerState({ ...playerState, season: Number(season), episode: Number(episode) });
   _lastPlaybackCheckpoint = null;

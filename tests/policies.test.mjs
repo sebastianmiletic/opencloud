@@ -185,6 +185,11 @@ test('player source transitions replace the iframe and expose loading and recove
   assert.match(playerSource, /providerKey, sessionToken\);/);
   assert.match(playerSource, /detail\?\.type === 'frame-ready'\) confirmPlayerFrameReady\(\)/);
   assert.match(playerSource, /if \(!isTauri\(\)\) confirmPlayerFrameReady\(providerKey, sessionToken\)/);
+  assert.match(playerSource, /dns\.rel = 'dns-prefetch'/);
+  assert.match(playerSource, /connection\.rel = 'preconnect'/);
+  assert.match(playerSource, /warmProviderConnections\(getSettings\(\)\.provider\)/);
+  assert.match(playerSource, /requestFreshPlaybackCheckpoint\(40\)/);
+  assert.match(playerSource, /const forceLocal = forceCloud \|\| detail\.eventName === 'seeked'/);
 });
 
 test('Tauri playback preserves provider buffering and uses a secure browser-like origin', () => {

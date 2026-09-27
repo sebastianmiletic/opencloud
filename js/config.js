@@ -91,6 +91,7 @@ export const PROVIDERS = {
     movie: true,
     tv: true,
     description: 'New movie and series source powered by the VSEmbed player.',
+    connectionOrigins: ['https://cloudorchestranova.com', 'https://data.vidsrcme.ru'],
     movieUrl: 'https://vsembed.ru/embed/movie/{id}',
     tvUrl: 'https://vsembed.ru/embed/tv/{id}/{season}/{episode}'
   },
@@ -153,6 +154,7 @@ export const PROVIDERS = {
     subtitles: true,
     speed: 'Fast',
     description: 'VidSpark player with movies, series, and multiple playback servers.',
+    connectionOrigins: ['https://player.moviesapi.vip'],
     movieUrl: 'https://cdn.vidspark.to/movie/{id}',
     tvUrl: 'https://cdn.vidspark.to/tv/{id}/{season}/{episode}'
   },
@@ -165,6 +167,7 @@ export const PROVIDERS = {
     subtitles: true,
     speed: 'Fast',
     description: 'CloudOrchestra-backed source for movies and television episodes.',
+    connectionOrigins: ['https://cloudorchestranova.com', 'https://data.vidsrcme.ru'],
     movieUrl: 'https://vidsrc.me/embed/movie?tmdb={id}&autoplay=1',
     tvUrl: 'https://vidsrc.me/embed/tv?tmdb={id}&season={season}&episode={episode}&autoplay=1'
   },
@@ -177,6 +180,7 @@ export const PROVIDERS = {
     subtitles: true,
     speed: 'Fast',
     description: 'CineSrc player with minimal interruptions and TMDB-based playback.',
+    connectionOrigins: ['https://fembox.aether.bar', 'https://a.cineflix.st', 'https://a2.cineflix.st'],
     movieUrl: 'https://cinesrc.st/embed/movie/{id}',
     tvUrl: 'https://cinesrc.st/embed/tv/{id}?s={season}&e={episode}'
   },
