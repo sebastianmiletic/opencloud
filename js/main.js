@@ -259,8 +259,8 @@ function escapeHtml(text) {
 function validateEnv() {
   const env = (typeof window !== 'undefined' && window.ENV) ? window.ENV : {};
   const missing = [];
-  if (!env.TMDB_BEARER_TOKEN || env.TMDB_BEARER_TOKEN.length < 20) missing.push('TMDB_BEARER_TOKEN');
-  if (!env.OMDB_API_KEY || env.OMDB_API_KEY.length < 5) missing.push('OMDB_API_KEY');
+  if (!env.TMDB_API_BASE && (!env.TMDB_BEARER_TOKEN || env.TMDB_BEARER_TOKEN.length < 20)) missing.push('TMDB_BEARER_TOKEN');
+  if (!env.OMDB_API_BASE && (!env.OMDB_API_KEY || env.OMDB_API_KEY.length < 5)) missing.push('OMDB_API_KEY');
   if (!env.SUPABASE_URL || !env.SUPABASE_URL.startsWith('https://')) missing.push('SUPABASE_URL');
   if (!env.SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY.length < 20) missing.push('SUPABASE_ANON_KEY');
   return missing;

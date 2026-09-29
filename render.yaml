@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: opencloud-web
+    runtime: node
+    plan: free
+    buildCommand: npm ci --include=dev && npm run build:web
+    startCommand: npm run start:render
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: 22.16.0
+      - key: ELECTRON_SKIP_BINARY_DOWNLOAD
+        value: "1"
+      - key: TMDB_BEARER_TOKEN
+        sync: false
+      - key: OMDB_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false

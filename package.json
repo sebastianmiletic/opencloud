@@ -8,6 +8,7 @@
     "electron:dev": "electron .",
     "dev:web": "vite --host 127.0.0.1 --port 1420 --strictPort",
     "build:web": "vite build",
+    "start:render": "node web/server.mjs",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
