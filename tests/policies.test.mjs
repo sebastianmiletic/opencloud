@@ -192,6 +192,21 @@ test('player source transitions replace the iframe and expose loading and recove
   assert.match(playerSource, /const forceLocal = forceCloud \|\| detail\.eventName === 'seeked'/);
 });
 
+test('playback suspends background rendering and persists only progress checkpoints', () => {
+  const playerSource = readFileSync(new URL('../js/player.js', import.meta.url), 'utf8');
+  const heroSource = readFileSync(new URL('../js/hero.js', import.meta.url), 'utf8');
+  const storageSource = readFileSync(new URL('../js/storage.js', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
+
+  assert.match(playerSource, /document\.body\.classList\.add\('player-active'\)/);
+  assert.match(playerSource, /CLOUD_CHECKPOINT_INTERVAL_MS = 60000/);
+  assert.match(playerSource, /LOCAL_CHECKPOINT_INTERVAL_MS = 10000/);
+  assert.match(heroSource, /opencloud:player-opened', pauseHero/);
+  assert.match(css, /body\.player-active \.main-header,[\s\S]*?visibility:\s*hidden/);
+  assert.match(storageSource, /function persistLocalProgress\(\)[\s\S]*?\+ 'progress'/);
+  assert.match(storageSource, /saveWatchProgress\(data\)[\s\S]*?persistLocalProgress\(\)/);
+});
+
 test('Tauri playback preserves provider buffering and uses a secure browser-like origin', () => {
   const blockerSource = readFileSync(new URL('../src-tauri/src/blocker_init.js', import.meta.url), 'utf8');
   const tauriSource = readFileSync(new URL('../src-tauri/src/lib.rs', import.meta.url), 'utf8');

@@ -76,7 +76,8 @@
   const instrumentedVideos = new WeakSet();
   const trackedVideos = new Set();
   const lastVideoReportAt = new WeakMap();
-  const VIDEO_REPORT_INTERVAL_MS = 3000;
+  const VIDEO_REPORT_INTERVAL_MS = 5000;
+  let videoHeartbeatTimer = null;
   const appliedResumeTargets = new WeakMap();
   let pendingResume = { seconds: 0, durationSeconds: 0, sessionKey: '' };
   let lastPointerActivityAt = 0;
@@ -171,10 +172,30 @@
     } catch (_) {}
   };
 
+  const startVideoHeartbeat = () => {
+    if (videoHeartbeatTimer || typeof setInterval !== 'function') return;
+    videoHeartbeatTimer = setInterval(() => {
+      try {
+        trackedVideos.forEach((video) => {
+          if (!video.isConnected) {
+            trackedVideos.delete(video);
+          } else if (!video.paused && !video.ended) {
+            reportVideoProgress(video, 'heartbeat');
+          }
+        });
+        if (trackedVideos.size === 0) {
+          clearInterval(videoHeartbeatTimer);
+          videoHeartbeatTimer = null;
+        }
+      } catch (_) {}
+    }, 10000);
+  };
+
   const instrumentVideo = (video) => {
     if (!video || instrumentedVideos.has(video)) return;
     instrumentedVideos.add(video);
     trackedVideos.add(video);
+    startVideoHeartbeat();
     // Observe the provider's media element without changing its preload or
     // adaptive-streaming decisions. The provider remains in full control of
     // buffering and quality, just as it is in a normal browser tab.
@@ -259,7 +280,7 @@
   window.addEventListener('mousemove', () => {
     if (window.top === window) return;
     const now = Date.now();
-    if (now - lastPointerActivityAt < 200) return;
+    if (now - lastPointerActivityAt < 500) return;
     lastPointerActivityAt = now;
     forwardPlayerInput('pointer-activity');
   }, true);
@@ -396,19 +417,6 @@
     reportFrameReadiness();
     if (typeof setTimeout === 'function') {
       [250, 1000, 2500].forEach(delay => setTimeout(reportFrameReadiness, delay));
-    }
-    if (typeof setInterval === 'function') {
-      setInterval(() => {
-        try {
-          trackedVideos.forEach((video) => {
-            if (!video.isConnected) {
-              trackedVideos.delete(video);
-            } else if (!video.paused && !video.ended) {
-              reportVideoProgress(video, 'heartbeat');
-            }
-          });
-        } catch (_) {}
-      }, 5000);
     }
     const observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {

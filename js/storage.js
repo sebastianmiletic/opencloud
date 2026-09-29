@@ -90,6 +90,15 @@ function loadLocalCache(userId) {
   }
 }
 
+function persistLocalProgress() {
+  if (!_activeLocalPrefix) return;
+  try {
+    localStorage.setItem(_activeLocalPrefix + 'progress', JSON.stringify(_cache.progress));
+  } catch (e) {
+    console.warn('[Storage] local progress persistence failed:', e);
+  }
+}
+
 function persistLocalCache() {
   if (!_activeLocalPrefix) return;
   try {
@@ -433,7 +442,7 @@ export function getWatchProgress() {
 export async function saveWatchProgress(data) {
   _cache.progress = { ..._cache.progress, ...data };
   setWatchProgress(_cache.progress);
-  persistLocalCache();
+  persistLocalProgress();
   return true;
 }
 
@@ -481,7 +490,7 @@ export async function syncWatchProgressItem(tmdbId, mediaType, season, episode, 
   }
   _cache.progress[sid] = next;
   setWatchProgress(_cache.progress);
-  persistLocalCache();
+  persistLocalProgress();
   const userId = getUserId();
   if (!userId) return true;
   await syncProgressInOrder(userId, {

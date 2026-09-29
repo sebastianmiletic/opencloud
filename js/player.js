@@ -83,8 +83,8 @@ const _seasonCache = new Map();
 const _preconnectedProviderOrigins = new Set();
 const PLAYER_HEADER_IDLE_MS = 5000;
 const PLAYER_CONTROL_CHANNEL = '__opencloud_player_control_v1__';
-const CLOUD_CHECKPOINT_INTERVAL_MS = 30000;
-const LOCAL_CHECKPOINT_INTERVAL_MS = 5000;
+const CLOUD_CHECKPOINT_INTERVAL_MS = 60000;
+const LOCAL_CHECKPOINT_INTERVAL_MS = 10000;
 
 function healthQuality(score) {
   return ['Unavailable', 'Poor', 'Fair', 'Good', 'Excellent'][Math.max(1, Math.min(5, score)) - 1];
@@ -1312,6 +1312,8 @@ export function closePlayer() {
   setTimeout(() => {
     playerOverlay.classList.add('hidden');
     playerOverlay.classList.remove('closing');
+    document.body.classList.remove('player-active');
+    window.dispatchEvent(new CustomEvent('opencloud:player-closed'));
     if (playerFrame) {
       playerFrame.classList.remove('is-ready');
       playerFrame.src = 'about:blank';
@@ -1383,8 +1385,10 @@ export async function openPlayer(id, type, season, episode) {
   _totalPausedMs = 0;
   _pausedAt = null;
   attachWatchActivityListeners();
+  document.body.classList.add('player-active');
   playerOverlay.classList.remove('hidden');
   playerOverlay.classList.remove('closing');
+  window.dispatchEvent(new CustomEvent('opencloud:player-opened'));
   lockScroll();
   window.dispatchEvent(new CustomEvent('watchStarted', { detail: { id, type, season: startSeason, episode: startEpisode } }));
   startProgressInterval();

@@ -21,6 +21,8 @@ export function initHero() {
     heroSection.addEventListener('mouseenter', pauseHero);
     heroSection.addEventListener('mouseleave', resumeHero);
   }
+  window.addEventListener('opencloud:player-opened', pauseHero);
+  window.addEventListener('opencloud:player-closed', resumeHero);
 }
 
 export function renderHeroSlides() {
@@ -146,6 +148,7 @@ function buildSlideHtml(item, index, isClone = false) {
 
 function startHeroTimer() {
   stopHeroTimer();
+  if (document.body.classList.contains('player-active')) return;
   timerStart = Date.now();
   if (progressBar) {
     progressBar.style.transition = 'none';

@@ -2291,6 +2291,21 @@ body {
 }
 
 /* Inline Player Overlay */
+/* Do not paint or composite the catalog underneath full-screen video. Large
+   poster grids, backdrops, and carousel layers otherwise compete with WebKit's
+   video compositor on older and integrated GPUs. */
+body.player-active .main-header,
+body.player-active .main-content {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+body.player-active .main-content *,
+body.player-active .main-header * {
+  animation-play-state: paused !important;
+  transition: none !important;
+}
+
 .player-overlay {
   position: fixed;
   inset: 0;
