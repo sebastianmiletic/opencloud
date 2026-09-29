@@ -2352,10 +2352,10 @@ body.player-active .main-header * {
 }
 
 body.device-laptop .player-overlay.player-header-autohide .player-pointer-tracker {
-  display: block;
-  position: absolute;
-  inset: 0;
-  z-index: 11;
+  display: none;
+  pointer-events: none;
+  /* Mouse activity is forwarded by the native child-frame bridge. A transparent
+     full-frame hit target here steals Play, server and quality-control clicks. */
 }
 
 body.device-laptop .player-overlay.player-header-autohide.player-header-visible .player-pointer-tracker {

@@ -380,12 +380,14 @@
     if (!element) return;
     const url = link?.href || form?.action || '';
     const targetName = element.getAttribute('target') || '';
-    const javascriptUrl = /^javascript:/i.test(url);
     const popupTarget = targetName === '_blank' || targetName === '_new' || targetName === 'popup';
-    if (javascriptUrl || (popupTarget && shouldBlock(url, 'tab'))) {
+    // Providers use javascript:void(0) links for Play and server selection.
+    // Do not cancel their handlers. Popup attempts remain blocked by window.open
+    // interception and the native new-window policy.
+    if (popupTarget && shouldBlock(url, 'tab')) {
       event.preventDefault();
       event.stopImmediatePropagation();
-      report(url, javascriptUrl ? 'javascript URL blocked' : 'new-tab click blocked');
+      report(url, 'new-tab click blocked');
     }
   }, true);
 

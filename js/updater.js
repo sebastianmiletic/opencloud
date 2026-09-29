@@ -1,4 +1,4 @@
-import { invokeDesktop, isTauri, listenNativeEvent } from './desktop.js';
+import { invokeDesktop, isTauri, listenNativeEvent, openExternal } from './desktop.js';
 import { showToast } from './utils.js';
 
 let availableUpdate = null;
@@ -6,6 +6,106 @@ let downloadedBytes = 0;
 let initialized = false;
 let launchCheckStarted = false;
 let installing = false;
+let checking = false;
+let loadingVersions = false;
+let selectedVersion = null;
+
+function setVersionControlsDisabled(disabled) {
+  document.querySelectorAll('#updatePastVersions button, #updatePastVersionsBtn').forEach(button => {
+    button.disabled = disabled;
+  });
+}
+
+async function showPastVersions() {
+  if (installing || checking || loadingVersions) return;
+  const panel = document.getElementById('updatePastVersions');
+  const status = document.getElementById('updatePastVersionsStatus');
+  const list = document.getElementById('updatePastVersionsList');
+  panel.hidden = !panel.hidden;
+  document.getElementById('updatePastVersionsBtn').setAttribute('aria-expanded', String(!panel.hidden));
+  if (panel.hidden) return;
+  list.replaceChildren();
+  document.getElementById('updateDowngradeConfirm').hidden = true;
+  selectedVersion = null;
+  status.textContent = 'Loading release history…';
+  loadingVersions = true;
+  try {
+    let page = 1;
+    let more = true;
+    const seen = new Set();
+    while (more) {
+      const result = await invokeDesktop('list_past_versions', { page });
+      for (const release of result.items) {
+        if (seen.has(release.tag)) continue;
+        seen.add(release.tag);
+        const row = document.createElement('li');
+        row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:0.6rem 0;border-bottom:1px solid var(--border-color)';
+        const label = document.createElement('span');
+        const current = release.tag === `v${result.currentVersion}`;
+        label.textContent = `${release.tag}${current ? ' (installed)' : ''}`;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'btn btn-secondary';
+        const parts = value => value.replace(/^v/, '').split('.').map(Number);
+        const target = parts(release.tag);
+        const installed = parts(result.currentVersion);
+        const difference = target.map((value, index) => value - installed[index]).find(value => value !== 0) || 0;
+        const canDowngrade = difference < 0 && release.signed;
+        button.textContent = canDowngrade ? 'Downgrade…' : 'Downloads';
+        button.setAttribute('aria-label', `${button.textContent} ${release.tag}`);
+        button.addEventListener('click', () => {
+          if (installing || checking) return;
+          if (!canDowngrade) {
+            openExternal(`https://github.com/sebastianmiletic/opencloud/releases/tag/${release.tag}`).catch(error => { status.textContent = String(error); });
+            return;
+          }
+          selectedVersion = release.tag;
+          document.getElementById('updateDowngradeQuestion').textContent = `Install ${release.tag} and restart? Your data will not be deleted, but compatibility with this older version is not guaranteed.`;
+          document.getElementById('updateDowngradeConfirm').hidden = false;
+          document.getElementById('updateDowngradeCancel').focus();
+        });
+        row.append(label, button);
+        if (canDowngrade) {
+          const downloads = document.createElement('button');
+          downloads.type = 'button';
+          downloads.className = 'btn btn-secondary';
+          downloads.textContent = 'Downloads';
+          downloads.setAttribute('aria-label', `Downloads for ${release.tag}`);
+          downloads.addEventListener('click', () => {
+            if (!installing) openExternal(`https://github.com/sebastianmiletic/opencloud/releases/tag/${release.tag}`)
+              .catch(error => { status.textContent = String(error); });
+          });
+          row.append(downloads);
+        }
+        list.append(row);
+      }
+      more = result.hasMore;
+      page += 1;
+    }
+    status.textContent = seen.size ? 'Signed downgrades require a compatible installer for this device.' : 'No releases found.';
+  } catch (error) {
+    status.textContent = `Could not load all versions: ${String(error)}. Close and reopen this list to retry.`;
+  } finally { loadingVersions = false; }
+}
+
+async function installSelectedVersion() {
+  if (!selectedVersion || installing || checking || loadingVersions) return;
+  installing = true;
+  downloadedBytes = 0;
+  setVersionControlsDisabled(true);
+  const ui = elements();
+  if (ui.install) ui.install.disabled = true;
+  try {
+    ui.message.textContent = `Downloading and verifying ${selectedVersion}…`;
+    await invokeDesktop('downgrade_version', { tag: selectedVersion });
+    await invokeDesktop('restart_app');
+  } catch (error) {
+    ui.message.textContent = `Downgrade failed: ${String(error)}. You can also use the release's Downloads page.`;
+    installing = false;
+    setVersionControlsDisabled(false);
+    if (ui.install) ui.install.disabled = false;
+  }
+}
 
 function elements() {
   return {
@@ -23,6 +123,10 @@ function elements() {
 function setCheckingUI() {
   const ui = elements();
   ui.modal?.classList.remove('hidden');
+  document.getElementById('updatePastVersions').hidden = true;
+  document.getElementById('updatePastVersionsBtn').setAttribute('aria-expanded', 'false');
+  document.getElementById('updateDowngradeConfirm').hidden = true;
+  selectedVersion = null;
   if (ui.title) ui.title.textContent = 'Checking for Updates';
   if (ui.subtitle) ui.subtitle.textContent = 'Contacting the signed release channel';
   if (ui.message) ui.message.textContent = 'Checking…';
@@ -48,6 +152,8 @@ function showAvailableUpdate(update) {
 }
 
 async function checkForUpdate({ interactive = false } = {}) {
+  if (installing || checking || loadingVersions) return;
+  checking = true;
   const ui = elements();
   if (interactive) setCheckingUI();
   try {
@@ -73,12 +179,13 @@ async function checkForUpdate({ interactive = false } = {}) {
       console.warn('[Updater] Automatic update check failed:', error);
     }
     return undefined;
-  }
+  } finally { checking = false; }
 }
 
 async function installUpdate() {
-  if (!availableUpdate || installing) return;
+  if (!availableUpdate || installing || checking || loadingVersions) return;
   installing = true;
+  setVersionControlsDisabled(true);
   const ui = elements();
   downloadedBytes = 0;
   if (ui.install) {
@@ -91,6 +198,7 @@ async function installUpdate() {
     await invokeDesktop('restart_app');
   } catch (error) {
     installing = false;
+    setVersionControlsDisabled(false);
     if (ui.message) ui.message.textContent = String(error);
     if (ui.install) {
       ui.install.disabled = false;
@@ -122,7 +230,14 @@ export function initUpdater(button, accountDropdown) {
     ui.close?.addEventListener('click', () => { if (!installing) ui.modal?.classList.add('hidden'); });
     ui.modal?.querySelector('.modal-overlay')?.addEventListener('click', () => { if (!installing) ui.modal?.classList.add('hidden'); });
     ui.install?.addEventListener('click', installUpdate);
-    ui.later?.addEventListener('click', () => ui.modal?.classList.add('hidden'));
+    ui.later?.addEventListener('click', () => { if (!installing) ui.modal?.classList.add('hidden'); });
+    document.getElementById('updatePastVersionsBtn')?.addEventListener('click', showPastVersions);
+    document.getElementById('updateDowngradeInstall')?.addEventListener('click', installSelectedVersion);
+    document.getElementById('updateDowngradeCancel')?.addEventListener('click', () => {
+      if (installing) return;
+      selectedVersion = null;
+      document.getElementById('updateDowngradeConfirm').hidden = true;
+    });
 
     listenNativeEvent('opencloud:update-progress', (progress) => {
       downloadedBytes += Number(progress?.chunkLength) || 0;

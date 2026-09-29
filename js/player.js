@@ -51,6 +51,7 @@ let _providerProbeToken = 0;
 let _providerProbeFailures = 0;
 let _frameLoadStartedAt = 0;
 let _frameNavigationLoaded = false;
+let _frameReady = false;
 let _lastFrameScore = 1;
 let _currentProviderKey = null;
 let _providerCandidates = [];
@@ -151,10 +152,14 @@ function showPlayerFrameFailure(reason = 'This source did not respond.') {
 }
 
 function confirmPlayerFrameReady(providerKey = _currentProviderKey, sessionToken = _playerFrameSessionToken) {
-  if (!_frameNavigationLoaded
-    || sessionToken !== _playerFrameSessionToken
+  // A provider's DOMContentLoaded/bridge message can precede iframe load.
+  // Waiting for load here loses the one-shot readiness signal, and some ad
+  // subresources never finish loading at all. Current-frame evidence suffices.
+  if (sessionToken !== _playerFrameSessionToken
     || providerKey !== _currentProviderKey
     || playerOverlay?.classList.contains('hidden')) return false;
+  if (_frameReady) return true;
+  _frameReady = true;
   clearHealthTimer();
   showPlayerFrameReady();
   const latency = Math.max(0, performance.now() - _frameLoadStartedAt);
@@ -943,6 +948,7 @@ function attachIframeLoadListener() {
       }
     )) return;
     _frameNavigationLoaded = true;
+    if (_frameReady) return;
     setPlayerHealth('connecting', `${providerName(providerKey)} · Opening player…`, false, 2);
     sendResumeToProviderFrames();
     // Browser and legacy Electron builds do not have the all-frame native
@@ -1251,6 +1257,7 @@ function loadPlayerIframe() {
   _attemptedProviders.add(providerKey);
   _frameLoadStartedAt = performance.now();
   _frameNavigationLoaded = false;
+  _frameReady = false;
   _lastFrameScore = 1;
   setPlayerHealth('connecting', `Connecting to ${providerName(providerKey)}…`, false, 2);
   showPlayerFrameLoading(providerKey);
@@ -1309,7 +1316,10 @@ export function closePlayer() {
   _totalPausedMs = 0;
   _pausedAt = null;
   playerOverlay.classList.add('closing');
+  const closingSession = _playerFrameSessionToken;
   setTimeout(() => {
+    // Opening another title during the close animation must not blank it.
+    if (closingSession !== _playerFrameSessionToken) return;
     playerOverlay.classList.add('hidden');
     playerOverlay.classList.remove('closing');
     document.body.classList.remove('player-active');
@@ -1502,12 +1512,15 @@ function saveCurrentEpisodeElapsed() {
 
 async function switchEpisode(season, episode, knownName = '') {
   if (!playerState.id || playerState.type !== 'tv') return;
-  _providerSwitchToken += 1;
+  const switchToken = ++_providerSwitchToken;
+  const contextKey = playbackContextKey();
   closeProviderMenu();
   // The bridge reports progress every few seconds. Give a final frame message
   // one animation-sized window, rather than blocking episode startup for the
   // old 120 ms timeout.
   await requestFreshPlaybackCheckpoint(40);
+  if (switchToken !== _providerSwitchToken || contextKey !== playbackContextKey()
+    || playerOverlay?.classList.contains('hidden')) return;
   saveCurrentEpisodeElapsed();
   setPlayerState({ ...playerState, season: Number(season), episode: Number(episode) });
   _lastPlaybackCheckpoint = null;

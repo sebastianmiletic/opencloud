@@ -918,6 +918,17 @@
           </button>
           <button type="button" class="btn btn-secondary" id="updateModalLaterBtn">Later</button>
         </div>
+        <button type="button" class="btn btn-secondary" id="updatePastVersionsBtn" aria-expanded="false" aria-controls="updatePastVersions" style="width:100%;margin-top:1rem;">Past versions</button>
+        <section id="updatePastVersions" hidden aria-label="Past versions">
+          <p style="color:var(--text-muted);font-size:0.8125rem;">Older versions may contain security issues or lack support for newer data. Back up your data before downgrading.</p>
+          <p id="updatePastVersionsStatus" role="status" aria-live="polite"></p>
+          <ul id="updatePastVersionsList" style="list-style:none;padding:0;max-height:220px;overflow:auto;"></ul>
+          <div id="updateDowngradeConfirm" hidden>
+            <p id="updateDowngradeQuestion"></p>
+            <button type="button" class="btn btn-primary" id="updateDowngradeInstall">Downgrade and restart</button>
+            <button type="button" class="btn btn-secondary" id="updateDowngradeCancel">Cancel</button>
+          </div>
+        </section>
         <p id="updateModalUpToDate" style="display:none;text-align:center;font-size:0.8125rem;color:var(--text-secondary);margin-top:1rem;">
           <i class="fas fa-check-circle" style="color:#10b981;margin-right:0.3rem;"></i>You are on the latest version.
         </p>

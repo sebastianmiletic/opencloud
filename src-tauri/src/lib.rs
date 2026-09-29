@@ -544,6 +544,57 @@ async fn check_for_updates(app: tauri::AppHandle) -> Result<Option<UpdateInfo>, 
     }))
 }
 
+fn valid_release_tag(tag: &str) -> bool {
+    let Some(version) = tag.strip_prefix('v') else { return false };
+    let parts: Vec<_> = version.split('.').collect();
+    parts.len() == 3 && parts.iter().all(|part| !part.is_empty()
+        && part.len() <= 6 && part.bytes().all(|b| b.is_ascii_digit()))
+}
+
+#[tauri::command]
+async fn list_past_versions(page: u32) -> Result<serde_json::Value, String> {
+    if page == 0 || page > 1000 { return Err("invalid release page".into()); }
+    let response = reqwest::Client::builder().timeout(Duration::from_secs(20))
+        .user_agent("OpenCloud release history").build().map_err(|e| e.to_string())?
+        .get(format!("https://api.github.com/repos/sebastianmiletic/opencloud/releases?per_page=100&page={page}"))
+        .send().await.map_err(|e| e.to_string())?
+        .error_for_status().map_err(|e| e.to_string())?;
+    let releases: Vec<serde_json::Value> = serde_json::from_str(&response.text().await.map_err(|e| e.to_string())?)
+        .map_err(|e| e.to_string())?;
+    let has_more = releases.len() == 100;
+    let items: Vec<_> = releases.into_iter().filter(|r| r["draft"] != true && r["prerelease"] != true)
+        .filter_map(|r| {
+            let tag = r["tag_name"].as_str()?;
+            if !valid_release_tag(tag) { return None; }
+            Some(serde_json::json!({"tag": tag, "date": r["published_at"],
+                "signed": r["assets"].as_array().is_some_and(|assets| assets.iter().any(|a| a["name"] == "latest.json"))}))
+        }).collect();
+    Ok(serde_json::json!({"items": items, "hasMore": has_more, "currentVersion": env!("CARGO_PKG_VERSION")}))
+}
+
+#[tauri::command]
+async fn downgrade_version(app: tauri::AppHandle, tag: String) -> Result<(), String> {
+    if !valid_release_tag(&tag) { return Err("invalid release tag".into()); }
+    let endpoint = Url::parse(&format!("https://github.com/sebastianmiletic/opencloud/releases/download/{tag}/latest.json"))
+        .map_err(|e| e.to_string())?;
+    let update = app.updater_builder().endpoints(vec![endpoint]).map_err(|e| e.to_string())?
+        .version_comparator(|current, remote| remote.version < current)
+        .build().map_err(|e| e.to_string())?.check().await.map_err(|e| e.to_string())?
+        .ok_or("This release is not older than the installed version.")?;
+    if format!("v{}", update.version) != tag {
+        return Err("Release manifest does not match the selected version.".into());
+    }
+    let prefix = format!("https://github.com/sebastianmiletic/opencloud/releases/download/{tag}/");
+    if !update.download_url.as_str().starts_with(&prefix) {
+        return Err("Release download is outside the selected official release.".into());
+    }
+    update.download_and_install(move |chunk_length, content_length| {
+        let _ = app.emit("opencloud:update-progress", serde_json::json!({
+            "chunkLength": chunk_length, "contentLength": content_length
+        }));
+    }, || {}).await.map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
     let update = app
@@ -652,6 +703,8 @@ pub fn run() {
             open_external,
             check_for_updates,
             install_update,
+            list_past_versions,
+            downgrade_version,
             probe_provider,
             restart_app,
             set_player_fullscreen
@@ -681,9 +734,9 @@ pub fn run() {
 
             let _main_window = main_window_builder
                 .background_color(tauri::webview::Color(0, 0, 0, 255))
-                // Serve the app from an HTTPS custom origin so embedded players
-                // receive a normal secure referrer instead of an empty tauri://
-                // referrer. Keep media timers active like a foreground browser.
+                // HTTPS custom origins apply on Windows/Android only. macOS and
+                // Linux retain custom schemes, which can leave document.referrer
+                // empty in embeds. This is not a cross-platform referrer fix.
                 .use_https_scheme(true)
                 .background_throttling(BackgroundThrottlingPolicy::Disabled)
                 .visible(false)
@@ -733,6 +786,16 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn downgrade_tags_cannot_escape_official_release_paths() {
+        for tag in ["v3.9.16", "v2.2.11"] {
+            assert!(super::valid_release_tag(tag));
+        }
+        for tag in ["../latest", "v3.9.16/evil", "v3.9.16?x=1", "https://evil.test", "v3..1", "v3.9.16-beta"] {
+            assert!(!super::valid_release_tag(tag));
+        }
+    }
+
     use super::*;
 
     fn test_service(name: &str) -> BlockerService {
