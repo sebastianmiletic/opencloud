@@ -22,6 +22,7 @@ export function initSupabase() {
     auth: {
       autoRefreshToken: true,
       persistSession: true,
+      storage: window.localStorage,
       detectSessionInUrl: false
     }
   });

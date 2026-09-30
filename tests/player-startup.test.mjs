@@ -10,7 +10,8 @@ test('early readiness exposes the current frame once, without waiting for iframe
   const end = player.indexOf('\nfunction providerName(', start);
   const context = { performance: { now: () => 100 } };
   runInNewContext(`
-    let _frameNavigationLoaded = false, _frameReady = false;
+    let _frameNavigationLoaded = false, _frameReady = false, _mediaStarted = false;
+    const isTauri = () => false;
     let _playerFrameSessionToken = 2, _currentProviderKey = 'test';
     let _frameLoadStartedAt = 0, _lastFrameScore = 1, _providerProbeFailures = 0;
     let _playbackSignalsActive = false, _playbackBufferingSince = 0;

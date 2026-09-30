@@ -28,6 +28,11 @@ const playerBackBtn = document.getElementById('playerBackBtn');
 const playerNextBtn = document.getElementById('playerNextBtn');
 const playerEpBtn = document.getElementById('playerEpBtn');
 const playerFullscreenBtn = document.getElementById('playerFullscreenBtn');
+const playerUpNext = document.getElementById('playerUpNext');
+const playerUpNextTitle = document.getElementById('playerUpNextTitle');
+const playerUpNextStatus = document.getElementById('playerUpNextStatus');
+const playerUpNextPlay = document.getElementById('playerUpNextPlay');
+const playerUpNextDismiss = document.getElementById('playerUpNextDismiss');
 const playerProviderControl = document.getElementById('playerProviderControl');
 const playerHealth = document.getElementById('playerHealth');
 const playerHealthText = document.getElementById('playerHealthText');
@@ -75,6 +80,12 @@ let _resumeConfirmationKey = null;
 let _checkpointResolvers = [];
 let _sessionResumePoint = null;
 let _playbackWatchdogTimer = null;
+let _mediaStartupTimer = null;
+let _mediaStarted = false;
+let _mediaStartupObserved = false;
+let _nextEpisodeTarget = null;
+let _nextEpisodeTimer = null;
+let _autoplayNextEpisode = false;
 let _playbackBufferingSince = 0;
 let _playbackRecoverySent = false;
 let _playbackLastAdvancedAt = 0;
@@ -171,6 +182,16 @@ function confirmPlayerFrameReady(providerKey = _currentProviderKey, sessionToken
   }
   startProviderHealthProbes();
   scheduleResumeAttempts();
+  if (!_mediaStarted && isTauri()) {
+    _mediaStartupTimer = setTimeout(() => {
+      _mediaStartupTimer = null;
+      if (sessionToken !== _playerFrameSessionToken || _mediaStarted
+        || playerOverlay?.classList.contains('hidden')) return;
+      // Keep server selection and Play clickable. A loaded HTML page is not
+      // proof that the media CDN delivered a stream; do not hide or reload it.
+      setPlayerHealth('slow', `${providerName(providerKey)} · Video not started. Try Play or another server`, true, 1);
+    }, 45000);
+  }
   return true;
 }
 
@@ -336,8 +357,20 @@ function clearPlaybackWatchdog() {
   _playbackWatchdogTimer = null;
 }
 
+function clearNextEpisodePrompt() {
+  if (_nextEpisodeTimer) clearTimeout(_nextEpisodeTimer);
+  _nextEpisodeTimer = null;
+  _nextEpisodeTarget = null;
+  playerUpNext?.classList.add('hidden');
+}
+
 function resetPlaybackMonitoring() {
   clearPlaybackWatchdog();
+  clearNextEpisodePrompt();
+  if (_mediaStartupTimer) clearTimeout(_mediaStartupTimer);
+  _mediaStartupTimer = null;
+  _mediaStarted = false;
+  _mediaStartupObserved = false;
   _playbackBufferingSince = 0;
   _playbackRecoverySent = false;
   _playbackLastAdvancedAt = 0;
@@ -514,7 +547,7 @@ function stopProviderHealthProbes() {
 async function probeCurrentProvider() {
   // Once real media telemetry is flowing, it is both more accurate and less
   // wasteful than a second native HTTP request to the provider landing page.
-  if (_playbackSignalsActive) return;
+  if (_playbackSignalsActive || _mediaStartupObserved) return;
   const providerKey = _currentProviderKey;
   if (!providerKey || !playerState.id || playerOverlay?.classList.contains('hidden')) return;
   const probeToken = _providerProbeToken;
@@ -611,6 +644,12 @@ function getCurrentResumePoint() {
   };
 }
 
+function requestProviderPlayback() {
+  const sessionKey = playbackContextKey();
+  if (!playerFrame?.contentWindow || !sessionKey) return;
+  playerFrame.contentWindow.postMessage({ channel: PLAYER_CONTROL_CHANNEL, type: 'play', sessionKey }, '*');
+}
+
 function sendResumeToProviderFrames() {
   const sessionKey = playbackContextKey();
   if (!playerFrame?.contentWindow || !sessionKey) return;
@@ -650,6 +689,7 @@ function scheduleResumeAttempts() {
     setTimeout(() => {
       if (sessionToken === _playerFrameSessionToken && !playerOverlay?.classList.contains('hidden')) {
         sendResumeToProviderFrames();
+        if (_autoplayNextEpisode) requestProviderPlayback();
       }
     }, delay);
   });
@@ -747,12 +787,38 @@ function handlePlayerFrameInput(detail) {
   if (detail?.type === 'pointer-activity') showPlayerHeaderForMouseActivity();
   if (detail?.type === 'bridge-ready') sendResumeToProviderFrames();
   if (detail?.type === 'frame-ready') confirmPlayerFrameReady();
+  if (detail?.type === 'media-startup' && detail.sessionKey === playbackContextKey() && !_mediaStarted) {
+    const sample = detail.sample || {};
+    if (Number(sample.area) > 0) {
+      if (!_mediaStartupObserved) {
+        _mediaStartupObserved = true;
+        stopProviderHealthProbes();
+        setPlayerHealth('connecting', `${providerName(_currentProviderKey)} · Waiting for video data…`, false, 2);
+      }
+      const code = Number(sample.mediaErrorCode);
+      const reason = code === 2 ? 'Video network request failed'
+        : code === 3 ? 'Video decoding failed'
+        : code === 4 ? 'Video format or source unsupported' : null;
+      if (reason) setPlayerHealth('failed', `${providerName(_currentProviderKey)} · ${reason}`, true, 1);
+      // Do not persist this diagnostic as watch progress: duration is unknown.
+      console.info('[media startup]', { provider: _currentProviderKey, event: detail.eventName,
+        readyState: sample.readyState, networkState: sample.networkState, mediaErrorCode: code });
+    }
+  }
   if (detail?.type === 'playback-progress') {
+    if (detail.sessionKey === playbackContextKey() && isPlausiblePlaybackSample(detail.sample)
+      && detail.eventName === 'playing') {
+      _mediaStarted = true;
+      _autoplayNextEpisode = false;
+      if (_mediaStartupTimer) clearTimeout(_mediaStartupTimer);
+      _mediaStartupTimer = null;
+    }
     const forceCloud = ['pause', 'ended', 'pagehide'].includes(detail.eventName);
     const forceLocal = forceCloud || detail.eventName === 'seeked';
     if (persistPlaybackSample(detail, forceCloud, forceLocal)) {
       confirmPlayerFrameReady();
       updatePlaybackHealth(detail);
+      if (detail.eventName === 'ended') showNextEpisodePrompt();
     }
   }
   if (detail?.type === 'resume-applied') {
@@ -1086,6 +1152,9 @@ function handlePlayerHeaderShortcut() {
 }
 
 export function initPlayer() {
+  playerUpNextPlay?.addEventListener('click', playPromptedNextEpisode);
+  playerUpNextDismiss?.addEventListener('click', clearNextEpisodePrompt);
+
   // Start DNS, TCP and TLS setup for the preferred player while the user is
   // browsing. No provider page or media is downloaded until playback starts.
   warmProviderConnections(getSettings().provider);
@@ -1202,10 +1271,17 @@ export function initPlayer() {
 
 function getPlayerSrc(providerKey = _currentProviderKey) {
   const p = playerState;
-  if (p.type === 'movie') {
-    return getProviderUrlFor(providerKey, 'movie', p.id);
-  }
-  return getProviderUrlFor(providerKey, 'tv', p.id, p.season, p.episode);
+  const raw = p.type === 'movie'
+    ? getProviderUrlFor(providerKey, 'movie', p.id)
+    : getProviderUrlFor(providerKey, 'tv', p.id, p.season, p.episode);
+  if (!_autoplayNextEpisode) return raw;
+  try {
+    const url = new URL(raw);
+    // Providers use both spellings. Unknown query parameters are ignored.
+    url.searchParams.set('autoplay', '1');
+    url.searchParams.set('autoPlay', 'true');
+    return url.toString();
+  } catch (_) { return raw; }
 }
 
 function preconnectProvider(url) {
@@ -1348,6 +1424,7 @@ export async function openPlayer(id, type, season, episode) {
   _providerSwitchToken += 1;
   closeProviderMenu();
   _lastHeaderToggleAt = Number.NEGATIVE_INFINITY;
+  _autoplayNextEpisode = false;
   setPlayerHeaderAutohide(getSettings().playerHeaderAutoHide === true, false);
 
   let startSeason = season ?? 1;
@@ -1496,6 +1573,33 @@ function configureNextButton(tmdbData = playerState.tmdbData) {
   playerNextBtn.onclick = nextS === null ? null : () => switchEpisode(nextS, nextE);
 }
 
+function showNextEpisodePrompt() {
+  if (playerState.type !== 'tv' || !playerState.tmdbData) return false;
+  const [season, episode] = getNextEp(playerState.season, playerState.episode, playerState.tmdbData);
+  if (season === null) return false;
+  clearNextEpisodePrompt();
+  _nextEpisodeTarget = { season, episode };
+  if (playerUpNextTitle) playerUpNextTitle.textContent = `Season ${season}, Episode ${episode}`;
+  const autoPlay = getSettings().autoPlay !== false;
+  if (playerUpNextStatus) playerUpNextStatus.textContent = autoPlay
+    ? 'Playing automatically in 5 seconds'
+    : 'Episode finished';
+  playerUpNext?.classList.remove('hidden');
+  if (autoPlay) {
+    _nextEpisodeTimer = setTimeout(() => {
+      const target = _nextEpisodeTarget;
+      if (target) switchEpisode(target.season, target.episode, '', { autoplay: true });
+    }, 5000);
+  }
+  return true;
+}
+
+function playPromptedNextEpisode() {
+  const target = _nextEpisodeTarget;
+  if (!target) return;
+  switchEpisode(target.season, target.episode, '', { autoplay: true });
+}
+
 function saveCurrentEpisodeElapsed() {
   if (flushPlaybackCheckpoint()) {
     _playerOpenedAt = Date.now();
@@ -1510,7 +1614,7 @@ function saveCurrentEpisodeElapsed() {
   resetWatchSession();
 }
 
-async function switchEpisode(season, episode, knownName = '') {
+async function switchEpisode(season, episode, knownName = '', options = {}) {
   if (!playerState.id || playerState.type !== 'tv') return;
   const switchToken = ++_providerSwitchToken;
   const contextKey = playbackContextKey();
@@ -1528,6 +1632,7 @@ async function switchEpisode(season, episode, knownName = '') {
   updatePlayerTitle(playerState.tmdbData?.title || 'Series', season, episode, knownName);
   configureNextButton();
   persistProgress(playerState.id, season, episode).catch(console.error);
+  _autoplayNextEpisode = options.autoplay === true;
   loadPlayerIframe();
   window.dispatchEvent(new CustomEvent('watchStarted', { detail: { id: playerState.id, type: 'tv', season: Number(season), episode: Number(episode) } }));
   loadSeasonData(season).catch(handleSeasonLoadFailure);

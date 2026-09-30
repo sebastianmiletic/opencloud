@@ -143,7 +143,17 @@
     const now = Date.now();
     if (!force && now - (lastVideoReportAt.get(video) || 0) < VIDEO_REPORT_INTERVAL_MS) return;
     const sample = videoSample(video);
-    if (!Number.isFinite(sample.seconds) || !Number.isFinite(sample.durationSeconds)) return;
+    if (!Number.isFinite(sample.seconds) || !Number.isFinite(sample.durationSeconds)) {
+      // A failed manifest often leaves duration as NaN forever. Report startup
+      // state separately so it is visible without saving a bogus checkpoint.
+      lastVideoReportAt.set(video, now);
+      forwardPlayerInput('media-startup', {
+        eventName,
+        sample: { ...sample, seconds: 0, durationSeconds: 0 },
+        sessionKey: pendingResume.sessionKey
+      });
+      return;
+    }
     lastVideoReportAt.set(video, now);
     forwardPlayerInput('playback-progress', { eventName, sample, sessionKey: pendingResume.sessionKey });
   };
@@ -165,6 +175,20 @@
     if (resumeSeconds > duration - 3) return;
     const target = resumeSeconds;
     if (target < 1 || appliedResumeTargets.get(video) === target) return;
+    // loadedmetadata/durationchange do not mean HLS has attached its buffers.
+    // Seeking then can abort the initial segment before the provider is ready.
+    // Wait for actual media data and a seekable range covering the checkpoint.
+    if (Number(video.readyState) < 2 || video.seeking) return;
+    let canSeek = false;
+    try {
+      for (let i = 0; i < video.seekable.length; i += 1) {
+        if (target >= video.seekable.start(i) && target <= video.seekable.end(i)) {
+          canSeek = true;
+          break;
+        }
+      }
+    } catch (_) {}
+    if (!canSeek) return;
     try {
       video.currentTime = target;
       appliedResumeTargets.set(video, target);
@@ -179,7 +203,7 @@
         trackedVideos.forEach((video) => {
           if (!video.isConnected) {
             trackedVideos.delete(video);
-          } else if (!video.paused && !video.ended) {
+          } else if (!video.ended && (!video.paused || video.readyState < 2)) {
             reportVideoProgress(video, 'heartbeat');
           }
         });
@@ -199,12 +223,13 @@
     // Observe the provider's media element without changing its preload or
     // adaptive-streaming decisions. The provider remains in full control of
     // buffering and quality, just as it is in a normal browser tab.
-    ['loadedmetadata', 'durationchange', 'canplay'].forEach((eventName) => {
+    ['loadedmetadata', 'durationchange', 'loadeddata', 'canplay'].forEach((eventName) => {
       video.addEventListener(eventName, () => {
         applyPendingResume(video);
         reportVideoProgress(video, eventName, true);
       }, true);
     });
+    video.addEventListener('progress', () => applyPendingResume(video), true);
     video.addEventListener('timeupdate', () => reportVideoProgress(video, 'timeupdate'), true);
     ['playing', 'pause', 'seeked', 'ended'].forEach((eventName) => {
       video.addEventListener(eventName, () => {
@@ -311,6 +336,17 @@
         scanForVideos();
         try { trackedVideos.forEach(recoverVideo); } catch (_) {}
         broadcastPlayerControl('recover');
+      } else if (data.type === 'play') {
+        pendingResume.sessionKey = String(data.sessionKey || pendingResume.sessionKey || '').slice(0, 160);
+        scanForVideos();
+        try {
+          trackedVideos.forEach(video => {
+            if (!video.ended && Number(video.duration) >= MIN_CONTENT_DURATION_SECONDS) {
+              video.play?.().catch?.(() => {});
+            }
+          });
+        } catch (_) {}
+        broadcastPlayerControl('play');
       }
       return;
     }

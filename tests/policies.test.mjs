@@ -360,6 +360,7 @@ test('native child-frame bridge forwards controls and resumes the content video'
     ended: false,
     readyState: 4,
     networkState: 1,
+    seekable: { length: 1, start: () => 0, end: () => 3600 },
     buffered: {
       length: 1,
       start: () => 0,
@@ -433,6 +434,14 @@ test('native child-frame bridge forwards controls and resumes the content video'
       sessionKey: 'movie:99'
     }
   });
+  listeners.message({
+    source: parent,
+    data: {
+      channel: '__opencloud_player_control_v1__',
+      type: 'play',
+      sessionKey: 'movie:99'
+    }
+  });
 
   let prevented = false;
   let stopped = false;
@@ -458,7 +467,7 @@ test('native child-frame bridge forwards controls and resumes the content video'
     && message.sample.seconds === 321.4
     && Math.abs(message.sample.bufferedAheadSeconds - 38.6) < 0.01));
   assert.ok(messages.some(message => message.type === 'playback-progress' && message.eventName === 'waiting'));
-  assert.equal(recoveryPlayCalls, 0);
+  assert.equal(recoveryPlayCalls, 1);
   assert.ok(messages.some(message => message.type === 'playback-progress' && message.eventName === 'recovery-observed'));
   assert.ok(messages.some(message => message.type === 'toggle-header'));
   assert.ok(messages.some(message => message.type === 'pointer-activity'));

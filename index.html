@@ -532,6 +532,17 @@
       </div>
     </div>
     <div class="player-frame-wrap">
+      <aside class="player-up-next hidden" id="playerUpNext" aria-live="polite" aria-label="Up next">
+        <div>
+          <small>Up next</small>
+          <strong id="playerUpNextTitle">Next episode</strong>
+          <span id="playerUpNextStatus">Episode finished</span>
+        </div>
+        <div class="player-up-next-actions">
+          <button type="button" class="btn btn-primary" id="playerUpNextPlay">Play now</button>
+          <button type="button" class="btn btn-secondary" id="playerUpNextDismiss" aria-label="Dismiss next episode">Not now</button>
+        </div>
+      </aside>
       <div class="player-frame-status" id="playerFrameStatus" role="status" aria-live="polite">
         <i class="fas fa-circle-notch fa-spin player-frame-status-icon" id="playerFrameStatusIcon" aria-hidden="true"></i>
         <strong id="playerFrameStatusTitle">Connecting to source</strong>
@@ -694,7 +705,7 @@
             </div>
             <div class="form-group" style="display:flex;align-items:center;gap:0.75rem;">
               <input type="checkbox" id="settingsAutoPlay" checked style="width:auto;">
-              <label for="settingsAutoPlay" style="margin-bottom:0;">Auto-play videos when opening player</label>
+              <label for="settingsAutoPlay" style="margin-bottom:0;">Automatically play the next episode when the current episode ends</label>
             </div>
           </div>
           <div class="settings-tab-panel hidden" data-panel="themes">
