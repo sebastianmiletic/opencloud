@@ -16,6 +16,54 @@ function message(providerKey, data, context = movie, overrides = {}, previous = 
 const playerEvent = (currentTime = 321.4, extra = {}) => ({ type: 'PLAYER_EVENT',
   data: { event: 'timeupdate', currentTime, duration: 7200, tmdbId: '550', mediaType: 'movie', ...extra } });
 
+const plasmaEvent = (seconds = 321.4, status = 'playing', info = movie, duration = 7200) => ({
+  type: 'PLAYER_EVENT', data: {
+    player_info: { tmdb: info.id, mediaType: info.type, season: info.season, episode: info.episode },
+    player_status: status, player_progress: seconds, player_duration: duration
+  }
+});
+
+test('Plasma relay payloads normalize real VidAPI time/status fields', () => {
+  for (const [status, eventName] of [['playing', 'playing'], ['paused', 'pause'], ['seeked', 'seeked'], ['completed', 'ended']]) {
+    const data = plasmaEvent(321.4, status);
+    assert.deepEqual(message('vsembed', data), {
+      kind: 'progress', eventName, sample: { seconds: 321.4, durationSeconds: 7200 }
+    });
+    assert.deepEqual(message('vsembed', JSON.stringify(data)), message('vsembed', data));
+  }
+  assert.equal(message('vsembed', plasmaEvent(123, 'playing', tv), tv).sample.seconds, 123);
+});
+
+test('Plasma rejects wrong titles/episodes and untrusted or stale nested-frame events', () => {
+  for (const info of [{ ...movie, id: '551' }, { ...movie, type: 'tv' }, { ...movie, id: null }]) {
+    assert.equal(message('vsembed', plasmaEvent(123, 'playing', info)), null);
+  }
+  for (const info of [{ ...tv, season: 2 }, { ...tv, episode: 3 }, { ...tv, episode: null }]) {
+    assert.equal(message('vsembed', plasmaEvent(123, 'playing', info), tv), null);
+  }
+  for (const overrides of [{ source: {} }, { origin: 'https://cloudorchestranova.com' },
+    { origin: 'https://vsembed.ru.attacker.test' }, { origin: 'http://vsembed.ru' }]) {
+    assert.equal(message('vsembed', plasmaEvent(), movie, overrides), null);
+  }
+});
+
+test('Plasma requires fresh numeric time and duration on every event, never ad/startup estimates', () => {
+  const previous = { seconds: 100, durationSeconds: 7200 };
+  for (const seconds of [null, undefined, '123', true, NaN, Infinity, -1, 8000]) {
+    const data = plasmaEvent(123, 'paused');
+    data.data.player_progress = seconds;
+    assert.equal(message('vsembed', data, movie, {}, previous), null);
+  }
+  for (const duration of [null, '7200', 0, 30, Infinity]) {
+    assert.equal(message('vsembed', plasmaEvent(10, 'playing', movie, duration), movie, {}, previous), null);
+  }
+  for (const status of ['unknown', '__proto__', 'constructor', 'toString', null, {}]) {
+    assert.equal(message('vsembed', plasmaEvent(123, status)), null);
+  }
+  assert.equal(message('vsembed', playerEvent()), null);
+  assert.equal(message('ultra', plasmaEvent()), null);
+});
+
 test('documented PLAYER_EVENT objects and JSON strings normalize time without DOM access', () => {
   for (const key of ['ultra', 'vidlink', 'videasy']) {
     assert.deepEqual(message(key, JSON.stringify(playerEvent())), {
@@ -73,6 +121,8 @@ test('CineSrc normalizes events, metadata and getter replies with bounded cached
 
 test('resume URLs use only verified provider parameters and preserve TV coordinates', () => {
   const cases = [
+    ['vsembed', 'https://vsembed.ru/embed/movie/550', 'startAt'],
+    ['vsembed', 'https://vsembed.ru/embed/tv/1399/1/2?autoplay=1', 'startAt'],
     ['platinum', 'https://cinesrc.st/embed/tv/1399?s=1&e=2', 't'],
     ['ultra', 'https://vidphantom.com/embed/tv/1399/1/2?autoplay=1', 'startAt'],
     ['vidlink', 'https://vidlink.pro/movie/550?title=true', 'startAt'],
@@ -90,8 +140,8 @@ test('resume URLs use only verified provider parameters and preserve TV coordina
     }
     assert.equal(adapters.withBrowserResume(input, key, 0), input);
   }
-  const unsupported = 'https://vsembed.ru/embed/movie/550';
-  assert.equal(adapters.withBrowserResume(unsupported, 'vsembed', 321), unsupported);
+  const unsupported = 'https://vidcore.org/embed/movie/550';
+  assert.equal(adapters.withBrowserResume(unsupported, 'delta', 321), unsupported);
   assert.equal(adapters.withBrowserResume(unsupported, 'platinum', 321), unsupported);
 });
 
@@ -159,6 +209,7 @@ function playerHarness(storage, state = movie, key = 'platinum') {
     CustomEvent: class {}, setTimeout: fn => { callbacks.push(fn); },
     getProviderUrlFor: (provider, type, id, season, episode) => provider === 'platinum'
       ? `https://cinesrc.st/embed/${type}/${id}${type === 'tv' ? `?s=${season}&e=${episode}` : ''}`
+      : provider === 'vsembed' ? `https://vsembed.ru/embed/${type}/${id}${type === 'tv' ? `/${season}/${episode}` : ''}`
       : `https://vidphantom.com/embed/${type}/${id}`
   };
   frame.contentWindow.postMessage = (data, origin) => commands.push({ data, origin });
@@ -194,6 +245,58 @@ test('movie close and website pagehide preserve the latest sample, then a fresh 
     const otherAccount = await storageHarness(local, 'account-b');
     assert.equal(otherAccount.getWatchProgress()['550'], undefined);
   }
+});
+
+test('Plasma saves the latest movie sample on player close/site exit and resumes after reload', async () => {
+  for (const action of ['close', 'pagehide', 'pause']) {
+    const local = localHarness(), storage = await storageHarness(local, 'account-a');
+    const h = playerHarness(storage, movie, 'vsembed');
+    h.send(plasmaEvent(123.4));
+    h.send(plasmaEvent(125.7));
+    assert.equal(storage.getWatchProgress()['550'].playbackSeconds, 123.4);
+    if (action === 'close') h.context.closePlayer();
+    else if (action === 'pagehide') h.callbacks.pagehide();
+    else h.send(plasmaEvent(125.7, 'paused'));
+    const reloaded = await storageHarness(local, 'account-a');
+    const next = playerHarness(reloaded, movie, 'vsembed');
+    assert.equal(new URL(next.context.getPlayerSrc()).searchParams.get('startAt'), '125.7');
+    assert.ok(reloaded.uploaded.some(upload => upload.item.progress_seconds === 126));
+    const otherAccount = await storageHarness(local, 'account-b');
+    assert.equal(otherAccount.getWatchProgress()['550'], undefined);
+  }
+});
+
+test('Plasma checkpoints stay per episode and backward seeks save after a confirmed resume', async () => {
+  const local = localHarness(), storage = await storageHarness(local, 'account-a');
+  const h = playerHarness(storage, tv, 'vsembed');
+  h.context._sessionResumePoint = { contextKey: 'tv:1399:s1:e2', seconds: 600, durationSeconds: 7200, active: true };
+  h.send(plasmaEvent(0, 'playing', tv));
+  assert.equal(storage.getWatchProgress()['1399'], undefined);
+  h.send(plasmaEvent(600, 'seeked', tv));
+  assert.equal(h.context._sessionResumePoint.active, false);
+  h.send(plasmaEvent(500, 'seeked', tv));
+  h.send(plasmaEvent(505, 'paused', tv));
+  const reloaded = await storageHarness(local, 'account-a');
+  assert.equal(reloaded.getWatchProgress()['1399'].episodes.s1e2.playbackSeconds, 505);
+  const next = playerHarness(reloaded, tv, 'vsembed');
+  const url = new URL(next.context.getPlayerSrc());
+  assert.equal(url.pathname, '/embed/tv/1399/1/2');
+  assert.equal(url.searchParams.get('startAt'), '505');
+  next.context.playerState.episode = 3;
+  assert.equal(new URL(next.context.getPlayerSrc()).searchParams.has('startAt'), false);
+  next.send(plasmaEvent(510, 'playing', tv)); // Old episode cannot update the new one.
+  assert.equal(reloaded.getWatchProgress()['1399'].episodes.s1e3, undefined);
+});
+
+test('Plasma completion is saved as a real end event, without duplicate desktop telemetry', async () => {
+  const storage = await storageHarness(localHarness(), 'account-a');
+  const h = playerHarness(storage, tv, 'vsembed');
+  h.send(plasmaEvent(7200, 'completed', tv));
+  assert.equal(storage.getWatchProgress()['1399'].episodes.s1e2.playbackSeconds, 7200);
+  assert.equal(h.context.prompted, true);
+  h.context.isTauri = () => true;
+  h.send(plasmaEvent(100, 'seeked', tv));
+  assert.equal(storage.getWatchProgress()['1399'].episodes.s1e2.playbackSeconds, 7200);
 });
 
 test('pause/seeked save immediately; individual episode checkpoints survive reopen', async () => {

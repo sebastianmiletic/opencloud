@@ -2,6 +2,7 @@
 import { isPlausiblePlaybackSample } from './playback-progress.js';
 
 export const BROWSER_PLAYBACK = Object.freeze({
+  vsembed: { origins: ['https://vsembed.ru'], resumeParam: 'startAt', protocol: 'vidapi' },
   platinum: { origins: ['https://cinesrc.st'], resumeParam: 't', protocol: 'cinesrc' },
   ultra: {
     origins: ['https://vidphantom.com', 'https://vidphantom.live', 'https://vidphantom.online',
@@ -35,8 +36,11 @@ function sameContent(data, context) {
   return true;
 }
 
-const eventNames = { play: 'playing', playing: 'playing', pause: 'pause',
-  timeupdate: 'timeupdate', seeking: 'seeking', seeked: 'seeked', ended: 'ended' };
+const eventNames = Object.assign(Object.create(null), { play: 'playing', playing: 'playing', pause: 'pause',
+  timeupdate: 'timeupdate', seeking: 'seeking', seeked: 'seeked', ended: 'ended' });
+const vidapiEventNames = Object.assign(Object.create(null), {
+  playing: 'playing', paused: 'pause', completed: 'ended', seeked: 'seeked'
+});
 
 /** Return a normalized event, or null for unknown, stale or untrusted messages.
  * State is per iframe generation and supplies missing time/duration for CineSrc
@@ -78,9 +82,25 @@ export function parseProviderEvent(event, options, previous = {}) {
   } else {
     if (envelope.type !== 'PLAYER_EVENT') return null;
     data = objectData(envelope.data);
-    if (!data || !sameContent(data, context)) return null;
-    name = data.event;
-    if (!eventNames[name]) return null;
+    if (!data) return null;
+    if (protocol === 'vidapi') {
+      // Plasma relays the nested player's VidAPI payload through its own
+      // iframe. Trust the relay's source/origin, never arbitrary descendants.
+      const info = objectData(data.player_info);
+      if (!info || !sameContent({ tmdbId: info.tmdb, mediaType: info.mediaType,
+        season: info.season, episode: info.episode }, context)) return null;
+      if (typeof data.player_status !== 'string') return null;
+      name = vidapiEventNames[data.player_status];
+      if (!name) return null;
+      data = { currentTime: data.player_progress, duration: data.player_duration };
+      // Every VidAPI event carries its own time and duration. Never reuse the
+      // previous sample when a malformed or startup event omits either field.
+      if (typeof data.currentTime !== 'number' || typeof data.duration !== 'number') return null;
+    } else {
+      if (!sameContent(data, context)) return null;
+      name = data.event;
+      if (!eventNames[name]) return null;
+    }
   }
   const canUsePrevious = ['play', 'playing', 'pause', 'ended'].includes(name);
   const time = data.currentTime ?? (canUsePrevious ? previous.seconds : undefined);

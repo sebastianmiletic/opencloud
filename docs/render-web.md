@@ -59,6 +59,7 @@ playback. Desktop installation/downgrade actions are not available on the web.
 
 | Source | Playback messages | Saved-position input |
 | --- | --- | --- |
+| Plasma | Relayed VidAPI `PLAYER_EVENT` (`player_progress` / `player_duration`) | `startAt` |
 | Platinum | CineSrc `cinesrc:*` events/getter responses | `t` and `continueprompt=false` |
 | Ultra | `PLAYER_EVENT` | `startAt` |
 | Illumini | `PLAYER_EVENT` | `startAt` |
@@ -94,7 +95,16 @@ messages, changed provider protocols, or unsupported redirects can also prevent
 saving/restoring. Browser autoplay policies still apply: automatically restoring
 a position is not a guarantee of automatic audible playback.
 
-References checked for this change: [CineSrc](https://cinesrc.st/docs),
+Plasma's events are relayed by `vsembed.ru` from its nested CloudOrchestra
+player. The browser integration accepts only the current outer iframe's source
+and exact `https://vsembed.ru` origin, validates `player_info.tmdb`, media type and
+TV coordinates, and maps `playing`, `paused`, `seeked` and `completed` statuses.
+The `startAt` parameter is preserved through both wrapper layers into the media
+player's configuration. See [Plasma verification](plasma-web-resume.md) for
+actual movie/episode resume results and remaining browser limitations.
+
+References checked for this change: [VidAPI](https://vidapi.ru/api), Plasma's
+public wrapper/player scripts, [CineSrc](https://cinesrc.st/docs),
 [VidPhantom](https://vidphantom.com), [VidLink](https://vidlink.pro), and Helix's
 public embed scripts (which read the `progress` query and emit `PLAYER_EVENT`).
 A live Chromium CineSrc movie-550 probe, with muted autoplay, observed a requested
