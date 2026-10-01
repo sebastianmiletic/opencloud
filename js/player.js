@@ -10,6 +10,7 @@ import { invokeDesktop, isTauri, openExternal } from './desktop.js';
 import { connectionScoreForLatency, connectionScoreForPlayback, stallThresholdsForConnection } from './player-health.js';
 import { getSavedPlaybackDuration, getSavedPlaybackSeconds, isPlausiblePlaybackSample, mergePlaybackCheckpoint } from './playback-progress.js';
 import { getNextProviderCandidate, isCurrentFrameGeneration } from './player-frame-lifecycle.js';
+import { BROWSER_PLAYBACK, parseProviderEvent, withBrowserResume, cinesrcCommand } from './provider-playback.js';
 
 /* DOM refs */
 const playerOverlay = document.getElementById('playerOverlay');
@@ -86,6 +87,7 @@ let _mediaStartupObserved = false;
 let _nextEpisodeTarget = null;
 let _nextEpisodeTimer = null;
 let _autoplayNextEpisode = false;
+let _browserProgress = {};
 let _playbackBufferingSince = 0;
 let _playbackRecoverySent = false;
 let _playbackLastAdvancedAt = 0;
@@ -204,7 +206,9 @@ function isProviderMenuOpen() {
 }
 
 function providerMeta(provider) {
-  return [provider.quality, provider.speed, provider.subtitles ? 'Subtitles' : null]
+  const key = Object.keys(PROVIDERS).find(key => PROVIDERS[key] === provider);
+  return [provider.quality, provider.speed, provider.subtitles ? 'Subtitles' : null,
+    !isTauri() ? (BROWSER_PLAYBACK[key] ? 'Web progress API' : 'No web progress API') : null]
     .filter(Boolean)
     .join(' · ');
 }
@@ -371,6 +375,7 @@ function resetPlaybackMonitoring() {
   _mediaStartupTimer = null;
   _mediaStarted = false;
   _mediaStartupObserved = false;
+  _browserProgress = {};
   _playbackBufferingSince = 0;
   _playbackRecoverySent = false;
   _playbackLastAdvancedAt = 0;
@@ -674,6 +679,9 @@ function requestFreshPlaybackCheckpoint(timeoutMs = 120) {
       resolve(saved);
     };
     _checkpointResolvers.push(finish);
+    if (!isTauri() && _currentProviderKey === 'platinum') {
+      playerFrame.contentWindow.postMessage(cinesrcCommand('getCurrentTime'), 'https://cinesrc.st');
+    }
     playerFrame.contentWindow.postMessage({
       channel: PLAYER_CONTROL_CHANNEL,
       type: 'checkpoint',
@@ -779,6 +787,89 @@ function flushPlaybackCheckpoint() {
   const contextKey = playbackContextKey();
   if (!_lastPlaybackCheckpoint || _lastPlaybackCheckpoint.contextKey !== contextKey) return false;
   return persistPlaybackSample(_lastPlaybackCheckpoint.detail, true);
+}
+
+function handleBrowserProviderMessage(event) {
+  // Tauri's injected bridge remains authoritative there: do not double-save.
+  if (isTauri() || !playerFrame || playerOverlay?.classList.contains('hidden')
+    || playerOverlay?.classList.contains('closing')) return;
+  const context = currentPlaybackContext();
+  const parsed = parseProviderEvent(event, {
+    providerKey: _currentProviderKey, frameWindow: playerFrame.contentWindow, context
+  }, _browserProgress);
+  if (!parsed) return;
+  if (parsed.kind === 'episode') {
+    if (!parsed.internalNavigation
+      || (parsed.season === context.season && parsed.episode === context.episode)) return;
+    // CineSrc can change episodes without replacing its iframe. Save the old
+    // episode first and update our identity, otherwise new time is saved to it.
+    _providerSwitchToken += 1;
+    saveCurrentEpisodeElapsed();
+    setPlayerState({ ...playerState, season: parsed.season, episode: parsed.episode });
+    _lastPlaybackCheckpoint = null;
+    _activePlaybackFrameId = null;
+    _lastLocalCheckpointAt = 0;
+    _lastCloudCheckpointAt = 0;
+    _resumeConfirmationKey = null;
+    resetPlaybackMonitoring();
+    const resumePoint = getCurrentResumePoint();
+    _sessionResumePoint = { contextKey: playbackContextKey(), ...resumePoint,
+      active: resumePoint.seconds >= 1, browserAwaitMetadata: true, browserSeekPending: true };
+    updatePlayerTitle(playerState.tmdbData?.title || 'Series', parsed.season, parsed.episode);
+    configureNextButton();
+    persistProgress(playerState.id, parsed.season, parsed.episode).catch(console.error);
+    loadSeasonData(parsed.season).catch(handleSeasonLoadFailure);
+    return;
+  }
+  if (parsed.kind === 'ready') {
+    confirmPlayerFrameReady();
+    playerFrame.contentWindow.postMessage(cinesrcCommand('getDuration'), 'https://cinesrc.st');
+    return;
+  }
+  if (parsed.kind === 'metadata') {
+    _browserProgress.durationSeconds = parsed.durationSeconds;
+    // Only a new media metadata event unlocks an internal episode transition;
+    // a delayed getter reply for the previous video must not do so.
+    if (parsed.mediaLoaded && _sessionResumePoint) {
+      _sessionResumePoint.browserAwaitMetadata = false;
+    }
+    playerFrame.contentWindow.postMessage(cinesrcCommand('getCurrentTime'), 'https://cinesrc.st');
+    return;
+  }
+  if (_sessionResumePoint?.browserAwaitMetadata) return;
+  if (_sessionResumePoint?.browserSeekPending) {
+    if (parsed.eventName === 'checkpoint') return;
+    _sessionResumePoint.browserSeekPending = false;
+    // Wait for usable time/duration rather than seeking the previous video.
+    // This also removes a carried-over start offset when the next episode has
+    // no saved position. Use CineSrc's documented command, not DOM access.
+    playerFrame.contentWindow.postMessage(cinesrcCommand('seek', [_sessionResumePoint.seconds]), 'https://cinesrc.st');
+    return;
+  }
+  const { sample, eventName } = parsed;
+  const previousSeconds = _browserProgress.seconds || 0;
+  _browserProgress = { ...sample };
+  const detail = { sessionKey: playbackContextKey(), frameId: `browser:${_playerFrameSessionToken}`,
+    sample, eventName };
+  const forceCloud = ['pause', 'ended'].includes(eventName);
+  if (!persistPlaybackSample(detail, forceCloud, forceCloud || ['seeked', 'checkpoint'].includes(eventName))) return;
+  _playbackSignalsActive = true;
+  stopProviderHealthProbes();
+  confirmPlayerFrameReady();
+  if (eventName === 'playing' || (eventName === 'timeupdate' && sample.seconds > previousSeconds)) {
+    _mediaStarted = true;
+    _autoplayNextEpisode = false;
+    if (_mediaStartupTimer) clearTimeout(_mediaStartupTimer);
+    _mediaStartupTimer = null;
+  }
+  if (eventName === 'ended') showNextEpisodePrompt();
+  if (_sessionResumePoint?.seconds >= 1 && !_sessionResumePoint.active) {
+    const key = `${playbackContextKey()}:${_sessionResumePoint.seconds}`;
+    if (key !== _resumeConfirmationKey) {
+      _resumeConfirmationKey = key;
+      showToast(`Resumed at ${formatPlaybackTime(_sessionResumePoint.seconds)}`, 'info');
+    }
+  }
 }
 
 function handlePlayerFrameInput(detail) {
@@ -1050,6 +1141,10 @@ window.addEventListener('beforeunload', () => {
   flushElapsedAndSave();
   recordCurrentSession();
 });
+// pagehide also runs on mobile navigation / BFCache, where beforeunload may not.
+// Flush the last observed media time synchronously to account-scoped localStorage.
+// Cloud writes are best effort; initStorage reconciles local checkpoints on reopen.
+window.addEventListener('pagehide', () => { flushPlaybackCheckpoint(); });
 
 function updateFullscreenButton(fullscreen) {
   _isPlayerFullscreen = fullscreen;
@@ -1226,6 +1321,7 @@ export function initPlayer() {
   window.addEventListener('opencloud:player-frame-input', (event) => {
     handlePlayerFrameInput(event.detail);
   });
+  window.addEventListener('message', handleBrowserProviderMessage);
   window.addEventListener('offline', () => {
     if (!playerOverlay?.classList.contains('hidden')) setPlayerHealth('failed', `${providerName(_currentProviderKey)} · Offline`, true, 1);
   });
@@ -1271,9 +1367,10 @@ export function initPlayer() {
 
 function getPlayerSrc(providerKey = _currentProviderKey) {
   const p = playerState;
-  const raw = p.type === 'movie'
+  let raw = p.type === 'movie'
     ? getProviderUrlFor(providerKey, 'movie', p.id)
     : getProviderUrlFor(providerKey, 'tv', p.id, p.season, p.episode);
+  if (!isTauri()) raw = withBrowserResume(raw, providerKey, getCurrentResumePoint().seconds);
   if (!_autoplayNextEpisode) return raw;
   try {
     const url = new URL(raw);
@@ -1420,6 +1517,8 @@ export function closePlayer() {
 
 export async function openPlayer(id, type, season, episode) {
   if (!playerOverlay || !playerFrame) return;
+  // Opening another title must not discard its last unsaved media sample.
+  flushPlaybackCheckpoint();
 
   _providerSwitchToken += 1;
   closeProviderMenu();

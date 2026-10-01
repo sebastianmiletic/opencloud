@@ -49,11 +49,60 @@ a faster Render plan will not fix a slow video CDN.
 ## Browser differences
 
 Embedded sources can reject specific site origins or browser privacy policies.
-The website cannot inject Tauri's script into cross-origin providers, so exact
-video progress/resume and popup interception are not equivalent to the desktop
-app. Browser-native popup blocking applies. Verify each source on the deployed
-HTTPS domain; a successful local build does not guarantee provider playback.
-Desktop installation/downgrade actions are not available on the web.
+The website cannot inject Tauri's script into cross-origin providers. Progress
+uses the providers' own messaging APIs; popup interception is not equivalent to
+the desktop app. Browser-native popup blocking applies. Verify each source on
+the deployed HTTPS domain; a successful local build does not guarantee provider
+playback. Desktop installation/downgrade actions are not available on the web.
+
+### Saving and resuming playback
+
+| Source | Playback messages | Saved-position input |
+| --- | --- | --- |
+| Platinum | CineSrc `cinesrc:*` events/getter responses | `t` and `continueprompt=false` |
+| Ultra | `PLAYER_EVENT` | `startAt` |
+| Illumini | `PLAYER_EVENT` | `startAt` |
+| Helix (`player.videasy.net`) | `PLAYER_EVENT` | `progress` |
+
+Messages must match the active iframe and a verified provider origin. Providers
+with content identifiers must match the title, type and TV episode. Short
+advertisement samples and malformed messages are rejected. Movies and each
+individual TV episode use the existing account-scoped progress store, shared
+with the app through Supabase. Collections/history are not cleared or migrated.
+
+The latest received position is cached in memory; localStorage checkpoints run
+at most every ten seconds during ordinary playback. Pause/seek events, closing
+the player, hiding the page and `pagehide` flush the latest observed position.
+Cloud synchronization is periodic and best effort on exit. On reopening,
+`initStorage()` reconciles local and cloud progress, including locally saved
+checkpoints whose cloud request did not finish. An abrupt browser/OS crash can
+lose updates since the most recent durable checkpoint, and events cannot report
+time more precisely than the provider emits it.
+
+Reopening a supported source supplies the saved position automatically, without
+an OpenCloud confirmation prompt. CineSrc also supports getter requests for a
+fresh checkpoint and internal episode-change events to keep progress assigned
+to the correct episode. Native Tauri playback continues to use its existing
+all-frame bridge, not a second browser listener.
+
+Other visible sources currently have no verified web progress integration and
+are marked **No web progress API** in the player source menu. Do not substitute
+elapsed wall-clock time or attempt to read their cross-origin video DOM.
+Illumini documents that its own existing browser progress may override
+`startAt`; OpenCloud cannot clear another origin's storage. Blocking provider
+messages, changed provider protocols, or unsupported redirects can also prevent
+saving/restoring. Browser autoplay policies still apply: automatically restoring
+a position is not a guarantee of automatic audible playback.
+
+References checked for this change: [CineSrc](https://cinesrc.st/docs),
+[VidPhantom](https://vidphantom.com), [VidLink](https://vidlink.pro), and Helix's
+public embed scripts (which read the `progress` query and emit `PLAYER_EVENT`).
+A live Chromium CineSrc movie-550 probe, with muted autoplay, observed a requested
+321.4-second start followed by time advancing from 321.400995 to 325.06627.
+This validates that probe, not every source/title or the user's browser.
+The full player also passed mocked cross-origin browser tests for movie close,
+real page navigation/reload and per-episode TV resume. Unit tests exercise the
+actual storage/persistence functions with network/UI dependencies stubbed.
 
 ## Local production smoke test
 
