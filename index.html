@@ -3,9 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Native HLS cannot set per-video referrer policy. Movie embeds explicitly use origin. -->
+  <meta name="referrer" content="no-referrer">
   <title>Open Cloud</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Cpath fill='%23fff' d='M403.9 221.8c-5.5-57.9-54.9-103.2-114.3-103.2-46.5 0-86.6 27.6-105.2 67.3-5.5-1.1-11.2-1.7-17-1.7-47.5 0-86 38.5-86 86 0 5 .5 9.9 1.3 14.7C34.8 299.3 0 340.8 0 390c0 56.6 45.9 102.4 102.4 102.4h307.2C466.1 492.4 512 446.5 512 390c0-45.6-30.1-84.2-71.6-97.1 1.4-7.2 2.1-14.6 2.1-22.2 0-21.7-6.7-41.9-18.1-58.6l-20.7 9.7z'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="styles.css?v=25">
+  <link rel="stylesheet" href="sports.css?v=1">
 </head>
 <body>
   <a class="skip-link" href="#mainContent">Skip to content</a>
@@ -81,6 +84,10 @@
             <button class="nav-btn active" data-tab="home">
               <i class="fas fa-home"></i>
               <span>Home</span>
+            </button>
+            <button type="button" class="nav-btn" data-tab="sports" aria-label="Sports">
+              <i class="fas fa-futbol" aria-hidden="true"></i>
+              <span>Sports</span>
             </button>
             <button class="nav-btn" data-tab="collection">
               <i class="fas fa-layer-group"></i>
@@ -228,6 +235,53 @@
           </div>
           <div class="category-row" id="popularCollectionsRow"></div>
         </div>
+      </section>
+
+      <section id="sportsView" class="sports-view hidden" aria-labelledby="sportsTitle">
+        <div class="sports-header">
+          <div>
+            <h2 id="sportsTitle">Sports</h2>
+            <p>Football fixtures, live scores, and streams from camel1.to</p>
+          </div>
+          <div class="sports-refresh-wrap">
+            <button type="button" class="btn btn-secondary" id="sportsRefresh"><i class="fas fa-rotate" aria-hidden="true"></i> Refresh</button>
+            <span class="sports-updated" id="sportsUpdated" role="status"></span>
+          </div>
+        </div>
+        <div id="sportsPlayer" class="sports-player hidden" aria-labelledby="sportsPlayerTitle">
+          <div class="sports-player-header">
+            <div>
+              <h3 id="sportsPlayerTitle">Live match</h3>
+              <p id="sportsPlayerLeague"></p>
+            </div>
+            <div class="sports-player-actions">
+              <button type="button" class="btn btn-secondary" id="sportsFullscreen" aria-label="Fullscreen live sports"><i class="fas fa-expand" aria-hidden="true"></i></button>
+              <button type="button" class="btn btn-secondary" id="sportsPlayerClose" aria-label="Close live sports player"><i class="fas fa-times" aria-hidden="true"></i></button>
+            </div>
+          </div>
+          <video id="sportsVideo" class="sports-video" controls playsinline preload="none" aria-label="Live sports video"></video>
+          <div class="sports-playback-footer">
+            <p id="sportsPlaybackStatus" class="sports-playback-status" role="status"></p>
+            <div class="sports-source-controls">
+              <label class="sports-field">Video source<select id="sportsStream" disabled></select></label>
+              <button type="button" class="btn btn-secondary hidden" id="sportsRetry">Retry stream</button>
+            </div>
+          </div>
+        </div>
+        <div class="sports-toolbar">
+          <label class="sports-field sports-search-field">Team or league<input type="search" id="sportsSearch" placeholder="Search fixtures…" autocomplete="off"></label>
+          <label class="sports-field">Match date (UTC)<input type="date" id="sportsDate"></label>
+          <button type="button" class="btn btn-secondary sports-today" id="sportsToday">Today</button>
+        </div>
+        <p class="sports-timezone" id="sportsTimezone"></p>
+        <div class="sports-filters" role="group" aria-label="Filter sports fixtures">
+          <button type="button" class="sports-filter" data-sports-phase="all" aria-pressed="true">All matches</button>
+          <button type="button" class="sports-filter" data-sports-phase="live" aria-pressed="false">Live now</button>
+          <button type="button" class="sports-filter" data-sports-phase="upcoming" aria-pressed="false">Upcoming</button>
+          <button type="button" class="sports-filter" data-sports-phase="results" aria-pressed="false">Results</button>
+        </div>
+        <p class="sports-summary" id="sportsSummary" role="status">Select Sports to load fixtures</p>
+        <div id="sportsMatches" aria-busy="false"></div>
       </section>
 
       <section id="collectionsView" class="collections-view hidden">

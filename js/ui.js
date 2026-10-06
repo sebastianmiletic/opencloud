@@ -18,6 +18,7 @@ import { showToast, lockScroll, unlockScroll, showConfirm, escapeHtml } from './
 import { openPlayer } from './player.js';
 import { renderHeroSlides } from './hero.js';
 import { resolveUpNextEpisode } from './series.js';
+import { initSports } from './sports.js';
 
 /* DOM refs */
 const searchInput = document.getElementById('searchInput');
@@ -26,6 +27,7 @@ const searchResultsBody = document.getElementById('searchResultsBody');
 const searchResultsCount = document.getElementById('searchResultsCount');
 const clearSearchBtn = document.getElementById('clearSearch');
 const homeView = document.getElementById('homeView');
+const sportsView = document.getElementById('sportsView');
 const collectionView = document.getElementById('collectionView');
 const collectionGrid = document.getElementById('collectionGrid');
 const historyView = document.getElementById('historyView');
@@ -194,6 +196,7 @@ async function fetchFranchiseResults(franchise) {
 
 /* Nav */
 export function initNav() {
+  initSports();
   const navBtns = document.querySelectorAll('.nav-btn');
   navBtns.forEach(btn => {
     btn.addEventListener('click', () => {
@@ -208,6 +211,7 @@ export function initNav() {
 function toggleView(tab) {
   document.getElementById('devView')?.classList.add('hidden');
   homeView?.classList.toggle('hidden', tab !== 'home');
+  sportsView?.classList.toggle('hidden', tab !== 'sports');
   collectionView?.classList.toggle('hidden', tab !== 'collection');
   historyView?.classList.toggle('hidden', tab !== 'history');
   searchView?.classList.add('hidden');
@@ -448,6 +452,7 @@ function renderSearchResults(results) {
 /* Search Gallery View */
 function showSearchGallery(query) {
   if (!query || query.length < 2) return;
+  sportsView?.classList.add('hidden');
   _previousView = 'home';
   _homeScrollY = window.scrollY;
   searchResults?.classList.add('hidden');
@@ -543,6 +548,7 @@ function applySearchFilters(results) {
 
 /* Genre Gallery */
 export async function showGenreGallery(genreId, genreName) {
+  sportsView?.classList.add('hidden');
   _previousView = 'home';
   _homeScrollY = window.scrollY;
   searchResults?.classList.add('hidden');
@@ -587,6 +593,7 @@ export async function showGenreGallery(genreId, genreName) {
 
 /* Collection Gallery */
 export async function showCollectionGallery(collectionId, collectionName) {
+  sportsView?.classList.add('hidden');
   const fromCollections = !document.getElementById('collectionsView')?.classList.contains('hidden');
   _previousView = fromCollections ? 'collections' : 'home';
   if (!fromCollections) _homeScrollY = window.scrollY;
@@ -902,6 +909,7 @@ export async function showCollectionsGallery() {
 
   if (!view) return;
 
+  sportsView?.classList.add('hidden');
   // Save scroll position before leaving home
   _homeScrollY = window.scrollY;
 
@@ -986,6 +994,7 @@ export async function showCollectionsGallery() {
 
 /* Show a full franchise gallery (all movies + TV) */
 async function showFranchiseGallery(franchise, displayName) {
+  sportsView?.classList.add('hidden');
   _previousView = 'collections';
   searchResults?.classList.add('hidden');
   homeView?.classList.add('hidden');

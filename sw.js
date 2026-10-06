@@ -1,5 +1,5 @@
 /** Open Cloud Service Worker — auto-update from GitHub raw */
-const CACHE_NAME = 'openccloud-v3.9.19';
+const CACHE_NAME = 'openccloud-v3.9.20';
 const GITHUB_RAW = 'https://raw.githubusercontent.com/sebastianmiletic/opencloud/main/';
 
 /* Only static files that exist in the repo (env.js is server-generated) */
@@ -7,6 +7,7 @@ const FILES_TO_CACHE = [
   '/',
   '/index.html',
   '/styles.css',
+  '/sports.css',
   '/beta.css',
   '/js/main.js',
   '/js/auth.js',
@@ -14,6 +15,10 @@ const FILES_TO_CACHE = [
   '/js/dev-panel-policy.js',
   '/js/api.js',
   '/js/ui.js',
+  '/js/sports.js',
+  '/js/sports-api.js',
+  '/js/sports-data.js',
+  '/js/sports-playback.js',
   '/js/player.js',
   '/js/config.js',
   '/js/settings.js',
@@ -61,8 +66,9 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const { request } = event;
 
-  // Only intercept same-origin GET requests
-  if (request.method !== 'GET' || !new URL(request.url).origin.includes(self.location.origin)) {
+  // Live scores and short-lived sports tokens must never use the static cache.
+  const url = new URL(request.url);
+  if (request.method !== 'GET' || url.origin !== self.location.origin || url.pathname === '/api/sports') {
     return; // let browser handle it normally
   }
 

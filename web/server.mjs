@@ -2,6 +2,7 @@ import http from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { sportsUpstream } from '../js/sports-data.js';
 
 const project = fileURLToPath(new URL('../', import.meta.url));
 const mime = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css',
@@ -25,6 +26,9 @@ export function upstreamFor(url, env) {
     headers.Authorization = `Bearer ${env.TMDB_BEARER_TOKEN}`;
   } else if (url.pathname === '/api/omdb') {
     upstream = new URL('https://www.omdbapi.com/');
+  } else if (url.pathname === '/api/sports') {
+    upstream = sportsUpstream(url.searchParams.get('resource'), Object.fromEntries(url.searchParams));
+    return upstream ? { url: upstream, headers: { ...headers, 'Accept-Language': 'en' } } : null;
   } else return null;
   for (const [key, value] of url.searchParams) {
     if (!['api_key', 'apikey', 'access_token', 'callback'].includes(key.toLowerCase())) upstream.searchParams.append(key, value);
@@ -54,18 +58,24 @@ export function createWebServer({ env = process.env, root = path.join(project, '
         const upstream = upstreamFor(url, env);
         if (!upstream) return send(404, '{}');
         const key = upstream.url.href;
-        const cached = cache.get(key);
-        if (cached && cached.expires > Date.now()) return send(200, cached.body, 'application/json', 'public, max-age=60');
+        const sports = url.pathname === '/api/sports';
+        const cacheable = !sports || url.searchParams.get('resource') === 'schedule';
+        const caching = cacheable ? `public, max-age=${sports ? 15 : 60}` : 'no-store';
+        const cached = cacheable && cache.get(key);
+        if (cached && cached.expires > Date.now()) return send(200, cached.body, 'application/json', caching);
         if (inFlight >= 24) { res.setHeader('Retry-After', '5'); return send(429, '{"error":"Busy. Retry shortly."}'); }
         inFlight++;
         try {
           const response = await fetchImpl(upstream.url, { headers: upstream.headers, redirect: 'error', signal: AbortSignal.timeout(15000) });
           if (!response.ok) return send(response.status, '{"error":"Catalog request failed"}');
           const body = await response.text();
-          JSON.parse(body);
-          if (cache.size >= 500) cache.delete(cache.keys().next().value);
-          cache.set(key, { body, expires: Date.now() + 60000 });
-          return send(200, body, 'application/json', 'public, max-age=60');
+          if (sports && body.length > 3 * 1024 * 1024) throw new Error('Oversized sports response');
+          const parsed = JSON.parse(body);
+          if (cacheable && (!sports || parsed.status === 200)) {
+            if (cache.size >= 500) cache.delete(cache.keys().next().value);
+            cache.set(key, { body, expires: Date.now() + (sports ? 15000 : 60000) });
+          }
+          return send(200, body, 'application/json', sports && parsed.status !== 200 ? 'no-store' : caching);
         } catch { return send(502, '{"error":"Catalog temporarily unavailable"}'); }
         finally { inFlight--; }
       }

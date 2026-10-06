@@ -1,3 +1,5 @@
+mod sports;
+
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -706,6 +708,7 @@ pub fn run() {
             list_past_versions,
             downgrade_version,
             probe_provider,
+            sports::fetch_sports,
             restart_app,
             set_player_fullscreen
         ])

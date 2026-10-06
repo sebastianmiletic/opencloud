@@ -37,6 +37,31 @@ test('Render serves build assets and public config without leaking server creden
   }
 });
 
+test('sports proxy uses fixed public routes and never caches playback tokens', async () => {
+  let requests = 0;
+  const server = createWebServer({ fetchImpl: async (url, options) => {
+    requests++;
+    assert.equal(url.hostname, 'api.cameltv.live');
+    assert.equal(options.headers.Authorization, undefined);
+    assert.equal(options.redirect, 'error');
+    assert.equal(url.searchParams.has('url'), false);
+    return new Response('{"status":200,"data":{"txSecret":"public-token"}}');
+  } });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    assert.equal((await fetch(base + '/api/sports?resource=account')).status, 404);
+    assert.equal((await fetch(base + '/api/sports?resource=schedule&date=20260230')).status, 404);
+    for (let i = 0; i < 2; i++) {
+      const response = await fetch(base + '/api/sports?resource=token&streamName=sd-test&url=https://evil.test');
+      assert.equal(response.status, 200); assert.equal(response.headers.get('cache-control'), 'no-store');
+    }
+    assert.equal(requests, 2);
+    for (let i = 0; i < 2; i++) assert.equal((await fetch(base + '/api/sports?resource=schedule&date=20261006')).status, 200);
+    assert.equal(requests, 3, 'schedules receive a short cache, tokens do not');
+  } finally { await new Promise(resolve => server.close(resolve)); }
+});
+
 test('catalog proxy has fixed destinations and owns authentication parameters', () => {
   const env = { OMDB_API_KEY: 'server-key' };
   assert.equal(upstreamFor(new URL('https://app/api/tmdb/https://evil.test'), env), null);
