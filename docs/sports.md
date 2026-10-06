@@ -1,62 +1,107 @@
-# Sports (3.9.20)
+# Sports (3.9.21)
 
-Sports sits between Home and Collection and presents the public football schedule
-from **camel1.to** in OpenCloud's existing interface. It does not open Chromium,
-embed Camel's website, or execute Camel's advertising, tracking, or page scripts.
-macOS uses the existing Tauri WKWebView and native HLS decoder. Other platforms
-use their existing system webview and a lazily loaded, locally bundled `hls.js`
-when native HLS is unavailable. No new browser shell is installed or launched.
+Sports sits between Home and Collection. Its Football screen uses the public
+**camel1.to** schedule, scores and streams, not an embedded copy of the website.
+It never opens a separate Chromium browser or executes Camel's advertising,
+tracking or page scripts. macOS uses the existing WKWebView and native HLS
+decoder. Other platforms use their existing webview and a lazily loaded,
+locally bundled `hls.js` when native HLS is unavailable.
 
-## Behavior
+## Main football only
 
-- Fixtures and live scores grouped by competition, with live, upcoming, and result
-  filters, team/league search, UTC schedule dates, and local kickoff times.
-- A public schedule refresh every minute, only while Sports is visible. Failed
-  refreshes preserve the last successful schedule with an explicit warning.
-- Live streams play inline with native video controls, fullscreen, source selection,
-  and retry. Matches without video are honestly labeled as score-only/not-live.
-- Leaving Sports, opening another view, or closing its player cancels pending UI
-  work, destroys HLS buffers, and releases the video source.
-- Sports never writes movie/TV history, collection, watch progress, or account data.
+The list includes recognized senior international competitions, major domestic
+leagues and national cups. The explicit competition allowlist and international
+competition patterns live in `isMainFootballMatch()` in `js/sports-data.js`.
+Examples include the Premier League, La Liga, Bundesliga, Serie A, Ligue 1,
+Champions League, Nations League, World Cup qualifiers, major national cups,
+MLS and the A-League. Selected major senior women's competitions are included.
+
+Both team names and competition names are checked for U-age groups, youth,
+junior, reserve, academy and development labels. Reserve teams such as Benfica B
+and Ajax II are excluded even if they appear in a senior competition's feed.
+Unrecognized/lower-profile competitions remain hidden. Camel's highlighted
+fixtures affect ordering, not admission to this senior-only list. There is no
+synthetic fallback schedule, hard-coded match list, estimated score or guessed
+match clock. Missing scores stay missing; incomplete team/competition records
+are omitted instead of becoming invented "Home team" fixtures.
+
+## Interface and freshness
+
+- Quiet competition lists, real scores, team/competition search, Yesterday,
+  Today and Tomorrow shortcuts, a UTC date picker, and local kickoff times.
+- Live, upcoming and results filters. No disabled watch buttons on every row.
+- The schedule refreshes every minute only while Sports is visible. "Checked"
+  means the time of the successful fetch, not a fabricated provider update time.
+- Failed refreshes retain the last successful data with a connection warning.
+  Cached live fixtures say **Last reported**, not **Live**, until a fetch succeeds.
+- Watch is offered only for a currently reported live, unblocked match with
+  provider-reported video coverage. That flag is not a guarantee of delivery.
+  The stream list and authorization are fetched afresh when opening the player.
+
+## Playback
+
+- Actual HLS video plays inline with native controls and fullscreen.
+- Playback starts muted to respect autoplay policies. **Sound off/on** controls
+  audio explicitly; a large Play button appears if autoplay is blocked or paused.
+- Available HD sources are preferred. Sources are numbered independently; no
+  commentary language is invented from an opaque stream identifier.
+- Failed starts automatically try another allowlisted source. Token rejection
+  gets one fresh authorization attempt before failover. HLS decoder recovery is
+  bounded, and frozen playback is detected from actual video-time progression.
+- Authorization is renewed before the provider's token expires. Renewal can
+  briefly reconnect the video. An intentionally paused feed stays paused; its
+  next resume obtains fresh authorization if needed.
+- If every feed is unavailable, the player reports that honestly and provides
+  Try again. It does not substitute a different match or simulate playing video.
+- Leaving Sports, closing its player or opening another view cancels pending
+  work, clears startup/renewal/watchdog timers, destroys HLS buffers and releases
+  the video source. Sports never writes movie/TV history, collections, account
+  settings or saved progress.
 
 ## Integration and safety
 
-`js/sports-data.js` normalizes Camel's grouped public API response and restricts
-stream/image URLs. `js/sports-api.js` uses `fetch_sports` in the native Tauri build,
-`/api/sports` on Render, or Camel's CORS-enabled endpoint during web development.
-Both native and server routes accept only `schedule`, `streams`, and `token` and
-validate their parameters. Destinations are fixed to `api.cameltv.live`; arbitrary
-URLs, mutation APIs, redirects, account credentials, and auth cookies are excluded.
-The existing movie-provider navigation and popup policies are unchanged. Native
-HLS cannot set a per-video referrer policy, so the app document uses `no-referrer`
-to prevent Camel's hotlink checks from rejecting an OpenCloud origin. Movie
-iframes retain their explicit `referrerpolicy="origin"` override.
+`js/sports-api.js` uses `fetch_sports` in Tauri, `/api/sports` on Render, or Camel's
+CORS-enabled endpoint during development. Native/server routes accept only
+`schedule`, `streams` and `token`, with validated parameters and fixed
+`api.cameltv.live` destinations. Arbitrary URLs, mutations, redirects, account
+credentials and auth cookies are excluded. Stream and logo URLs are allowlisted.
 
-Camel's HLS endpoints require a short-lived token issued by its public `/token`
-endpoint. Its response uses an AES-GCM envelope with a public compatibility key
-already shipped in Camel's website client. OpenCloud decodes only that response
-locally; it does not generate, forge, persist, or bypass playback authorization.
-Provider rejection or unavailable streams surface as an error with retry. Tokens
-are fetched afresh, are never server/service-worker cached, and are not logged.
+Native HLS cannot set a per-video referrer policy, so the document uses
+`no-referrer` to avoid Camel's hotlink rejection of the OpenCloud origin.
+Movie iframes preserve their explicit `referrerpolicy="origin"` override.
+Existing movie-provider navigation and popup policies are unchanged.
 
-The upstream may change its API, token format, availability, or permitted regions.
-The schedule and stream parser report unsupported responses rather than inventing
-fixtures or silently showing a blank embedded page.
+Playback tokens come from Camel's public `/token` endpoint. OpenCloud decodes
+its AES-GCM response envelope using the compatibility key shipped in Camel's
+public client. It does not generate, forge, persist or bypass authorization.
+Tokens are fetched afresh and never server/service-worker cached or logged.
+The upstream can change its API, token format, regions or availability. No client
+can guarantee a working feed when the provider is offline or rejects the viewer.
 
-## Verification
+## Verification and publishing
 
-`npm run check` includes API/URL boundaries, real-time fixture deduplication,
-zero scores, filters, public-token decoding, native HLS selection, cancelled
-playback races, tab order, and the separate native sports command. Browser smoke
-checks should cover loading, filtering, unavailable streams, native video controls,
-phone layouts, themes, and Home/Collection/History/search navigation.
+`npm run check` covers senior filtering, malformed/missing data, URL/API
+boundaries, genuine zero scores, token decoding, native and lazy HLS playback,
+automatic failover, decoder/token recovery, expired-token renewal, user pause,
+stalled video, cancellation and cleanup. Browser smoke checks use real Camel
+fixtures and real Render API requests; test-only failure injection exercises
+fallback/error states without adding sample fixtures to production.
+
+Check phone layouts, themes, sound, play/pause, fullscreen and other app views.
+Exercise both native HLS and HLS.js with actual video frames/time progression,
+not just a successful playlist request or a "playing" status label.
+
+**Render tracks `render-web`, not `main`.** After validation, fast-forward both
+branches to the same commit. See [Render deployment](render-web.md). Desktop
+installers and the signed updater are published by the `v3.9.21` release tag.
 
 ## Complete rollback
 
-The feature and release metadata are isolated in the commit **Add Camel Sports tab
-and release v3.9.20**. Revert that commit (not unrelated commits or user files),
-then bump the release metadata to a version higher than the currently published
-release before tagging the rollback. This removes Sports, its native command,
-proxy routes, dependency, CSP additions, tests, styles, and documentation without
-any account-data migration. Existing installations can also use the signed
-3.9.19 release under Check for Updates > Past versions.
+The original feature is isolated in `ee6a526` (**Add Camel Sports tab and release
+v3.9.20**). The refinement is isolated in **Clean up senior football and harden
+sports playback; release v3.9.21**. Revert the refinement to restore the earlier
+Sports behavior. To remove Sports completely, revert the refinement and then
+`ee6a526`, preserving unrelated commits/files, and publish a version higher than
+the latest released version. Fast-forward `render-web` as well. Do not reuse an
+old release tag. No account-data migration or cleanup is needed. Existing native
+installations can also select the signed 3.9.19 release under Past versions.

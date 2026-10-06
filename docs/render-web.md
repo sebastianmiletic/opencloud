@@ -22,6 +22,22 @@ into `web-dist`; a dedicated Node server publishes only that directory.
 6. Test sign-up, sign-in, password/email flows, collections, search and playback
    in a normal browser before announcing public availability.
 
+### Updating the existing site
+
+`opencloud-web.onrender.com` currently follows the **`render-web`** branch.
+Pushing `main` or publishing a GitHub desktop release alone does not deploy it.
+After checks pass, verify there are no web-only commits, then fast-forward:
+
+```bash
+git fetch origin main render-web
+git merge-base --is-ancestor origin/render-web main
+git push origin main:render-web
+```
+
+Do not force-push over web-only work. Confirm Render's GitHub deployment status
+is successful, check `/env.js` for the expected `APP_VERSION`, and verify the live
+UI and `/api/sports` endpoint. A local build does not prove the site was deployed.
+
 ## Separation and data
 
 - Use a separate Supabase project if the website must have entirely separate
