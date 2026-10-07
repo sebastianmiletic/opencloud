@@ -20,7 +20,7 @@ const match = (id, status = 2, extra = {}) => ({
 
 function fixture() {
   return { living_group: [{ competition: { id: 'league', name: 'Example League' }, match: [match('live')] }],
-    country_group: [{ competition_match: [{ competition: { id: 'league', name: 'Example League' },
+    country_group: [{ country: { name: 'England' }, competition_match: [{ competition: { id: 'league', name: 'Example League' },
       match: [match('live', 1), match('next', 1), match('final', 8), match('cancelled', 12)] }] }] };
 }
 
@@ -43,7 +43,7 @@ test('grouped Camel fixtures flatten, deduplicate, preserve live data and safely
   const live = matches.find(item => item.id === 'live');
   assert.equal(live.live, true, 'stale duplicate does not overwrite the live group');
   assert.equal(live.home, 'Home FC'); assert.equal(live.homeScore, 0); assert.equal(live.awayScore, 2);
-  assert.equal(live.competition, 'Example League'); assert.equal(live.awayLogo, '');
+  assert.equal(live.competition, 'Example League'); assert.equal(live.country, 'England'); assert.equal(live.awayLogo, '');
   assert.equal(live.watchable, true);
   assert.equal(matches.find(item => item.id === 'next').homeScore, null);
   assert.equal(matches.find(item => item.id === 'final').watchable, false);
@@ -53,12 +53,19 @@ test('grouped Camel fixtures flatten, deduplicate, preserve live data and safely
   assert.throws(() => camelData({ status: 403, data: [] }));
 });
 
-test('team/league search and phase filters sort live matches before upcoming and results', () => {
+test('team, country-vs-country, league, and phase searches sort live matches first', () => {
   const matches = normalizeSportsMatches(fixture());
   assert.equal(filterSportsMatches(matches)[0].id, 'live');
   assert.deepEqual(filterSportsMatches(matches, { phase: 'live', query: 'example LEAGUE' }).map(m => m.id), ['live']);
+  assert.deepEqual(filterSportsMatches(matches, { phase: 'live', query: 'Home FC vs Away FC' }).map(m => m.id), ['live']);
+  assert.deepEqual(filterSportsMatches(matches, { phase: 'live', query: 'away versus home' }).map(m => m.id), ['live']);
+  assert.deepEqual(filterSportsMatches(matches, { phase: 'live', query: 'England' }).map(m => m.id), ['live']);
   assert.deepEqual(filterSportsMatches(matches, { phase: 'results' }).map(m => m.id), ['final']);
   assert.deepEqual(filterSportsMatches(matches, { query: 'no such team' }), []);
+  assert.deepEqual(filterSportsMatches(matches, { query: 'vs' }), [], 'a separator alone is not a match-all query');
+  const countries = [{ ...matches[0], id: 'countries', home: 'South Korea', away: 'Uzbekistan' }];
+  assert.deepEqual(filterSportsMatches(countries, { query: 'South Korea vs Uzbekistan' }).map(m => m.id), ['countries']);
+  assert.deepEqual(filterSportsMatches(countries, { query: 'Uzbekistan' }).map(m => m.id), ['countries']);
   const scoreOnly = { ...matches[0], id: 'earlier-score-only', watchable: false, startTime: 0 };
   assert.equal(filterSportsMatches([scoreOnly, ...matches])[0].id, 'live', 'available live video comes before score-only matches');
 });
@@ -317,14 +324,22 @@ test('HLS token rejection renews once before fallback, and destroyed-engine even
   assert.equal(requests, 3); assert.equal(video.src, '');
 });
 
-test('sports shell appears between Home and Collection, never embeds the Camel website', () => {
+test('Live Games sits below Continue Watching with no Sports tab or Camel website embed', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  assert.ok(html.indexOf('data-tab="home"') < html.indexOf('data-tab="sports"'));
-  assert.ok(html.indexOf('data-tab="sports"') < html.indexOf('data-tab="collection"'));
+  assert.ok(!html.includes('data-tab="sports"'));
+  assert.ok(html.indexOf('id="continueWatchingSection"') < html.indexOf('id="liveGamesSection"'));
+  assert.ok(html.indexOf('id="liveGamesSection"') < html.indexOf('id="starWarsSection"'));
+  assert.ok(html.includes('id="liveGamesLive"'));
+  assert.ok(html.includes('id="liveGamesUpcoming"'));
+  assert.ok(html.includes('id="gameSearchSection"'));
   assert.ok(html.includes('id="sportsVideo"'));
   assert.ok(html.includes('<meta name="referrer" content="no-referrer">'));
   assert.ok(/<iframe id="playerFrame"[^>]*referrerpolicy="origin"/.test(html), 'movie iframe keeps its provider referrer');
   assert.ok(!/<iframe[^>]+camel/i.test(html));
   const sports = readFileSync(new URL('../js/sports.js', import.meta.url), 'utf8');
+  const ui = readFileSync(new URL('../js/ui.js', import.meta.url), 'utf8');
+  assert.ok(/export async function searchLiveGames/.test(sports));
+  assert.match(ui, /initLiveGames, openLiveGame, searchLiveGames/);
+  assert.ok(!/sportsView|data-tab=["']sports/.test(ui));
   assert.ok(!/innerHTML|window\.open|userHistory|saveWatchProgress|userCollection/.test(sports));
 });

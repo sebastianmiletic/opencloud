@@ -13,7 +13,7 @@ The browser version is available at **[opencloud-web.onrender.com](https://openc
 ## How to Download & Install
 
 <p align="center">
-  <a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud_3.9.21_universal.dmg"><img src="https://img.shields.io/badge/Download-macOS%20(.dmg)-black?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS"></a>&nbsp;&nbsp;<a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud_3.9.21_x64-setup.exe"><img src="https://img.shields.io/badge/Download-Windows%20x64-black?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows x64"></a>&nbsp;&nbsp;<a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud_3.9.21_arm64-setup.exe"><img src="https://img.shields.io/badge/Download-Windows%20ARM64-black?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows ARM64"></a>&nbsp;&nbsp;<a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud_3.9.21_amd64.AppImage"><img src="https://img.shields.io/badge/Download-Linux%20x64-black?style=for-the-badge&logo=linux&logoColor=white" alt="Download for Linux x64"></a>&nbsp;&nbsp;<a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud_3.9.21_aarch64.AppImage"><img src="https://img.shields.io/badge/Download-Linux%20ARM64-black?style=for-the-badge&logo=linux&logoColor=white" alt="Download for Linux ARM64"></a>
+  <a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud_3.9.22_universal.dmg"><img src="https://img.shields.io/badge/Download-macOS%20(.dmg)-black?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS"></a>&nbsp;&nbsp;<a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud_3.9.22_x64-setup.exe"><img src="https://img.shields.io/badge/Download-Windows%20x64-black?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows x64"></a>&nbsp;&nbsp;<a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud_3.9.22_arm64-setup.exe"><img src="https://img.shields.io/badge/Download-Windows%20ARM64-black?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows ARM64"></a>&nbsp;&nbsp;<a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud_3.9.22_amd64.AppImage"><img src="https://img.shields.io/badge/Download-Linux%20x64-black?style=for-the-badge&logo=linux&logoColor=white" alt="Download for Linux x64"></a>&nbsp;&nbsp;<a href="https://github.com/sebastianmiletic/opencloud/releases/latest/download/OpenCloud_3.9.22_aarch64.AppImage"><img src="https://img.shields.io/badge/Download-Linux%20ARM64-black?style=for-the-badge&logo=linux&logoColor=white" alt="Download for Linux ARM64"></a>
 </p>
 
 <p align="center">
@@ -29,7 +29,7 @@ The browser version is available at **[opencloud-web.onrender.com](https://openc
 ### macOS (Recommended — DMG)
 
 1. **Download the DMG**
-   - Click the **macOS (.dmg)** button above, or go to the [Releases page](https://github.com/sebastianmiletic/opencloud/releases/latest) and download `OpenCloud_3.9.21_universal.dmg`
+   - Click the **macOS (.dmg)** button above, or go to the [Releases page](https://github.com/sebastianmiletic/opencloud/releases/latest) and download `OpenCloud_3.9.22_universal.dmg`
 
 2. **Install the app**
    - Open the downloaded `OpenCloud.dmg`
@@ -49,7 +49,7 @@ The browser version is available at **[opencloud-web.onrender.com](https://openc
 ### Windows (Recommended — EXE)
 
 1. **Download the Installer**
-   - Download `OpenCloud_3.9.21_x64-setup.exe` for Intel/AMD PCs or `OpenCloud_3.9.21_arm64-setup.exe` for Windows on ARM.
+   - Download `OpenCloud_3.9.22_x64-setup.exe` for Intel/AMD PCs or `OpenCloud_3.9.22_arm64-setup.exe` for Windows on ARM.
 
 2. **Run the installer**
    - Double-click the downloaded `OpenCloud.exe`
@@ -62,17 +62,17 @@ The browser version is available at **[opencloud-web.onrender.com](https://openc
 
 ### Linux (AppImage or Debian package)
 
-1. Download `OpenCloud_3.9.21_amd64.AppImage` for Intel/AMD64 Linux or `OpenCloud_3.9.21_aarch64.AppImage` for ARM64 Linux. Matching `.deb` packages are also available for Debian/Ubuntu.
+1. Download `OpenCloud_3.9.22_amd64.AppImage` for Intel/AMD64 Linux or `OpenCloud_3.9.22_aarch64.AppImage` for ARM64 Linux. Matching `.deb` packages are also available for Debian/Ubuntu.
 2. For the AppImage, make it executable and launch it:
 
    ```bash
-   chmod +x OpenCloud_3.9.21_amd64.AppImage
-   ./OpenCloud_3.9.21_amd64.AppImage
+   chmod +x OpenCloud_3.9.22_amd64.AppImage
+   ./OpenCloud_3.9.22_amd64.AppImage
    ```
 
    The app uses the desktop's native display scale; no force-scale launch flag is required.
 
-3. On Debian/Ubuntu, install the matching package with `sudo apt install ./OpenCloud_3.9.21_amd64.deb` or `sudo apt install ./OpenCloud_3.9.21_arm64.deb`.
+3. On Debian/Ubuntu, install the matching package with `sudo apt install ./OpenCloud_3.9.22_amd64.deb` or `sudo apt install ./OpenCloud_3.9.22_arm64.deb`.
 
 #### OnePlus 6 with Kupfer Linux and Hyprland
 
@@ -82,7 +82,7 @@ responsive interface is used unchanged, with an ARM64-only minimum window size s
 phone display. The AppImage includes Tauri's GStreamer media framework bundle.
 
 If a future Mesa/WebKitGTK update works better with DMA-BUF on this device, launch with
-`OPEN_CLOUD_WEBKIT_RENDERER=accelerated ./OpenCloud_3.9.21_aarch64.AppImage`. For a last-resort CPU
+`OPEN_CLOUD_WEBKIT_RENDERER=accelerated ./OpenCloud_3.9.22_aarch64.AppImage`. For a last-resort CPU
 fallback, use `OPEN_CLOUD_WEBKIT_RENDERER=software` instead.
 
 To build Linux packages locally, install the official Tauri Linux prerequisites, run `npm ci`, then run `npm run tauri:build:linux`.
@@ -125,23 +125,25 @@ If you prefer to run the app from code or want to develop:
 - **Hero carousel** — Featured movies/shows at the top with auto-sliding slides
 - **Categories** — "Popular Now", "Recently Released", "Star Wars Saga", and recommendation rows
 - **Continue Watching** — Resume the current episode or start the next one after finishing
-- **Search** — Type in the top-center search bar to find movies and TV shows
+- **Live Games** — Main senior football directly below Continue Watching, with live matches at left and upcoming fixtures across
+- **Search** — Find movies, TV shows, teams, competitions, countries, or matchups such as “India vs Russia”
 - **Item Modal** — Click any poster to see details, ratings, synopsis, and options to Watch Now or Add to Collection
 
 ### Navigating the App
-- **Home** tab — Browse trending content
-- **Sports** tab — Camel football fixtures, live scores, and inline streams in OpenCloud's own UI
+- **Home** tab — Browse trending content, Continue Watching, and Live Games
 - **Collection** tab — Your saved movies/shows with folder support
 - **History** tab — Movies and shows you've watched, with posters, ratings, and watch dates
 
-### Sports
-- Main senior football competitions from **camel1.to**, with youth, U-age, reserve and lower-profile fixtures excluded
-- Clean competition lists, team search, Yesterday/Today/Tomorrow, UTC dates and live/upcoming/results filters
-- Only provider data is shown. Missing scores stay missing; failed refreshes explicitly mark the last checked fixtures
-- Inline HLS playback with automatic source fallback, expiring-token renewal, fullscreen, play/pause and a one-click sound control
-- Video starts muted for reliable autoplay. Unavailable provider streams show an honest error with **Try again**
-- Closing Sports releases playback. Sports does not change movie history, collections, or saved progress
-- See [Sports integration and rollback](docs/sports.md) for details
+### Live Games
+- Real fixtures from **camel1.to**; there is no Sports tab, standalone Sports page, embedded Camel site, or separate Chromium browser
+- Main senior competitions only, with youth, U-age, reserve and lower-profile fixtures excluded
+- Live scores and Watch actions appear at left; upcoming fixtures scroll horizontally across Home
+- Global search combines games with movies and TV. Search by team, provider country, competition, or “country vs country”
+- Only provider data is shown. Missing scores stay missing and failed refreshes clearly mark stale or unavailable data
+- Inline HLS playback includes source fallback, expiring-token renewal, fullscreen, pause/resume, and one-click sound
+- Video starts muted for reliable autoplay. Unavailable streams show an honest error with **Try again**
+- Closing the player or leaving Home releases playback. Games do not change movie history, collections, or saved progress
+- See [Live Games integration and rollback](docs/sports.md) for details
 
 ### Player
 - Click **Watch Now** on any item to open the inline player

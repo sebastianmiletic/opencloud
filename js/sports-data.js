@@ -112,13 +112,16 @@ export function normalizeSportsMatches(data) {
     throw new Error('Camel returned an unfamiliar schedule. Try refreshing later.');
   }
   const matches = new Map();
-  function visit(node, competition = {}, depth = 0, featured = false) {
+  function visit(node, competition = {}, country = '', depth = 0, featured = false) {
     if (!node || typeof node !== 'object' || depth > 12) return;
-    if (Array.isArray(node)) { node.forEach(child => visit(child, competition, depth + 1, featured)); return; }
+    if (Array.isArray(node)) { node.forEach(child => visit(child, competition, country, depth + 1, featured)); return; }
     if (node.competition) competition = node.competition;
+    if (node.country) country = String(node.country.name_en || node.country.name || '').trim().slice(0, 100);
     if (ID_PATTERN.test(node.id || '') && node.home_team && node.away_team) {
       if (matches.has(node.id)) {
-        if (featured) matches.get(node.id).featured = true;
+        const existing = matches.get(node.id);
+        if (featured) existing.featured = true;
+        if (country && !existing.country) existing.country = country;
         return;
       }
       const status = Number(node.real_time_data?.status_id ?? node.status_id);
@@ -131,7 +134,7 @@ export function normalizeSportsMatches(data) {
         id: node.id, home, away,
         homeLogo: sportsImage(node.home_team.country_logo || node.home_team.logo),
         awayLogo: sportsImage(node.away_team.country_logo || node.away_team.logo),
-        competition: competitionName, featured,
+        competition: competitionName, country, featured,
         competitionId: String(competition.id || node.competition_id || nameKey(competitionName)),
         startTime: Number(node.match_time) > 0 ? Number(node.match_time) * 1000 : NaN,
         status, statusLabel: STATUS[status] || 'Unavailable', live,
@@ -143,17 +146,24 @@ export function normalizeSportsMatches(data) {
       });
       return;
     }
-    GROUP_KEYS.forEach(key => visit(node[key], competition, depth + 1, featured || key === 'hot_group'));
+    GROUP_KEYS.forEach(key => visit(node[key], competition, country, depth + 1, featured || key === 'hot_group'));
   }
   visit(data);
   return [...matches.values()];
 }
 
+export function matchesSportsQuery(match, query = '') {
+  const normalized = nameKey(query);
+  if (!normalized) return true;
+  const tokens = normalized.split(' ').filter(token => !['v', 'vs', 'versus', 'against'].includes(token));
+  if (!tokens.length) return false;
+  const searchable = nameKey(`${match?.home || ''} ${match?.away || ''} ${match?.competition || ''} ${match?.country || ''}`);
+  return tokens.every(token => searchable.includes(token));
+}
+
 export function filterSportsMatches(matches, { query = '', phase = 'all' } = {}) {
-  const needle = query.trim().toLocaleLowerCase();
   const order = { live: 0, upcoming: 1, results: 2 };
-  return matches.filter(match => (phase === 'all' || match.phase === phase)
-    && (!needle || `${match.home} ${match.away} ${match.competition}`.toLocaleLowerCase().includes(needle)))
+  return matches.filter(match => (phase === 'all' || match.phase === phase) && matchesSportsQuery(match, query))
     .sort((a, b) => order[a.phase] - order[b.phase] || Number(b.watchable) - Number(a.watchable)
       || Number(b.featured) - Number(a.featured)
       || (Number.isFinite(a.startTime) ? a.startTime : Infinity) - (Number.isFinite(b.startTime) ? b.startTime : Infinity)

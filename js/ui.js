@@ -18,7 +18,7 @@ import { showToast, lockScroll, unlockScroll, showConfirm, escapeHtml } from './
 import { openPlayer } from './player.js';
 import { renderHeroSlides } from './hero.js';
 import { resolveUpNextEpisode } from './series.js';
-import { initSports } from './sports.js';
+import { initLiveGames, openLiveGame, searchLiveGames } from './sports.js';
 
 /* DOM refs */
 const searchInput = document.getElementById('searchInput');
@@ -27,7 +27,6 @@ const searchResultsBody = document.getElementById('searchResultsBody');
 const searchResultsCount = document.getElementById('searchResultsCount');
 const clearSearchBtn = document.getElementById('clearSearch');
 const homeView = document.getElementById('homeView');
-const sportsView = document.getElementById('sportsView');
 const collectionView = document.getElementById('collectionView');
 const collectionGrid = document.getElementById('collectionGrid');
 const historyView = document.getElementById('historyView');
@@ -36,6 +35,11 @@ const searchView = document.getElementById('searchView');
 const searchGrid = document.getElementById('searchGrid');
 const searchQueryTitle = document.getElementById('searchQueryTitle');
 const searchResultCount = document.getElementById('searchResultCount');
+const gameSearchSection = document.getElementById('gameSearchSection');
+const gameSearchGrid = document.getElementById('gameSearchGrid');
+const gameSearchCount = document.getElementById('gameSearchCount');
+const titleSearchHeading = document.getElementById('titleSearchHeading');
+const searchFiltersWrap = document.querySelector('.search-filters-dropdown-wrap');
 const searchBackBtn = document.getElementById('searchBackBtn');
 const itemModal = document.getElementById('itemModal');
 const collectionSort = document.getElementById('collectionSort');
@@ -55,6 +59,8 @@ let _previousView = 'home';
 
 /* Saved home scroll position for back navigation */
 let _homeScrollY = 0;
+let _searchGalleryGames = [];
+let _searchGeneration = 0;
 
 function escapeAttribute(value) {
   return escapeHtml(String(value)).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -196,7 +202,7 @@ async function fetchFranchiseResults(franchise) {
 
 /* Nav */
 export function initNav() {
-  initSports();
+  initLiveGames();
   const navBtns = document.querySelectorAll('.nav-btn');
   navBtns.forEach(btn => {
     btn.addEventListener('click', () => {
@@ -209,9 +215,9 @@ export function initNav() {
 }
 
 function toggleView(tab) {
+  _searchGeneration++;
   document.getElementById('devView')?.classList.add('hidden');
   homeView?.classList.toggle('hidden', tab !== 'home');
-  sportsView?.classList.toggle('hidden', tab !== 'sports');
   collectionView?.classList.toggle('hidden', tab !== 'collection');
   historyView?.classList.toggle('hidden', tab !== 'history');
   searchView?.classList.add('hidden');
@@ -230,6 +236,7 @@ export function initSearch() {
 
   searchInput.addEventListener('input', (e) => {
     const query = e.target.value.trim();
+    const generation = ++_searchGeneration;
     clearSearchBtn?.classList.toggle('hidden', !query);
     clearTimeout(window._searchTimeout);
     if (query.length < 2) {
@@ -237,10 +244,10 @@ export function initSearch() {
       return;
     }
     if (searchResultsBody) {
-      searchResultsBody.innerHTML = '<div class="search-loading"><i class="fas fa-spinner"></i> Searching...</div>';
+      searchResultsBody.innerHTML = '<div class="search-loading"><i class="fas fa-spinner"></i> Searching movies, shows, and games...</div>';
     }
     searchResults?.classList.remove('hidden');
-    window._searchTimeout = setTimeout(() => searchTMDB(query), 250);
+    window._searchTimeout = setTimeout(() => searchTMDB(query, generation), 250);
   });
 
   searchInput.addEventListener('keydown', (e) => {
@@ -256,6 +263,7 @@ export function initSearch() {
   });
 
   clearSearchBtn?.addEventListener('click', () => {
+    _searchGeneration++;
     searchInput.value = '';
     clearSearchBtn.classList.add('hidden');
     searchResults?.classList.add('hidden');
@@ -340,73 +348,90 @@ export function initSearch() {
   });
 }
 
-async function searchTMDB(query) {
+async function searchCatalog(route, query) {
   try {
-    const [movieRes, tvRes] = await Promise.all([
-      fetch(`${BASE_URL}/search/movie?query=${encodeURIComponent(query)}&page=1`, {
-        headers: { 'Authorization': `Bearer ${API_KEY}`, 'Accept': 'application/json' }
-      }),
-      fetch(`${BASE_URL}/search/tv?query=${encodeURIComponent(query)}&page=1`, {
-        headers: { 'Authorization': `Bearer ${API_KEY}`, 'Accept': 'application/json' }
-      })
-    ]);
-    const movies = await movieRes.json();
-    const tvShows = await tvRes.json();
-    let results = [
-      ...movies.results.map(item => ({ ...item, media_type: 'movie' })),
-      ...tvShows.results.map(item => ({ ...item, media_type: 'tv' }))
-    ];
-
-    // Franchise search: if query matches a known franchise, merge discover results
-    const franchise = getMatchedFranchise(query);
-    if (franchise) {
-      const franchiseResults = await fetchFranchiseResults(franchise);
-      const seen = new Set(results.map(r => r.id));
-      franchiseResults.forEach(item => {
-        if (!seen.has(item.id)) {
-          seen.add(item.id);
-          results.push(item);
-        }
-      });
-    }
-
-    results.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
-    results = results.slice(0, 15);
-
-    const omdbRatings = await getOMDBRatingsBatch(results);
-    results.forEach(item => { if (omdbRatings[item.id]) item.omdbRating = omdbRatings[item.id]; });
-
-    if (searchResultsCount) searchResultsCount.textContent = `${results.length} result${results.length !== 1 ? 's' : ''}`;
-    renderSearchResults(results);
-  } catch (error) {
-    if (searchResultsBody) searchResultsBody.innerHTML = '<div class="search-loading">Search failed. Please try again.</div>';
-    if (searchResultsCount) searchResultsCount.textContent = 'Error';
-  }
+    const response = await fetch(`${BASE_URL}/search/${route}?query=${encodeURIComponent(query)}&page=1`, {
+      headers: { 'Authorization': `Bearer ${API_KEY}`, 'Accept': 'application/json' }
+    });
+    if (!response.ok) return [];
+    const body = await response.json();
+    return Array.isArray(body.results) ? body.results : [];
+  } catch { return []; }
 }
 
-function renderSearchResults(results) {
+async function searchTMDB(query, generation = _searchGeneration) {
+  const [movies, tvShows, games] = await Promise.all([
+    searchCatalog('movie', query), searchCatalog('tv', query), searchLiveGames(query).catch(() => [])
+  ]);
+  if (generation !== _searchGeneration || searchInput?.value.trim() !== query) return;
+  let results = [
+    ...movies.map(item => ({ ...item, media_type: 'movie' })),
+    ...tvShows.map(item => ({ ...item, media_type: 'tv' }))
+  ];
+
+  const franchise = getMatchedFranchise(query);
+  if (franchise) {
+    const franchiseResults = await fetchFranchiseResults(franchise).catch(() => []);
+    const seen = new Set(results.map(result => `${result.media_type}:${result.id}`));
+    franchiseResults.forEach(item => {
+      const key = `${item.media_type}:${item.id}`;
+      if (!seen.has(key)) { seen.add(key); results.push(item); }
+    });
+  }
+  if (generation !== _searchGeneration || searchInput?.value.trim() !== query) return;
+  results.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+  results = results.slice(0, 15);
+  const omdbRatings = await getOMDBRatingsBatch(results).catch(() => ({}));
+  results.forEach(item => { if (omdbRatings[item.id]) item.omdbRating = omdbRatings[item.id]; });
+  if (generation !== _searchGeneration || searchInput?.value.trim() !== query) return;
+  const total = results.length + games.length;
+  if (searchResultsCount) searchResultsCount.textContent = `${total} result${total === 1 ? '' : 's'}`;
+  renderSearchResults(results, games.slice(0, 6));
+}
+
+function gameSearchTiming(match) {
+  if (match.live) return match.statusLabel;
+  const start = new Date(match.startTime);
+  if (!Number.isFinite(match.startTime) || match.status === 13) return 'Time TBC';
+  const today = new Date();
+  const todayUtc = today.toISOString().slice(0, 10);
+  today.setUTCDate(today.getUTCDate() + 1);
+  const tomorrowUtc = today.toISOString().slice(0, 10);
+  const day = match.scheduleDate === todayUtc ? 'Today' : match.scheduleDate === tomorrowUtc ? 'Tomorrow'
+    : new Date(`${match.scheduleDate}T00:00:00Z`).toLocaleDateString([], { weekday: 'short', timeZone: 'UTC' });
+  return `${day} · ${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+}
+
+function renderSearchResults(results, games = []) {
   if (!searchResultsBody) return;
-  if (results.length === 0) {
-    searchResultsBody.innerHTML = '<div class="search-loading">No results found</div>';
+  if (!results.length && !games.length) {
+    searchResultsBody.innerHTML = '<div class="search-loading">No movies, shows, or games found</div>';
     return;
   }
-
-  searchResultsBody.innerHTML = results.map(item => {
+  const gameMarkup = games.length ? `<div class="search-result-section-label">Games</div>${games.map(match => `
+    <div class="search-result-item game-search-result-item" data-match-id="${escapeAttribute(match.id)}">
+      <div class="search-game-crests" aria-hidden="true">
+        ${match.homeLogo ? `<img src="${escapeAttribute(match.homeLogo)}" alt="" loading="lazy">` : '<i class="fas fa-futbol"></i>'}
+        ${match.awayLogo ? `<img src="${escapeAttribute(match.awayLogo)}" alt="" loading="lazy">` : ''}
+      </div>
+      <div class="search-result-info">
+        <div class="search-result-title">${escapeHtml(match.home)} <span>vs</span> ${escapeHtml(match.away)}</div>
+        <div class="search-result-meta"><span>${escapeHtml(match.competition)}</span><span>${escapeHtml(gameSearchTiming(match))}</span></div>
+      </div>
+      <span class="search-result-type ${match.live ? 'is-live' : ''}">${match.watchable ? 'Watch live' : match.live ? 'Live' : 'Upcoming'}</span>
+    </div>`).join('')}` : '';
+  const titleMarkup = results.length ? `<div class="search-result-section-label">Movies &amp; TV</div>${results.map(item => {
     const title = item.media_type === 'movie' ? item.title : item.name;
     const year = item.media_type === 'movie' ? item.release_date?.slice(0, 4) : item.first_air_date?.slice(0, 4);
     const poster = item.poster_path ? `${IMG_BASE}w92${item.poster_path}` : '';
     const rating = item.omdbRating != null ? item.omdbRating.toFixed(1) : (item.vote_average != null ? item.vote_average.toFixed(1) : 'N/A');
     const isInCollection = userCollection.some(c => c.id === item.id && c.media_type === item.media_type);
-
     return `
-      <div class="search-result-item" data-id="${item.id}" data-type="${item.media_type}">
-        <img src="${poster}" alt="${title}" loading="lazy" onerror="this.style.display='none'">
+      <div class="search-result-item search-title-result" data-id="${item.id}" data-type="${item.media_type}">
+        <img src="${escapeAttribute(poster)}" alt="${escapeAttribute(title)}" loading="lazy" onerror="this.style.display='none'">
         <div class="search-result-info">
-          <div class="search-result-title">${title}</div>
-          <div class="search-result-meta">
-            <span class="rating"><i class="fas fa-star"></i> ${rating}</span>
-            <span>${year || 'Unknown'}</span>
-          </div>
+          <div class="search-result-title">${escapeHtml(title)}</div>
+          <div class="search-result-meta"><span class="rating"><i class="fas fa-star"></i> ${rating}</span><span>${year || 'Unknown'}</span></div>
         </div>
         <span class="search-result-type">${item.media_type === 'movie' ? 'Movie' : 'TV'}</span>
         <div class="search-result-actions">
@@ -414,102 +439,103 @@ function renderSearchResults(results) {
           <button class="search-collection-btn" title="Add to Collection" data-id="${item.id}" data-type="${item.media_type}" ${isInCollection ? 'disabled' : ''}><i class="fas ${isInCollection ? 'fa-check' : 'fa-plus'}"></i></button>
         </div>
       </div>`;
-  }).join('');
-
-  searchResultsBody.querySelectorAll('.search-result-item').forEach(item => {
-    item.addEventListener('click', (e) => {
-      if (e.target.closest('.search-result-actions')) return;
-      openItemModal(parseInt(item.dataset.id), item.dataset.type);
+  }).join('')}` : '';
+  searchResultsBody.innerHTML = gameMarkup + titleMarkup;
+  const gamesById = new Map(games.map(match => [match.id, match]));
+  searchResultsBody.querySelectorAll('.game-search-result-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const match = gamesById.get(item.dataset.matchId);
+      if (match) { searchResults?.classList.add('hidden'); openLiveGame(match.id, { play: match.watchable }); }
     });
   });
-
-  searchResultsBody.querySelectorAll('.search-watch-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      openPlayer(parseInt(btn.dataset.id), btn.dataset.type);
-    });
-  });
-
-  searchResultsBody.querySelectorAll('.search-collection-btn').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      if (btn.disabled) return;
-      const id = parseInt(btn.dataset.id);
-      const type = btn.dataset.type;
-      try {
-        const data = await fetchWithAuth(`${BASE_URL}/${type}/${id}?language=en-US`);
-        addToUserCollection({ ...data, media_type: type });
-        btn.innerHTML = '<i class="fas fa-check"></i>';
-        btn.disabled = true;
-      } catch (err) {
-        console.error('[Search collection btn] Error:', err);
-        showToast('Failed to add to collection', 'error');
-      }
-    });
-  });
+  searchResultsBody.querySelectorAll('.search-title-result').forEach(item => item.addEventListener('click', event => {
+    if (!event.target.closest('.search-result-actions')) openItemModal(parseInt(item.dataset.id), item.dataset.type);
+  }));
+  searchResultsBody.querySelectorAll('.search-watch-btn').forEach(btn => btn.addEventListener('click', event => {
+    event.stopPropagation(); openPlayer(parseInt(btn.dataset.id), btn.dataset.type);
+  }));
+  searchResultsBody.querySelectorAll('.search-collection-btn').forEach(btn => btn.addEventListener('click', async event => {
+    event.stopPropagation(); if (btn.disabled) return;
+    try {
+      const data = await fetchWithAuth(`${BASE_URL}/${btn.dataset.type}/${parseInt(btn.dataset.id)}?language=en-US`);
+      addToUserCollection({ ...data, media_type: btn.dataset.type });
+      btn.innerHTML = '<i class="fas fa-check"></i>'; btn.disabled = true;
+    } catch (error) {
+      console.error('[Search collection btn] Error:', error); showToast('Failed to add to collection', 'error');
+    }
+  }));
 }
 
 /* Search Gallery View */
 function showSearchGallery(query) {
   if (!query || query.length < 2) return;
-  sportsView?.classList.add('hidden');
+  const generation = ++_searchGeneration;
   _previousView = 'home';
   _homeScrollY = window.scrollY;
+  _searchGalleryGames = [];
   searchResults?.classList.add('hidden');
   homeView?.classList.add('hidden');
   collectionView?.classList.add('hidden');
   historyView?.classList.add('hidden');
   document.getElementById('collectionsView')?.classList.add('hidden');
   searchView?.classList.remove('hidden');
+  gameSearchSection?.classList.add('hidden');
+  titleSearchHeading?.classList.add('hidden');
   window.scrollTo({ top: 0, behavior: 'smooth' });
-  searchTMDBGallery(query);
+  void searchTMDBGallery(query, generation);
 }
 
-async function searchTMDBGallery(query) {
+async function searchTMDBGallery(query, generation) {
   if (!searchGrid) return;
   document.getElementById('collectionsView')?.classList.add('hidden');
-  searchGrid.innerHTML = '<div class="search-loading"><i class="fas fa-spinner"></i> Searching...</div>';
-  try {
-    const [movieRes, tvRes] = await Promise.all([
-      fetch(`${BASE_URL}/search/movie?query=${encodeURIComponent(query)}&page=1`, {
-        headers: { 'Authorization': `Bearer ${API_KEY}`, 'Accept': 'application/json' }
-      }),
-      fetch(`${BASE_URL}/search/tv?query=${encodeURIComponent(query)}&page=1`, {
-        headers: { 'Authorization': `Bearer ${API_KEY}`, 'Accept': 'application/json' }
-      })
-    ]);
-    const movies = await movieRes.json();
-    const tvShows = await tvRes.json();
-    let results = [
-      ...movies.results.map(item => ({ ...item, media_type: 'movie' })),
-      ...tvShows.results.map(item => ({ ...item, media_type: 'tv' }))
-    ];
-
-    // Franchise search: if query matches a known franchise, merge discover results
-    const franchise = getMatchedFranchise(query);
-    if (franchise) {
-      const franchiseResults = await fetchFranchiseResults(franchise);
-      const seen = new Set(results.map(r => r.id));
-      franchiseResults.forEach(item => {
-        if (!seen.has(item.id)) {
-          seen.add(item.id);
-          results.push(item);
-        }
-      });
-    }
-
-    results.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
-
-    const omdbRatings = await getOMDBRatingsBatch(results);
-    results.forEach(item => { if (omdbRatings[item.id]) item.omdbRating = omdbRatings[item.id]; });
-
-    setSearchGalleryResults(results);
-    setSearchGalleryQuery(query);
-    renderSearchGallery(results, query);
-  } catch (error) {
-    searchGrid.innerHTML = '<div class="search-loading">Search failed. Please try again.</div>';
-    if (searchResultCount) searchResultCount.textContent = 'Error';
+  searchGrid.innerHTML = '<div class="search-loading"><i class="fas fa-spinner"></i> Searching movies, shows, and games...</div>';
+  const [movies, tvShows, games] = await Promise.all([
+    searchCatalog('movie', query), searchCatalog('tv', query), searchLiveGames(query).catch(() => [])
+  ]);
+  if (generation !== _searchGeneration) return;
+  let results = [
+    ...movies.map(item => ({ ...item, media_type: 'movie' })),
+    ...tvShows.map(item => ({ ...item, media_type: 'tv' }))
+  ];
+  const franchise = getMatchedFranchise(query);
+  if (franchise) {
+    const franchiseResults = await fetchFranchiseResults(franchise).catch(() => []);
+    const seen = new Set(results.map(result => `${result.media_type}:${result.id}`));
+    franchiseResults.forEach(item => {
+      const key = `${item.media_type}:${item.id}`;
+      if (!seen.has(key)) { seen.add(key); results.push(item); }
+    });
   }
+  if (generation !== _searchGeneration) return;
+  results.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+  const omdbRatings = await getOMDBRatingsBatch(results).catch(() => ({}));
+  results.forEach(item => { if (omdbRatings[item.id]) item.omdbRating = omdbRatings[item.id]; });
+  if (generation !== _searchGeneration) return;
+  _searchGalleryGames = games;
+  setSearchGalleryResults(results);
+  setSearchGalleryQuery(query);
+  renderSearchGallery(results, query);
+}
+
+function renderGameSearchGallery(games) {
+  if (!gameSearchSection || !gameSearchGrid) return;
+  gameSearchSection.classList.toggle('hidden', !games.length);
+  if (gameSearchCount) gameSearchCount.textContent = `${games.length} live or upcoming`;
+  gameSearchGrid.innerHTML = games.map(match => {
+    const score = match.live && (match.homeScore != null || match.awayScore != null)
+      ? `<span class="game-search-score">${match.homeScore ?? '–'} : ${match.awayScore ?? '–'}</span>` : '';
+    return `<button type="button" class="game-search-card" data-match-id="${escapeAttribute(match.id)}">
+      <span class="game-search-status ${match.live ? 'is-live' : ''}">${match.live ? 'Live' : escapeHtml(gameSearchTiming(match))}</span>
+      <span class="game-search-competition">${escapeHtml(match.competition)}</span>
+      <span class="game-search-team">${match.homeLogo ? `<img src="${escapeAttribute(match.homeLogo)}" alt="" loading="lazy">` : ''}<strong>${escapeHtml(match.home)}</strong></span>
+      <span class="game-search-team">${match.awayLogo ? `<img src="${escapeAttribute(match.awayLogo)}" alt="" loading="lazy">` : ''}<strong>${escapeHtml(match.away)}</strong></span>
+      <span class="game-search-card-footer">${score}<span>${match.watchable ? '<i class="fas fa-play" aria-hidden="true"></i> Watch live' : 'View on Home'}</span></span>
+    </button>`;
+  }).join('');
+  gameSearchGrid.querySelectorAll('.game-search-card').forEach(card => card.addEventListener('click', () => {
+    const match = games.find(item => item.id === card.dataset.matchId);
+    if (match) openLiveGame(match.id, { play: match.watchable });
+  }));
 }
 
 function getSearchFilters() {
@@ -548,7 +574,8 @@ function applySearchFilters(results) {
 
 /* Genre Gallery */
 export async function showGenreGallery(genreId, genreName) {
-  sportsView?.classList.add('hidden');
+  _searchGeneration++; _searchGalleryGames = [];
+  gameSearchSection?.classList.add('hidden'); titleSearchHeading?.classList.add('hidden');
   _previousView = 'home';
   _homeScrollY = window.scrollY;
   searchResults?.classList.add('hidden');
@@ -593,7 +620,8 @@ export async function showGenreGallery(genreId, genreName) {
 
 /* Collection Gallery */
 export async function showCollectionGallery(collectionId, collectionName) {
-  sportsView?.classList.add('hidden');
+  _searchGeneration++; _searchGalleryGames = [];
+  gameSearchSection?.classList.add('hidden'); titleSearchHeading?.classList.add('hidden');
   const fromCollections = !document.getElementById('collectionsView')?.classList.contains('hidden');
   _previousView = fromCollections ? 'collections' : 'home';
   if (!fromCollections) _homeScrollY = window.scrollY;
@@ -901,6 +929,7 @@ export async function loadPopularCollections() {
 
 /* Collections Gallery (See All) */
 export async function showCollectionsGallery() {
+  _searchGeneration++;
   const view = document.getElementById('collectionsView');
   const movieGrid = document.getElementById('movieCollectionsGrid');
   const franchiseGrid = document.getElementById('franchisesGrid');
@@ -909,7 +938,7 @@ export async function showCollectionsGallery() {
 
   if (!view) return;
 
-  sportsView?.classList.add('hidden');
+  _searchGalleryGames = []; gameSearchSection?.classList.add('hidden'); titleSearchHeading?.classList.add('hidden');
   // Save scroll position before leaving home
   _homeScrollY = window.scrollY;
 
@@ -994,7 +1023,8 @@ export async function showCollectionsGallery() {
 
 /* Show a full franchise gallery (all movies + TV) */
 async function showFranchiseGallery(franchise, displayName) {
-  sportsView?.classList.add('hidden');
+  _searchGeneration++; _searchGalleryGames = [];
+  gameSearchSection?.classList.add('hidden'); titleSearchHeading?.classList.add('hidden');
   _previousView = 'collections';
   searchResults?.classList.add('hidden');
   homeView?.classList.add('hidden');
@@ -1026,7 +1056,11 @@ async function showFranchiseGallery(franchise, displayName) {
 
 function renderSearchGallery(results, query, customTitle = null) {
   if (!searchGrid) return;
+  if (!query || customTitle) _searchGalleryGames = [];
   const filtered = applySearchFilters(results);
+  renderGameSearchGallery(_searchGalleryGames);
+  titleSearchHeading?.classList.toggle('hidden', !_searchGalleryGames.length || !results.length);
+  searchFiltersWrap?.classList.toggle('hidden', !results.length);
   if (searchQueryTitle) {
     if (customTitle) {
       searchQueryTitle.textContent = customTitle;
@@ -1039,14 +1073,16 @@ function renderSearchGallery(results, query, customTitle = null) {
       }
     }
   }
-  if (searchResultCount) searchResultCount.textContent = `${filtered.length} result${filtered.length !== 1 ? 's' : ''}`;
+  const total = filtered.length + _searchGalleryGames.length;
+  if (searchResultCount) searchResultCount.textContent = `${total} result${total === 1 ? '' : 's'}`;
 
   if (filtered.length === 0) {
-    searchGrid.innerHTML = `
+    if (_searchGalleryGames.length && !results.length) searchGrid.replaceChildren();
+    else searchGrid.innerHTML = `
       <div class="empty-state">
         <i class="fas fa-search"></i>
-        <h3>No results match your filters</h3>
-        <p>Try adjusting the filters above</p>
+        <h3>${_searchGalleryGames.length ? 'No movies or shows match your filters' : 'No results found'}</h3>
+        <p>${_searchGalleryGames.length ? 'Game results are shown above. Adjust filters for movies and TV.' : 'Try another team, country, title, or filter.'}</p>
       </div>`;
     return;
   }

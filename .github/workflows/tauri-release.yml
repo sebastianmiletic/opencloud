@@ -47,14 +47,13 @@ jobs:
           TAG="v${VERSION}"
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" --draft --title "Open Cloud ${TAG}" --notes-file - <<'EOF'
-          Open Cloud 3.9.21 cleans up Football with main senior competitions only.
-          Youth, U-age, reserve and lower-profile fixtures are excluded. Includes quiet
-          competition lists, real scores, team search and Yesterday/Today/Tomorrow.
-          Live playback now prefers HD sources, automatically tries alternate feeds,
-          renews expiring authorization, and recovers stalled video. Starts muted with
-          an explicit sound control and a Play button when autoplay is blocked.
-          Missing data and unavailable streams are labeled honestly. No separate
-          Chromium browser or Camel page scripts. Movie data remains untouched.
+          Open Cloud 3.9.22 moves football into Live Games on Home, directly below
+          Continue Watching. The Sports tab and standalone page are removed. Live
+          matches stay at left while upcoming fixtures scroll across.
+          Global search now finds real games by team, competition, provider country,
+          and matchups such as "India vs Russia," alongside movies and TV.
+          Senior-only filtering and hardened inline HLS playback remain in place.
+          No separate Chromium browser or Camel page scripts. Movie data is untouched.
           Includes signed updates and macOS Universal, Windows x64/ARM64 and Linux
           x64/ARM64 packages. Render also deploys from the updated render-web branch.
           EOF
@@ -127,14 +126,13 @@ jobs:
           tagName: v__VERSION__
           releaseName: 'Open Cloud v__VERSION__'
           releaseBody: |
-            Open Cloud 3.9.21 cleans up Football with main senior competitions only.
-            Youth, U-age, reserve and lower-profile fixtures are excluded. Includes quiet
-            competition lists, real scores, team search and Yesterday/Today/Tomorrow.
-            Live playback now prefers HD sources, automatically tries alternate feeds,
-            renews expiring authorization, and recovers stalled video. Starts muted with
-            an explicit sound control and a Play button when autoplay is blocked.
-            Missing data and unavailable streams are labeled honestly. No separate
-            Chromium browser or Camel page scripts. Movie data remains untouched.
+            Open Cloud 3.9.22 moves football into Live Games on Home, directly below
+            Continue Watching. The Sports tab and standalone page are removed. Live
+            matches stay at left while upcoming fixtures scroll across.
+            Global search now finds real games by team, competition, provider country,
+            and matchups such as "India vs Russia," alongside movies and TV.
+            Senior-only filtering and hardened inline HLS playback remain in place.
+            No separate Chromium browser or Camel page scripts. Movie data is untouched.
             Includes signed updates and macOS Universal, Windows x64/ARM64 and Linux
             x64/ARM64 packages. Render also deploys from the updated render-web branch.
           releaseDraft: true

@@ -85,10 +85,6 @@
               <i class="fas fa-home"></i>
               <span>Home</span>
             </button>
-            <button type="button" class="nav-btn" data-tab="sports" aria-label="Sports">
-              <i class="fas fa-futbol" aria-hidden="true"></i>
-              <span>Sports</span>
-            </button>
             <button class="nav-btn" data-tab="collection">
               <i class="fas fa-layer-group"></i>
               <span>Collection</span>
@@ -175,6 +171,61 @@
           <div class="category-row up-next-row" id="continueWatchingRow"></div>
         </div>
 
+        <section class="category-section live-games-section" id="liveGamesSection" aria-labelledby="liveGamesTitle">
+          <div class="category-header category-header-with-copy live-games-header">
+            <div>
+              <h3 id="liveGamesTitle">Live Games</h3>
+              <p>Main senior football, with live games first and upcoming fixtures across.</p>
+            </div>
+            <div class="live-games-refresh">
+              <span id="liveGamesUpdated" role="status"></span>
+              <button type="button" class="live-games-icon-button" id="liveGamesRefresh" aria-label="Refresh live games" title="Refresh live games"><i class="fas fa-rotate" aria-hidden="true"></i></button>
+            </div>
+          </div>
+          <section id="sportsPlayer" class="sports-player hidden" aria-labelledby="sportsPlayerTitle" data-state="idle">
+            <div class="sports-player-header">
+              <div>
+                <p id="sportsPlayerLeague"></p>
+                <h3 id="sportsPlayerTitle">Live match</h3>
+              </div>
+              <div class="sports-player-actions">
+                <button type="button" class="live-games-icon-button" id="sportsFullscreen" aria-label="Fullscreen live game" title="Fullscreen"><i class="fas fa-expand" aria-hidden="true"></i></button>
+                <button type="button" class="live-games-icon-button" id="sportsPlayerClose" aria-label="Close live game player" title="Close player"><i class="fas fa-times" aria-hidden="true"></i></button>
+              </div>
+            </div>
+            <div class="sports-video-wrap">
+              <video id="sportsVideo" class="sports-video" controls playsinline muted preload="none" aria-label="Live football video"></video>
+              <div class="sports-video-placeholder" aria-hidden="true"><i class="fas fa-futbol"></i><span id="sportsVideoMessage">Connecting to live video…</span></div>
+              <button type="button" class="sports-play-button hidden" id="sportsPlay" aria-label="Play live football"><i class="fas fa-play" aria-hidden="true"></i></button>
+            </div>
+            <div class="sports-playback-footer">
+              <p id="sportsPlaybackStatus" class="sports-playback-status" role="status"></p>
+              <div class="sports-source-controls">
+                <button type="button" class="sports-control" id="sportsSound" aria-label="Enable sound" aria-pressed="false"><i class="fas fa-volume-xmark" aria-hidden="true"></i><span>Sound off</span></button>
+                <label class="sports-source-field hidden" id="sportsSourceField"><span class="sr-only">Video source</span><select id="sportsStream" aria-label="Video source" disabled></select></label>
+                <button type="button" class="sports-control hidden" id="sportsRetry"><i class="fas fa-rotate" aria-hidden="true"></i> Try again</button>
+              </div>
+            </div>
+          </section>
+          <div class="live-games-board" id="liveGamesBoard" aria-busy="false">
+            <section class="live-games-live-pane" aria-labelledby="liveGamesLiveTitle">
+              <div class="live-games-pane-header">
+                <h4 id="liveGamesLiveTitle"><span class="live-games-dot" aria-hidden="true"></span>Live</h4>
+                <span id="liveGamesLiveCount">0</span>
+              </div>
+              <div id="liveGamesLive" class="live-games-live-list"></div>
+            </section>
+            <section class="live-games-upcoming-pane" aria-labelledby="liveGamesUpcomingTitle">
+              <div class="live-games-pane-header">
+                <h4 id="liveGamesUpcomingTitle">Upcoming</h4>
+                <span>Next fixtures</span>
+              </div>
+              <div id="liveGamesUpcoming" class="live-games-upcoming-row"></div>
+            </section>
+          </div>
+          <p class="live-games-feed-note"><span id="liveGamesTimezone"></span><span>Scores and streams from Camel. Availability depends on the provider.</span></p>
+        </section>
+
         <div class="category-section" id="starWarsSection">
           <div class="category-header">
             <h3>The Star Wars Saga</h3>
@@ -235,64 +286,6 @@
           </div>
           <div class="category-row" id="popularCollectionsRow"></div>
         </div>
-      </section>
-
-      <section id="sportsView" class="sports-view hidden" aria-labelledby="sportsTitle">
-        <div class="sports-header">
-          <div>
-            <h2 id="sportsTitle">Football</h2>
-            <p>Main senior competitions. No youth or reserves.</p>
-          </div>
-          <div class="sports-refresh-wrap">
-            <span class="sports-updated" id="sportsUpdated" role="status"></span>
-            <button type="button" class="sports-icon-button" id="sportsRefresh" aria-label="Refresh football fixtures" title="Refresh fixtures"><i class="fas fa-rotate" aria-hidden="true"></i></button>
-          </div>
-        </div>
-        <section id="sportsPlayer" class="sports-player hidden" aria-labelledby="sportsPlayerTitle" data-state="idle">
-          <div class="sports-player-header">
-            <div>
-              <p id="sportsPlayerLeague"></p>
-              <h3 id="sportsPlayerTitle">Live match</h3>
-            </div>
-            <div class="sports-player-actions">
-              <button type="button" class="sports-icon-button" id="sportsFullscreen" aria-label="Fullscreen live sports" title="Fullscreen"><i class="fas fa-expand" aria-hidden="true"></i></button>
-              <button type="button" class="sports-icon-button" id="sportsPlayerClose" aria-label="Close live sports player" title="Close player"><i class="fas fa-times" aria-hidden="true"></i></button>
-            </div>
-          </div>
-          <div class="sports-video-wrap">
-            <video id="sportsVideo" class="sports-video" controls playsinline muted preload="none" aria-label="Live football video"></video>
-            <div class="sports-video-placeholder" aria-hidden="true"><i class="fas fa-futbol"></i><span id="sportsVideoMessage">Connecting to live video…</span></div>
-            <button type="button" class="sports-play-button hidden" id="sportsPlay" aria-label="Play live football"><i class="fas fa-play" aria-hidden="true"></i></button>
-          </div>
-          <div class="sports-playback-footer">
-            <p id="sportsPlaybackStatus" class="sports-playback-status" role="status"></p>
-            <div class="sports-source-controls">
-              <button type="button" class="sports-control" id="sportsSound" aria-label="Enable sound" aria-pressed="false"><i class="fas fa-volume-xmark" aria-hidden="true"></i><span>Sound off</span></button>
-              <label class="sports-field sports-source-field hidden" id="sportsSourceField"><span class="sr-only">Video source</span><select id="sportsStream" aria-label="Video source" disabled></select></label>
-              <button type="button" class="sports-control hidden" id="sportsRetry"><i class="fas fa-rotate" aria-hidden="true"></i> Try again</button>
-            </div>
-          </div>
-        </section>
-        <div class="sports-toolbar">
-          <div class="sports-days" role="group" aria-label="Match day">
-            <button type="button" class="sports-day" data-sports-day="-1" aria-pressed="false">Yesterday</button>
-            <button type="button" class="sports-day" id="sportsToday" data-sports-day="0" aria-pressed="true">Today</button>
-            <button type="button" class="sports-day" data-sports-day="1" aria-pressed="false">Tomorrow</button>
-          </div>
-          <label class="sports-field sports-date-field"><span class="sr-only">Match date (UTC)</span><input type="date" id="sportsDate" aria-label="Match date (UTC)"></label>
-          <label class="sports-field sports-search-field"><i class="fas fa-search" aria-hidden="true"></i><span class="sr-only">Search teams or competitions</span><input type="search" id="sportsSearch" placeholder="Team or competition" autocomplete="off"></label>
-        </div>
-        <div class="sports-list-header">
-          <div class="sports-filters" role="group" aria-label="Filter football fixtures">
-            <button type="button" class="sports-filter" data-sports-phase="all" aria-pressed="true">Matches</button>
-            <button type="button" class="sports-filter" data-sports-phase="live" aria-pressed="false">Live <span class="sports-filter-count" id="sportsLiveCount">0</span></button>
-            <button type="button" class="sports-filter" data-sports-phase="upcoming" aria-pressed="false">Upcoming</button>
-            <button type="button" class="sports-filter" data-sports-phase="results" aria-pressed="false">Results</button>
-          </div>
-          <p class="sports-summary" id="sportsSummary" role="status">Select Sports to load fixtures</p>
-        </div>
-        <div id="sportsMatches" aria-busy="false"></div>
-        <div class="sports-feed-note"><span id="sportsTimezone"></span><span>Scores &amp; streams: Camel. Availability depends on the provider.</span></div>
       </section>
 
       <section id="collectionsView" class="collections-view hidden">
@@ -369,6 +362,14 @@
           </div>
           <span id="searchResultCount" class="search-result-count"></span>
         </div>
+        <section id="gameSearchSection" class="game-search-section hidden" aria-labelledby="gameSearchTitle">
+          <div class="game-search-header">
+            <h3 id="gameSearchTitle">Games</h3>
+            <span id="gameSearchCount"></span>
+          </div>
+          <div id="gameSearchGrid" class="game-search-grid"></div>
+        </section>
+        <div class="search-results-subheading hidden" id="titleSearchHeading">Movies &amp; TV</div>
         <div class="search-filters-dropdown-wrap">
           <button class="search-filters-toggle" id="searchFiltersToggle">
             <i class="fas fa-filter"></i> Filters
